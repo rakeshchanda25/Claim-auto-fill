@@ -10,6 +10,7 @@ langchain-litellm
 weasyprint
 jinja2
 pypdf
+pdfplumber
 python-docx
 faker
 pillow

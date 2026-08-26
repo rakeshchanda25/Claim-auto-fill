@@ -27,6 +27,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.on_event("shutdown")
+def _close_shared_agent():
+    from ai_doc_generator.agent_factory import close_shared_agent
+    close_shared_agent()
+
 @app.post("/api/replace")
 async def replace_pdf_text(
     file: UploadFile = File(...),
@@ -159,15 +165,15 @@ async def ai_generate_document(
 
     def _run():
         import re
-        from ai_doc_generator.agent_factory import create_doc_generator_agent
+        from ai_doc_generator.agent_factory import get_shared_agent
 
-        with create_doc_generator_agent() as agent:
-            prompt = build_generation_prompt(req)
-            result_str = agent.run(prompt)
-            if hasattr(result_str, "content"):
-                result_str = result_str.content
-            elif hasattr(result_str, "output"):
-                result_str = result_str.output
+        agent = get_shared_agent()
+        prompt = build_generation_prompt(req)
+        result_str = agent.run(prompt)
+        if hasattr(result_str, "content"):
+            result_str = result_str.content
+        elif hasattr(result_str, "output"):
+            result_str = result_str.output
 
         print("\n" + "=" * 40 + " RAW AGENT RESPONSE START " + "=" * 40)
         print(f"TYPE: {type(result_str)}")
@@ -207,6 +213,10 @@ async def ai_generate_document(
                     zf.writestr(f"{safe_label}.pdf", pdf_data)
             return ("zip", buf.getvalue(), f"{doc_type}_packet.zip")
 
+        if "docx_bytes_b64" in result:
+            docx_bytes = base64.b64decode(result["docx_bytes_b64"])
+            return ("docx", docx_bytes, f"{doc_type}_{scenario}.docx")
+
         if "pdf_bytes_b64" not in result:
             raise HTTPException(
                 status_code=500,
@@ -226,15 +236,14 @@ async def ai_generate_document(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-    if file_type == "zip":
-        return Response(
-            content=content,
-            media_type="application/zip",
-            headers={"Content-Disposition": f"attachment; filename={filename}"},
-        )
+    media_types = {
+        "zip": "application/zip",
+        "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "pdf": "application/pdf",
+    }
     return Response(
         content=content,
-        media_type="application/pdf",
+        media_type=media_types[file_type],
         headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
 

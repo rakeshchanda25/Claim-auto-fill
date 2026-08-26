@@ -19,6 +19,8 @@ from renderers.form_filler import (
 )
 from renderers.form_structure import build_draft, inventory
 from renderers.docx_parser import extract_docx_layout
+from renderers.docx_structure import build_draft as build_docx_draft
+from renderers.docx_filler import fill_docx_controls, read_back_docx_controls
 from .packets import PACKET_REGISTRY
 
 
@@ -167,6 +169,64 @@ def verify_pdf_fill(pdf_bytes: bytes, expected_values: dict) -> dict:
     against what was requested. Call this after every fill_pdf_widgets -
     a mismatch here means the fill silently did not take for that widget."""
     back = read_back_widgets(pdf_bytes)
+    mismatches = {
+        k: {"expected": v, "actual": back.get(k, "<absent>")}
+        for k, v in expected_values.items()
+        if back.get(k) != v
+    }
+    return {"ok": len(mismatches) == 0, "checked": len(expected_values), "mismatches": mismatches}
+
+
+# =============================================================================
+# Dynamic docx-fill tools (skills/dynamic-docx-fill) - template-agnostic,
+# same discover/decide/fill/verify split as the PDF tools above, but for
+# Word content-control forms (w:sdt) instead of AcroForm widgets. Docx has
+# no fixed-box geometry (Word grows the paragraph to fit), so there is no
+# docx equivalent of flow_text_into_widgets/fit_grid_row - nothing to fit.
+# =============================================================================
+
+@tool
+def inspect_docx_form_structure(docx_bytes: bytes) -> dict:
+    """Analyze ANY .docx with Word content controls and return its structural
+    draft: every control's type (text/richText/date/checkbox/dropdown/
+    combobox), its harvested context label (the control's own `alias` if the
+    template author set one, else nearby paragraph/table-cell text), and -
+    for dropdown/comboBox controls - the exact list of selectable choices.
+    No meaning is assigned yet. ALWAYS call this first for a docx fill task;
+    never infer a control's purpose from its raw `tag` alone. A docx with no
+    content controls returns an empty controls list (0 = nothing to fill,
+    not an error) - the doc likely needs a different strategy (see
+    analyze_reference_document)."""
+    return build_docx_draft(docx_bytes)
+
+
+@tool
+def fill_docx_form_controls(
+    docx_bytes: bytes,
+    values: dict = None,
+    checks: dict = None,
+    choices: dict = None,
+) -> bytes:
+    """Fill Word content controls by exact control name (from
+    inspect_docx_form_structure). `values` is name->text for text/richText/
+    date controls. `checks` is name->bool for checkbox controls - never
+    assume a checkbox displays "X" when checked, the fill uses the
+    control's own configured checked-state glyph and font. `choices` is
+    name->displayText for dropdown/comboBox controls, and MUST be one of
+    that control's own listItem displayText values (raises otherwise -
+    never invent an option the template doesn't offer). Always call
+    verify_docx_fill afterwards."""
+    return fill_docx_controls(docx_bytes, values, checks, choices)
+
+
+@tool
+def verify_docx_fill(docx_bytes: bytes, expected_values: dict) -> dict:
+    """Reads the filled docx's content controls back out and diffs them
+    against what was requested (expected_values maps name -> the text, or
+    the bool for a checkbox, or the displayText for a dropdown/comboBox, that
+    was written). Call this after every fill_docx_form_controls - a
+    mismatch means the fill silently did not take for that control."""
+    back = read_back_docx_controls(docx_bytes)
     mismatches = {
         k: {"expected": v, "actual": back.get(k, "<absent>")}
         for k, v in expected_values.items()

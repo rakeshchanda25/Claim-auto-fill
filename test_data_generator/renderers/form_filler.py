@@ -58,7 +58,6 @@ def fill_widgets_precise(
     watermark: str | None = None,
 ) -> bytes:
     fonts = fonts or {}
-    reader = PdfReader(io.BytesIO(pdf_bytes))
     writer = PdfWriter(clone_from=io.BytesIO(pdf_bytes))
 
     acro_ref = writer._root_object.get("/AcroForm")

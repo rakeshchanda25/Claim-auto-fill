@@ -66,6 +66,31 @@ def build_generation_prompt(req: GenerationRequest) -> str:
             + json_footer
         )
 
+    if req.mode == "fill" and (req.reference_file_type or "").lower().lstrip(".") == "docx":
+        return (
+            f"Fill the supplied blank .docx (Word content-control form) with coherent synthetic "
+            f"data for scenario '{req.scenario}'.\n"
+            "1. Load the skill: load_skill('dynamic-docx-fill') and follow it exactly. It works on "
+            "ANY docx with content controls, including one never seen before - do not assume this "
+            "document's controls or layout.\n"
+            "2. Call inspect_docx_form_structure(docx_bytes=<reference_bytes>) to discover the "
+            "document's real controls: each one's type (text/richText/date/checkbox/dropdown/"
+            "combobox), harvested label, and - for dropdown/comboBox - its exact choices.\n"
+            "3. Decide what each control is asking for FROM ITS LABEL, never from its raw `tag`. "
+            "For a dropdown/comboBox you MUST pick one of its own `choices[].display` values.\n"
+            "4. Choose values, keeping ONE coherent identity, date order, and arithmetic across "
+            "the whole document.\n"
+            "5. Call fill_docx_form_controls(docx_bytes, values={...}, checks={...}, choices={...}), "
+            "then verify_docx_fill(...) and resolve any mismatch.\n"
+            "6. Encode the verified docx bytes as base64.\n"
+            "7. Return JSON object: {\"docx_bytes_b64\": \"<base64_string>\"}.\n"
+            f"\nIf a '{req.doc_type}' skill exists with domain rules for this document type, you "
+            "may also load it for guidance on realistic values - but dynamic-docx-fill governs "
+            "the filling procedure itself."
+            + _custom_fields_block(req)
+            + json_footer
+        )
+
     if req.mode == "fill":
         return (
             f"Fill the supplied blank fillable PDF form with coherent synthetic data "
