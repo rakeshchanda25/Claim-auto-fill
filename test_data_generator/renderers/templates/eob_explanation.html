@@ -38,26 +38,31 @@
   <div><span class="label">Claim Number:</span><br>{{ claim_number }}</div>
   <div><span class="label">Date of Service:</span><br>{{ dos }}</div>
   <div><span class="label">Provider:</span><br>{{ physician_name }}</div>
+  <div><span class="label">Network Status:</span><br>{{ network_status }}</div>
+  <div><span class="label">Processed Date:</span><br>{{ processed_date }}</div>
+  <div><span class="label">Check/EFT Number:</span><br>{{ check_number }}</div>
 </div>
 
 <h2>Claim Summary</h2>
 <table>
   <tr>
-    <th>Service Description</th>
+    <th>Procedure Code</th>
     <th>Date</th>
-    <th>Billed Amount</th>
-    <th>Allowed Amount</th>
+    <th>Billed</th>
+    <th>Allowed</th>
     <th>Plan Paid</th>
     <th>Your Responsibility</th>
+    <th>Reason Code</th>
   </tr>
-  {% for item in line_items %}
+  {% for line in eob_lines %}
   <tr>
-    <td>{{ item.description }} ({{ item.cpt }})</td>
+    <td>{{ line.cpt }}</td>
     <td>{{ dos }}</td>
-    <td>${{ "%.2f"|format(item.charge) }}</td>
-    <td>${{ "%.2f"|format(item.charge * 0.8) }}</td>
-    <td>${{ "%.2f"|format(item.charge * 0.64) }}</td>
-    <td>${{ "%.2f"|format(item.charge * 0.16) }}</td>
+    <td>${{ "%.2f"|format(line.billed) }}</td>
+    <td>${{ "%.2f"|format(line.allowed) }}</td>
+    <td>${{ "%.2f"|format(line.paid) }}</td>
+    <td>${{ "%.2f"|format(line.patient_owes) }}</td>
+    <td>{{ line.reason_code }}</td>
   </tr>
   {% endfor %}
 </table>

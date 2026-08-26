@@ -14,11 +14,13 @@ allowed-tools: generate_synthetic_data render_document_to_pdf validate_document_
 
 ## Required Sections
 1. Department Header — Department name (city + "Police Department")
-2. Incident Information — Report number, date, time, location
+2. Incident Information — Report number, date, time, location, case status, citation issued,
+   weather and road conditions
 3. Officer Information — Name and badge number
-4. Parties Involved Table — Role, Name, DOB for each party
-5. Narrative — 4-6 sentence factual description of incident
-6. Officer Signature Block
+4. Parties Involved Table — Role, Name, DOB, driver's license number for each party
+5. Witnesses Table — Name and phone
+6. Narrative — 4-6 sentence factual description of incident
+7. Officer Signature Block
 
 ## Incident Number Format
 - RPT + 8 digits (e.g., RPT20481039)

@@ -2,96 +2,150 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>ACORD 25 – {{ policy_number }}</title>
+<title>ACORD 25 – {{ certificate_holder }}</title>
 <style>
-  @page { size: letter portrait; margin: 0.6in; }
-  body { font-family: Arial, Helvetica, sans-serif; font-size: 8pt; color: #000; line-height: 1.3; }
-  .acord-header { display: flex; justify-content: space-between; align-items: flex-start; border: 2px solid #000; padding: 4px 8px; margin-bottom: 0; }
-  .acord-title { font-size: 14pt; font-weight: bold; }
-  .acord-sub { font-size: 8pt; }
-  .acord-num { font-size: 10pt; font-weight: bold; text-align: right; }
-  table.main { width: 100%; border-collapse: collapse; }
-  table.main td, table.main th { border: 1px solid #000; padding: 2px 5px; vertical-align: top; font-size: 7.5pt; }
-  .section-header { background: #000; color: #fff; font-size: 8pt; font-weight: bold; padding: 2px 6px; }
-  .box-label { font-size: 6pt; font-style: italic; color: #333; display: block; }
-  .box-value { font-size: 8pt; font-weight: bold; }
-  .coverage-row th { background: #d0d8e8; color: #000; }
+  @page { size: letter portrait; margin: 0.4in; }
+  * { box-sizing: border-box; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 7.3pt; color: #000; line-height: 1.25; }
+  .acord-header { display: flex; justify-content: space-between; align-items: flex-start; border: 2px solid #000; padding: 4px 8px; }
+  .acord-title { font-size: 13pt; font-weight: bold; }
+  .acord-sub { font-size: 7pt; }
+  .acord-num { font-size: 9pt; font-weight: bold; text-align: right; }
+  .disclaimer { font-size: 6.3pt; font-style: italic; border: 1px solid #000; border-top: none; padding: 3px 6px; }
+  table.grid { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  table.grid td { border: 1px solid #000; padding: 2px 4px; vertical-align: top; overflow: hidden; }
+  .lbl { font-size: 5.6pt; color: #000; display: block; margin-bottom: 1px; }
+  .val { font-size: 7.6pt; font-weight: 600; }
+  .section-bar { background: #1a1a1a; color: #fff; font-size: 7.5pt; font-weight: bold; padding: 2px 6px; }
+  table.cov { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  table.cov th { border: 1px solid #000; background: #d0d8e8; font-size: 5.8pt; padding: 2px; text-align: left; }
+  table.cov td { border: 1px solid #000; padding: 2px 4px; font-size: 7.3pt; vertical-align: top; }
+  .limit-row td { font-size: 6.6pt; }
+  .footer-note { font-size: 6px; color: #444; margin-top: 4px; }
 </style>
 </head>
 <body>
+
 <div class="acord-header">
   <div>
     <div class="acord-title">CERTIFICATE OF LIABILITY INSURANCE</div>
-    <div class="acord-sub">DATE (MM/DD/YYYY): {{ effective_date }}</div>
+    <div class="acord-sub">DATE (MM/DD/YYYY): {{ certificate_date }}</div>
   </div>
   <div class="acord-num">ACORD 25 (2016/03)</div>
 </div>
+<div class="disclaimer">
+  THIS CERTIFICATE IS ISSUED AS A MATTER OF INFORMATION ONLY AND CONFERS NO RIGHTS UPON THE CERTIFICATE
+  HOLDER. THIS CERTIFICATE DOES NOT AFFIRMATIVELY OR NEGATIVELY AMEND, EXTEND OR ALTER THE COVERAGE AFFORDED
+  BY THE POLICIES BELOW. THIS CERTIFICATE OF INSURANCE DOES NOT CONSTITUTE A CONTRACT BETWEEN THE ISSUING
+  INSURER(S), AUTHORIZED REPRESENTATIVE OR PRODUCER, AND THE CERTIFICATE HOLDER.
+</div>
 
-<table class="main">
+<table class="grid">
   <tr>
-    <td colspan="4" style="background:#ffe;font-size:7pt;font-style:italic;">
-      THIS CERTIFICATE IS ISSUED AS A MATTER OF INFORMATION ONLY AND CONFERS NO RIGHTS UPON THE CERTIFICATE HOLDER.
+    <td style="width:50%;">
+      <span class="lbl">PRODUCER</span>
+      <span class="val">{{ producer_name }}</span><br>
+      <span class="val">{{ producer_address.street }}, {{ producer_address.city }}, {{ producer_address.state }} {{ producer_address.zip }}</span><br>
+      <span class="val">PHONE: {{ producer_phone }}</span> &nbsp; <span class="val">E-MAIL: {{ producer_email }}</span>
+    </td>
+    <td style="width:50%;">
+      <span class="lbl">INSURED</span>
+      <span class="val">{{ insured_name }}</span><br>
+      <span class="val">{{ insured_address.street }}, {{ insured_address.city }}, {{ insured_address.state }} {{ insured_address.zip }}</span>
     </td>
   </tr>
   <tr>
     <td colspan="2">
-      <span class="box-label">PRODUCER (AGENCY)</span>
-      <span class="box-value">{{ agency_name }}</span><br>
-      {{ agency_address.street }}<br>{{ agency_address.city }}, {{ agency_address.state }} {{ agency_address.zip }}
-    </td>
-    <td colspan="2">
-      <span class="box-label">INSURED</span>
-      <span class="box-value">{{ insured_name }}</span><br>
-      {{ address.street }}<br>{{ address.city }}, {{ address.state }} {{ address.zip }}
-    </td>
-  </tr>
-  <tr>
-    <td colspan="4" class="section-header">COVERAGES &nbsp; CERTIFICATE NUMBER: {{ policy_number }}</td>
-  </tr>
-  <tr class="coverage-row">
-    <th>TYPE OF INSURANCE</th><th>POLICY NUMBER</th><th>EFFECTIVE DATE</th><th>EXPIRATION DATE</th>
-  </tr>
-  <tr>
-    <td>COMMERCIAL GENERAL LIABILITY<br><small>☑ OCCUR &nbsp; ☐ CLAIMS-MADE</small></td>
-    <td>{{ policy_number }}</td>
-    <td>{{ effective_date }}</td>
-    <td>{{ expiration_date }}</td>
-  </tr>
-  <tr>
-    <td colspan="2"><span class="box-label">EACH OCCURRENCE LIMIT</span><span class="box-value">${{ general_liability_limit }}</span></td>
-    <td colspan="2"><span class="box-label">GENERAL AGGREGATE LIMIT</span><span class="box-value">${{ umbrella_limit }}</span></td>
-  </tr>
-  <tr>
-    <td>WORKERS COMPENSATION &amp; EMPLOYERS LIABILITY</td>
-    <td>WC-{{ policy_number }}</td>
-    <td>{{ effective_date }}</td>
-    <td>{{ expiration_date }}</td>
-  </tr>
-  <tr>
-    <td colspan="2"><span class="box-label">E.L. EACH ACCIDENT</span><span class="box-value">${{ workers_comp_limit }}</span></td>
-    <td colspan="2"><span class="box-label">E.L. DISEASE – EA EMPLOYEE</span><span class="box-value">${{ workers_comp_limit }}</span></td>
-  </tr>
-  <tr>
-    <td colspan="4" class="section-header">CERTIFICATE HOLDER</td>
-  </tr>
-  <tr>
-    <td colspan="4">
-      <strong>{{ certificate_holder }}</strong><br>
-      {{ certificate_holder_address.street }}<br>
-      {{ certificate_holder_address.city }}, {{ certificate_holder_address.state }} {{ certificate_holder_address.zip }}
-    </td>
-  </tr>
-  <tr>
-    <td colspan="2">
-      <span class="box-label">AUTHORIZED REPRESENTATIVE</span>
-      <div style="height:20px;border-bottom:1px solid #000;width:200px;margin-top:8px;"></div>
-    </td>
-    <td colspan="2">
-      <span class="box-label">INSURER NAME</span>
-      <span class="box-value">{{ insurer_name }}</span>
+      <span class="lbl">INSURER(S) AFFORDING COVERAGE</span>
+      <span class="val">INSURER A: {{ insurer_a }} &nbsp; NAIC #: {{ insurer_a_naic }}</span>
     </td>
   </tr>
 </table>
-<div style="font-size:7pt;color:#555;margin-top:4px;">ACORD 25 (2016/03) &copy; 1988-2016 ACORD CORPORATION. All rights reserved. SYNTHETIC DATA – FOR IDP TESTING ONLY.</div>
+
+<div class="section-bar">COVERAGES &nbsp; CERTIFICATE NUMBER: {{ claim_number }} &nbsp; REVISION NUMBER: 0</div>
+<table class="cov">
+  <tr>
+    <th style="width:8%;">INSR LTR</th>
+    <th style="width:32%;">TYPE OF INSURANCE</th>
+    <th style="width:20%;">POLICY NUMBER</th>
+    <th style="width:12%;">POLICY EFF</th>
+    <th style="width:12%;">POLICY EXP</th>
+    <th style="width:16%;">LIMITS</th>
+  </tr>
+  <tr>
+    <td rowspan="6">A</td>
+    <td rowspan="6">COMMERCIAL GENERAL LIABILITY<br><span style="font-size:6.3pt;">☑ Occurrence &nbsp; ☐ Claims-Made</span></td>
+    <td rowspan="6">{{ gl_policy_number }}</td>
+    <td rowspan="6">{{ effective_date }}</td>
+    <td rowspan="6">{{ expiration_date }}</td>
+    <td>Each Occurrence &nbsp; ${{ gl_each_occurrence }}</td>
+  </tr>
+  <tr class="limit-row"><td>Damage to Rented Premises (Ea occurrence) &nbsp; ${{ gl_damage_rented_premises }}</td></tr>
+  <tr class="limit-row"><td>Med Exp (Any one person) &nbsp; ${{ gl_med_exp }}</td></tr>
+  <tr class="limit-row"><td>Personal &amp; Adv Injury &nbsp; ${{ gl_personal_injury }}</td></tr>
+  <tr class="limit-row"><td>General Aggregate &nbsp; ${{ gl_general_aggregate }}</td></tr>
+  <tr class="limit-row"><td>Products - Comp/Op Agg &nbsp; ${{ gl_products_agg }}</td></tr>
+  <tr>
+    <td>A</td>
+    <td>AUTOMOBILE LIABILITY<br><span style="font-size:6.3pt;">☑ Any Auto</span></td>
+    <td>{{ auto_policy_number }}</td>
+    <td>{{ effective_date }}</td>
+    <td>{{ expiration_date }}</td>
+    <td>Combined Single Limit &nbsp; ${{ auto_combined_single_limit }}</td>
+  </tr>
+  <tr>
+    <td rowspan="2">A</td>
+    <td rowspan="2">UMBRELLA LIAB (Occurrence)</td>
+    <td rowspan="2">{{ umb_policy_number }}</td>
+    <td rowspan="2">{{ effective_date }}</td>
+    <td rowspan="2">{{ expiration_date }}</td>
+    <td>Each Occurrence &nbsp; ${{ umb_each_occurrence }}</td>
+  </tr>
+  <tr class="limit-row"><td>Aggregate &nbsp; ${{ umb_aggregate }}</td></tr>
+  <tr>
+    <td rowspan="3">A</td>
+    <td rowspan="3">WORKERS COMPENSATION &amp; EMPLOYERS' LIABILITY<br><span style="font-size:6.3pt;">☑ Statutory Limits</span></td>
+    <td rowspan="3">{{ wc_policy_number }}</td>
+    <td rowspan="3">{{ effective_date }}</td>
+    <td rowspan="3">{{ expiration_date }}</td>
+    <td>E.L. Each Accident &nbsp; ${{ wc_el_each_accident }}</td>
+  </tr>
+  <tr class="limit-row"><td>E.L. Disease - Ea Employee &nbsp; ${{ wc_el_disease_employee }}</td></tr>
+  <tr class="limit-row"><td>E.L. Disease - Policy Limit &nbsp; ${{ wc_el_disease_policy }}</td></tr>
+</table>
+
+<table class="grid" style="margin-top:0;">
+  <tr>
+    <td>
+      <span class="lbl">DESCRIPTION OF OPERATIONS / LOCATIONS / VEHICLES (ACORD 101, Additional Remarks Schedule, may be attached if more space is required)</span>
+      <span class="val">{{ description_of_operations }}</span>
+    </td>
+  </tr>
+</table>
+
+<div class="section-bar">CERTIFICATE HOLDER</div>
+<table class="grid" style="margin-top:0;">
+  <tr>
+    <td style="width:60%;">
+      <span class="val">{{ certificate_holder }}</span><br>
+      <span class="val">{{ certificate_holder_address.street }}, {{ certificate_holder_address.city }}, {{ certificate_holder_address.state }} {{ certificate_holder_address.zip }}</span>
+    </td>
+    <td style="width:40%;">
+      <span class="lbl">CANCELLATION</span>
+      <span class="val" style="font-weight:400; font-size:6.6pt;">
+        SHOULD ANY OF THE ABOVE DESCRIBED POLICIES BE CANCELLED BEFORE THE EXPIRATION DATE THEREOF, NOTICE
+        WILL BE DELIVERED IN ACCORDANCE WITH THE POLICY PROVISIONS.
+      </span>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2">
+      <span class="lbl">AUTHORIZED REPRESENTATIVE</span>
+      <span class="val">{{ authorized_representative }}</span>
+    </td>
+  </tr>
+</table>
+
+<div class="footer-note">ACORD 25 (2016/03) — The ACORD name and logo are registered marks of ACORD. SYNTHETIC / DEMONSTRATION DATA ONLY, FOR IDP TESTING PURPOSES.</div>
 </body>
 </html>

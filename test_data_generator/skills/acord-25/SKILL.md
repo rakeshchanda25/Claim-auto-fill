@@ -1,37 +1,50 @@
 ---
 name: acord-25
 description: >
-  Generate ACORD 25 Certificate of Liability Insurance for IDP testing. Covers CGL, workers
-  compensation, and umbrella coverages with producer, insured, and certificate holder sections.
+  Generate ACORD 25 (2016/03) Certificate of Liability Insurance for IDP testing - CGL,
+  automobile liability, umbrella, and workers compensation coverages with producer, insured,
+  and certificate holder sections. Rendered through the placeholder-then-fill pipeline (see
+  render_document_to_pdf), so the output is a genuine fillable AcroForm PDF.
 metadata:
   owner: idp-test-team
-  version: "1"
+  version: "2"
   page-size: letter-portrait
   template: acord_25
 allowed-tools: generate_synthetic_data render_document_to_pdf validate_document_structure
 ---
 # ACORD 25 Generation Skill
 
-## Required Sections
-1. Producer (Agency) — Name and address
-2. Insured — Name and address (typically a business entity)
-3. Coverages:
-   - Commercial General Liability (occurrence form)
-   - Workers Compensation & Employers Liability
-   - Umbrella / Excess Liability (optional)
-4. Policy Numbers — one per coverage line
-5. Effective and Expiration Dates
-6. Limits — Each Occurrence, General Aggregate, EL per Employee
-7. Certificate Holder — Name and address
-8. Authorized Representative signature line
+## Sections covered by the template
+1. Producer — agency name, address, phone, email
+2. Insured — company name and address
+3. Insurer(s) Affording Coverage — Insurer A name + NAIC number
+4. Coverages table (4 fixed rows, each with its own policy number/dates/limits):
+   - A. Commercial General Liability: Each Occurrence, Damage to Rented Premises, Med Exp,
+     Personal & Adv Injury, General Aggregate, Products-Comp/Op Agg
+   - A. Automobile Liability: Combined Single Limit
+   - A. Umbrella Liab (Occurrence): Each Occurrence, Aggregate
+   - A. Workers Compensation & Employers' Liability: E.L. Each Accident, E.L. Disease-Ea
+     Employee, E.L. Disease-Policy Limit
+5. Description of Operations / Locations / Vehicles
+6. Certificate Holder — name and address
+7. Cancellation clause (fixed boilerplate text)
+8. Authorized Representative
 
-## Coverage Limits
-- CGL Each Occurrence: $1,000,000
-- CGL General Aggregate: $2,000,000
-- Workers Comp EL: $500,000
-- Umbrella: $2,000,000
+## Template-authoring constraint (read before editing acord_25.html)
+Same as cms-1500/ub-04: rendered through the placeholder-then-fill pipeline, so no arithmetic
+or data-driven `{% if %}` in the template. The coverage-limit dollar VALUES are data
+(`gl_each_occurrence` etc., flat top-level fields), but the LIMIT LABELS ("Each Occurrence",
+"E.L. Disease - Ea Employee", ...) are fixed template text, not data - a limit label is
+determined by which coverage row it's in, not by anything that varies per certificate, and
+looping over data-driven labels would turn static captions into fillable fields for no reason.
+
+## Coverage Limits (standard defaults used across all generated certificates)
+- CGL Each Occurrence: $1,000,000 · General Aggregate: $2,000,000
+- Auto Combined Single Limit: $1,000,000
+- Umbrella Each Occurrence / Aggregate: $2,000,000
+- Workers Comp E.L.: $500,000 (each accident / disease-employee / disease-policy)
 
 ## Synthetic Data Rules
-- Insured should be a company name (Faker.company)
-- Policy Number: POL + 9 alphanumeric characters
-- Certificate holder is a different company from insured
+- Insured and certificate holder should be different company names (Faker.company)
+- Policy numbers are prefixed by coverage type: GL/CA/UMB/WC + 8 digits
+- All four coverage lines share the same effective/expiration dates on a given certificate

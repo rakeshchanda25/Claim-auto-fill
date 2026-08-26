@@ -13,11 +13,14 @@ allowed-tools: generate_synthetic_data render_document_to_pdf validate_document_
 # EOB Generation Skill
 
 ## Required Fields
-- Member Name and ID
-- Group Number
+- Member Name and ID, Group Number
 - Claim Number and Date of Service
 - Provider Name
-- Service line items with: billed, allowed, plan paid, patient responsibility
+- Network Status, Processed Date, Check/EFT Number
+- Per-line claim summary (`eob_lines`): CPT code, billed, allowed, plan paid, patient owes,
+  reason code - each line's amounts are reconciled so they SUM EXACTLY to the claim totals
+  below (a real EOB's line items must foot to its stated total; do not recompute per-line
+  amounts independently of the totals)
 - Summary: deductible applied, copay, coinsurance, total plan paid, total patient responsibility
 - Denial reason (if any)
 

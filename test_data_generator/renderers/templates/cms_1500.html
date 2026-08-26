@@ -4,155 +4,248 @@
 <meta charset="UTF-8">
 <title>CMS-1500 – {{ claim_number }}</title>
 <style>
-  @page { size: letter portrait; margin: 0.5in; }
-  body { font-family: "Courier New", Courier, monospace; font-size: 8pt; color: #000; line-height: 1.3; }
-  .title { text-align: center; font-size: 11pt; font-weight: bold; margin-bottom: 6px; letter-spacing: 1px; }
-  .subtitle { text-align: center; font-size: 8pt; margin-bottom: 10px; }
-  table.form { width: 100%; border-collapse: collapse; }
-  table.form td, table.form th { border: 1px solid #000; padding: 2px 4px; vertical-align: top; font-size: 7.5pt; }
-  .box-label { font-size: 6pt; color: #333; font-style: italic; display: block; margin-bottom: 1px; }
-  .box-value { font-size: 8pt; font-weight: bold; }
-  .header-carrier { border: 2px solid #000; padding: 4px 8px; margin-bottom: 6px; font-size: 8pt; }
-  .section-bar { background: #000; color: #fff; font-size: 8pt; padding: 2px 6px; font-weight: bold; margin: 4px 0; }
-  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 10px; }
-  .totals-row td { font-weight: bold; }
+  @page { size: letter portrait; margin: 0.35in; }
+  * { box-sizing: border-box; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 7.3pt; color: #000; line-height: 1.25; }
+  .title-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 3px; }
+  .title { font-size: 12pt; font-weight: bold; letter-spacing: 0.5px; }
+  .subtitle { font-size: 7pt; color: #333; }
+  .form-id { font-size: 7pt; text-align: right; }
+  table.grid { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  table.grid td { border: 1px solid #000; padding: 2px 3px; vertical-align: top; overflow: hidden; }
+  .lbl { font-size: 5.6pt; color: #000; display: block; margin-bottom: 1px; }
+  .val { font-size: 8pt; font-weight: 600; }
+  .payer-box { border: 1.5px solid #000; padding: 4px 8px; margin: 4px 0 2px; min-height: 34px; }
+  .payer-box .lbl { font-size: 6pt; }
+  .payer-box .val { font-size: 9pt; }
+  .checks { font-size: 6.6pt; }
+  .section-bar { background: #1a1a1a; color: #fff; font-size: 7.5pt; font-weight: bold; padding: 2px 6px; margin: 5px 0 0; }
+  table.lines { width: 100%; border-collapse: collapse; margin-top: 0; table-layout: fixed; }
+  table.lines th { border: 1px solid #000; background: #e8e8e8; font-size: 5.6pt; padding: 2px; text-align: center; }
+  table.lines td { border: 1px solid #000; padding: 2px 3px; font-size: 7.3pt; text-align: center; }
+  .totals td { font-weight: bold; text-align: right; }
+  .footer-note { font-size: 6pt; color: #444; margin-top: 6px; text-align: center; }
 </style>
 </head>
 <body>
-<div class="title">HEALTH INSURANCE CLAIM FORM</div>
-<div class="subtitle">APPROVED BY NATIONAL UNIFORM CLAIM COMMITTEE (NUCC) 02/12</div>
 
-<div class="header-carrier">
-  <div>PICA &nbsp;&nbsp;&nbsp;&nbsp;
-    ☐ Medicare &nbsp; ☐ Medicaid &nbsp; ☑ Other
+<div class="title-row">
+  <div>
+    <div class="title">HEALTH INSURANCE CLAIM FORM</div>
+    <div class="subtitle">APPROVED BY NATIONAL UNIFORM CLAIM COMMITTEE (NUCC) 02/12</div>
   </div>
-  <div>Carrier: <strong>{{ insurer_name }}</strong></div>
+  <div class="form-id">CARRIER: {{ insurer_name }}<br>CLAIM #: {{ claim_number }}</div>
 </div>
 
-<table class="form">
+<div class="payer-box">
+  <span class="lbl checks">
+    ☐ MEDICARE &nbsp; ☐ MEDICAID &nbsp; ☐ TRICARE &nbsp; ☐ CHAMPVA &nbsp; ☐ GROUP HEALTH PLAN &nbsp; ☐ FECA BLK LUNG &nbsp; ☑ OTHER: {{ insurance_type }}
+  </span>
+  <span class="lbl">1a. INSURED'S I.D. NUMBER</span>
+  <span class="val">{{ insured_id }}</span>
+</div>
+
+<table class="grid">
   <tr>
-    <td colspan="2">
-      <span class="box-label">1a. INSURED'S I.D. NUMBER</span>
-      <span class="box-value">{{ insured_id }}</span>
+    <td style="width:38%;">
+      <span class="lbl">2. PATIENT'S NAME (Last, First, MI)</span>
+      <span class="val">{{ patient_name }}</span>
     </td>
-    <td colspan="2">
-      <span class="box-label">2. PATIENT'S NAME (Last, First, Middle Initial)</span>
-      <span class="box-value">{{ patient_name }}</span>
+    <td style="width:18%;">
+      <span class="lbl">3. PATIENT'S BIRTH DATE</span>
+      <span class="val">{{ dob }}</span>
+      <span class="lbl" style="margin-top:2px;">SEX</span>
+      <span class="val">{{ gender }}</span>
+    </td>
+    <td style="width:44%;">
+      <span class="lbl">4. INSURED'S NAME (Last, First, MI)</span>
+      <span class="val">{{ insured_name }}</span>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <span class="lbl">5. PATIENT'S ADDRESS (No., Street)</span>
+      <span class="val">{{ address.street }}</span><br>
+      <span class="lbl">CITY</span> <span class="val">{{ address.city }}</span>
+      <span class="lbl" style="display:inline;">STATE</span> <span class="val">{{ address.state }}</span><br>
+      <span class="lbl">ZIP</span> <span class="val">{{ address.zip }}</span>
+      <span class="lbl" style="display:inline;">TELEPHONE</span> <span class="val">{{ phone }}</span>
     </td>
     <td>
-      <span class="box-label">3. PATIENT'S BIRTH DATE</span>
-      <span class="box-value">{{ dob }}</span>
+      <span class="lbl">6. PATIENT RELATIONSHIP TO INSURED</span>
+      <span class="val">{{ relationship_to_insured }}</span>
     </td>
     <td>
-      <span class="box-label">SEX</span>
-      <span class="box-value">{{ gender }}</span>
+      <span class="lbl">7. INSURED'S ADDRESS (No., Street)</span>
+      <span class="val">{{ insured_address.street }}</span><br>
+      <span class="lbl">CITY</span> <span class="val">{{ insured_address.city }}</span>
+      <span class="lbl" style="display:inline;">STATE</span> <span class="val">{{ insured_address.state }}</span><br>
+      <span class="lbl">ZIP</span> <span class="val">{{ insured_address.zip }}</span>
+      <span class="lbl" style="display:inline;">TELEPHONE</span> <span class="val">{{ insured_phone }}</span>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <span class="lbl">9. OTHER INSURED'S NAME</span>
+      <span class="val">N/A</span>
+    </td>
+    <td colspan="2">
+      <span class="lbl">10. IS PATIENT'S CONDITION RELATED TO:</span>
+      <span class="val">a. Employment: {{ employment_related }}</span> &nbsp;
+      <span class="val">b. Auto Accident: {{ auto_accident_related }} (State: {{ auto_accident_state }})</span> &nbsp;
+      <span class="val">c. Other Accident: {{ other_accident_related }}</span>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <span class="lbl">11. INSURED'S POLICY GROUP OR FECA NUMBER</span>
+      <span class="val">{{ insured_policy_group }}</span>
+    </td>
+    <td>
+      <span class="lbl">11a. INSURED'S DATE OF BIRTH</span>
+      <span class="val">{{ insured_dob }}</span>
+      <span class="lbl" style="display:inline;">SEX</span> <span class="val">{{ insured_gender }}</span>
+    </td>
+    <td>
+      <span class="lbl">11c. INSURANCE PLAN NAME</span>
+      <span class="val">{{ insurer_name }}</span>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <span class="lbl">12. PATIENT'S OR AUTHORIZED PERSON'S SIGNATURE</span>
+      <span class="val">Signature on File</span> &nbsp; <span class="lbl" style="display:inline;">DATE</span> <span class="val">{{ dos }}</span>
+    </td>
+    <td colspan="2">
+      <span class="lbl">13. INSURED'S OR AUTHORIZED PERSON'S SIGNATURE</span>
+      <span class="val">Signature on File</span>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <span class="lbl">14. DATE OF CURRENT ILLNESS, INJURY, OR PREGNANCY</span>
+      <span class="val">{{ date_of_illness }}</span>
+      <span class="lbl" style="display:inline;">QUAL.</span> <span class="val">{{ date_of_illness_qualifier }}</span>
+    </td>
+    <td>
+      <span class="lbl">16. DATES PATIENT UNABLE TO WORK</span>
+      <span class="val">{{ unable_to_work_from }} – {{ unable_to_work_to }}</span>
+    </td>
+    <td>
+      <span class="lbl">17. NAME OF REFERRING PROVIDER</span>
+      <span class="val">{{ physician_name }}</span>
+      <span class="lbl" style="margin-top:2px;">17a / 17b NPI</span>
+      <span class="val">{{ npi }}</span>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <span class="lbl">18. HOSPITALIZATION DATES RELATED TO CURRENT SERVICES</span>
+      <span class="val">{{ hospitalization_from }} – {{ hospitalization_to }}</span>
+    </td>
+    <td>
+      <span class="lbl">20. OUTSIDE LAB?</span>
+      <span class="val">{{ outside_lab }}</span>
+      <span class="lbl" style="display:inline;">$ CHARGES</span>
+      <span class="val">${{ "%.2f"|format(outside_lab_charges) }}</span>
+    </td>
+    <td>
+      <span class="lbl">19. ADDITIONAL CLAIM INFORMATION</span>
+      <span class="val">{{ additional_claim_info }}</span>
     </td>
   </tr>
   <tr>
     <td colspan="2">
-      <span class="box-label">4. INSURED'S NAME</span>
-      <span class="box-value">{{ insured_name }}</span>
-    </td>
-    <td colspan="2">
-      <span class="box-label">5. PATIENT'S ADDRESS</span>
-      <span class="box-value">{{ address.street }}, {{ address.city }}, {{ address.state }} {{ address.zip }}</span>
-    </td>
-    <td colspan="2">
-      <span class="box-label">6. PATIENT RELATIONSHIP TO INSURED</span>
-      <span class="box-value">{{ relationship_to_insured }}</span>
-    </td>
-  </tr>
-  <tr>
-    <td colspan="3">
-      <span class="box-label">9. OTHER INSURED'S NAME</span>
-      <span class="box-value">N/A</span>
-    </td>
-    <td colspan="3">
-      <span class="box-label">10. IS PATIENT'S CONDITION RELATED TO:</span>
-      <span class="box-value">a. Employment? ☐ YES ☑ NO &nbsp; b. Auto Accident? ☐ YES ☑ NO</span>
-    </td>
-  </tr>
-  <tr>
-    <td colspan="2">
-      <span class="box-label">12. PATIENT'S OR AUTHORIZED SIGNATURE</span>
-      <span class="box-value">Signature on File</span>
-    </td>
-    <td colspan="2">
-      <span class="box-label">17. NAME OF REFERRING PROVIDER</span>
-      <span class="box-value">{{ physician_name }}</span>
-    </td>
-    <td colspan="2">
-      <span class="box-label">17b. NPI</span>
-      <span class="box-value">{{ provider_npi }}</span>
-    </td>
-  </tr>
-  <tr>
-    <td colspan="2">
-      <span class="box-label">21. DIAGNOSIS CODES (ICD-10-CM)</span>
+      <span class="lbl">21. DIAGNOSIS OR NATURE OF ILLNESS OR INJURY — ICD Ind. 0</span>
       {% for code, desc in diagnosis_codes %}
-      <span class="box-value">{{ loop.index }}. {{ code }}</span>&nbsp;
+      <div class="val">{{ loop.index0 == 0 and "A." or loop.index0 == 1 and "B." or loop.index0 == 2 and "C." or "D." }} {{ code }} — {{ desc }}</div>
       {% endfor %}
     </td>
-    <td colspan="2">
-      <span class="box-label">23. PRIOR AUTHORIZATION NUMBER</span>
-      <span class="box-value">{{ prior_auth_number }}</span>
-    </td>
-    <td colspan="2">
-      <span class="box-label">25. FEDERAL TAX I.D. NUMBER</span>
-      <span class="box-value">{{ federal_tax_id }}</span>
+    <td>
+      <span class="lbl">22. RESUBMISSION CODE / ORIGINAL REF NO.</span>
+      <span class="val">{{ resubmission_code }} {{ original_ref_number }}</span>
+      <span class="lbl" style="margin-top:2px;">23. PRIOR AUTHORIZATION NUMBER</span>
+      <span class="val">{{ prior_auth_number }}</span>
     </td>
   </tr>
 </table>
 
-<div class="section-bar">SERVICE LINE ITEMS</div>
-<table class="form">
+<div class="section-bar">24. SERVICE LINE ITEMS</div>
+<table class="lines">
   <tr>
-    <th>24A. DATE(S) OF SERVICE</th>
-    <th>24B. POS</th>
-    <th>24D. PROCEDURE CODE</th>
-    <th>24E. DIAG PTR</th>
-    <th>24F. $ CHARGES</th>
-    <th>24G. DAYS</th>
-    <th>24J. NPI</th>
+    <th style="width:14%;">A. DATE(S) OF SERVICE</th>
+    <th style="width:6%;">B. POS</th>
+    <th style="width:6%;">C. EMG</th>
+    <th style="width:14%;">D. CPT/HCPCS + MOD</th>
+    <th style="width:8%;">E. DIAG PTR</th>
+    <th style="width:12%;">F. $ CHARGES</th>
+    <th style="width:8%;">G. DAYS/UNITS</th>
+    <th style="width:8%;">H. EPSDT</th>
+    <th style="width:24%;">J. RENDERING PROVIDER NPI</th>
   </tr>
   {% for item in line_items %}
   <tr>
     <td>{{ dos_from }}</td>
-    <td>11</td>
-    <td>{{ item.cpt }}</td>
-    <td>A</td>
+    <td>{{ item.pos }}</td>
+    <td>{{ item.emg }}</td>
+    <td>{{ item.cpt }} {{ item.modifier }}</td>
+    <td>{{ item.diag_pointer }}</td>
     <td>${{ "%.2f"|format(item.charge) }}</td>
     <td>{{ item.units }}</td>
+    <td></td>
     <td>{{ rendering_provider_npi }}</td>
   </tr>
   {% endfor %}
-  <tr class="totals-row">
-    <td colspan="4" style="text-align:right;">28. TOTAL CHARGE</td>
-    <td>${{ "%.2f"|format(total_charge) }}</td>
-    <td colspan="2"></td>
+</table>
+
+<table class="grid" style="margin-top:0;">
+  <tr>
+    <td style="width:20%;">
+      <span class="lbl">25. FEDERAL TAX I.D. NUMBER</span>
+      <span class="val">{{ federal_tax_id }} ({{ federal_tax_id_type }})</span>
+    </td>
+    <td style="width:16%;">
+      <span class="lbl">26. PATIENT'S ACCOUNT NO.</span>
+      <span class="val">{{ patient_account_number }}</span>
+    </td>
+    <td style="width:12%;">
+      <span class="lbl">27. ACCEPT ASSIGNMENT?</span>
+      <span class="val">{{ accept_assignment }}</span>
+    </td>
+    <td style="width:14%;" class="totals">
+      <span class="lbl">28. TOTAL CHARGE</span>
+      <span class="val">${{ "%.2f"|format(total_charge) }}</span>
+    </td>
+    <td style="width:14%;" class="totals">
+      <span class="lbl">29. AMOUNT PAID</span>
+      <span class="val">${{ "%.2f"|format(amount_paid) }}</span>
+    </td>
+    <td style="width:24%;" class="totals">
+      <span class="lbl">30. BALANCE DUE</span>
+      <span class="val">${{ "%.2f"|format(balance_due) }}</span>
+    </td>
   </tr>
-  <tr class="totals-row">
-    <td colspan="4" style="text-align:right;">29. AMOUNT PAID</td>
-    <td>${{ "%.2f"|format(amount_paid) }}</td>
-    <td colspan="2"></td>
+  <tr>
+    <td colspan="3">
+      <span class="lbl">31. SIGNATURE OF PHYSICIAN OR SUPPLIER</span>
+      <span class="val">{{ physician_name }} (Signature on File, {{ dos }})</span>
+    </td>
+    <td colspan="2">
+      <span class="lbl">32. SERVICE FACILITY LOCATION INFORMATION</span>
+      <span class="val">{{ service_facility }}</span><br>
+      <span class="val">{{ service_facility_address.street }}, {{ service_facility_address.city }}, {{ service_facility_address.state }} {{ service_facility_address.zip }}</span>
+      <span class="lbl" style="margin-top:2px;">32a. NPI</span> <span class="val">{{ provider_npi }}</span>
+    </td>
+    <td>
+      <span class="lbl">33. BILLING PROVIDER INFO &amp; PH #</span>
+      <span class="val">{{ billing_provider_name }}</span><br>
+      <span class="val">{{ billing_provider_address.street }}, {{ billing_provider_address.city }}, {{ billing_provider_address.state }} {{ billing_provider_address.zip }}</span><br>
+      <span class="val">{{ billing_provider_phone }}</span>
+      <span class="lbl" style="margin-top:2px;">33a. NPI</span> <span class="val">{{ provider_npi }}</span>
+    </td>
   </tr>
 </table>
 
-<table class="form" style="margin-top:6px;">
-  <tr>
-    <td colspan="3">
-      <span class="box-label">31. SIGNATURE OF PHYSICIAN OR SUPPLIER</span>
-      <span class="box-value">{{ physician_name }} — Signature on File — {{ dos }}</span>
-    </td>
-    <td colspan="2">
-      <span class="box-label">32. SERVICE FACILITY</span>
-      <span class="box-value">{{ hospital }}</span>
-    </td>
-    <td>
-      <span class="box-label">33a. BILLING PROVIDER NPI</span>
-      <span class="box-value">{{ provider_npi }}</span>
-    </td>
-  </tr>
-</table>
+<div class="footer-note">SYNTHETIC / DEMONSTRATION DATA ONLY, NOT A REAL CLAIM, FOR IDP TESTING PURPOSES</div>
 </body>
 </html>

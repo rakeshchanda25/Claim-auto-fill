@@ -14,11 +14,18 @@ allowed-tools: generate_synthetic_data render_document_to_pdf validate_document_
 
 ## Required Sections
 1. Insurer/Policy Header — Insurer, Claim #, Policy #
-2. Policyholder Information — Name, DOB, Phone
-3. Accident Details — Date, location, police report #, bodily injury, at-fault, airbags deployed
-4. Vehicle Information — Year, Make, Model, VIN, License Plate
-5. Damage Description — 1-2 sentences
-6. Claimant Signature Block
+2. Policyholder Information — Insured Name, DOB, Phone
+3. Accident Details — Date, time, location, police report #, bodily injury, at-fault, airbags
+   deployed, vehicle towed
+4. Insured's Vehicle — Year, Make, Model, VIN, License Plate, Driver Name, Driver License Number
+5. Other Vehicle — Year, Make, Model, License Plate, Other Driver Name, Other Driver's Insurer
+   and Policy Number (the other party is never the same insurer/policy as the insured)
+6. Damage Description — 1-2 sentences, plus Estimated Damage amount
+7. Witnesses Table — Name and phone
+8. Claimant Signature Block
+
+Note: `insured_name` is the policyholder filing the claim - keep it consistent with
+`driver_name` unless the scenario explicitly involves someone else driving the insured vehicle.
 
 ## Vehicle Generation Rules
 - Year: 2010 to current year

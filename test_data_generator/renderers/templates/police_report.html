@@ -36,18 +36,30 @@
   <div><span class="label">Location:</span> {{ location }}</div>
   <div><span class="label">Officer Name:</span> {{ officer_name }}</div>
   <div><span class="label">Badge Number:</span> {{ badge_number }}</div>
+  <div><span class="label">Case Status:</span> {{ case_status }}</div>
+  <div><span class="label">Citation Issued:</span> {{ citation_issued }}</div>
+  <div><span class="label">Weather:</span> {{ weather_conditions }}</div>
+  <div><span class="label">Road Conditions:</span> {{ road_conditions }}</div>
 </div>
 
 <h2>Parties Involved</h2>
 <table>
-  <tr><th>Role</th><th>Name</th><th>Date of Birth</th><th>Notes</th></tr>
+  <tr><th>Role</th><th>Name</th><th>Date of Birth</th><th>License Number</th></tr>
   {% for party in parties_involved %}
   <tr>
     <td>{{ party.role }}</td>
     <td>{{ party.name }}</td>
     <td>{{ party.dob }}</td>
-    <td></td>
+    <td>{{ party.license_number }}</td>
   </tr>
+  {% endfor %}
+</table>
+
+<h2>Witnesses</h2>
+<table>
+  <tr><th>Name</th><th>Phone</th></tr>
+  {% for w in witnesses %}
+  <tr><td>{{ w.name }}</td><td>{{ w.phone }}</td></tr>
   {% endfor %}
 </table>
 
