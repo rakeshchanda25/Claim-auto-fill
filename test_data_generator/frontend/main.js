@@ -544,6 +544,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const seedInput = document.getElementById('ai-seed');
     const scenarioSection = document.getElementById('ai-scenario-section');
     const docSectionLabel = document.getElementById('ai-doc-section-label');
+    const fillPromptSection = document.getElementById('ai-fill-prompt-section');
+    const fillPromptInput = document.getElementById('ai-fill-prompt');
 
     fetch('/api/ai-doc-types')
         .then(r => r.json())
@@ -559,6 +561,13 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
     function renderDocCards() {
+        // Fill mode fills the user's OWN uploaded document - there is no
+        // template to pick, so the whole doc-type picker is irrelevant here.
+        const isFill = activeMode === 'fill';
+        docSectionLabel.classList.toggle('hidden', isFill);
+        grid.classList.toggle('hidden', isFill);
+        if (isFill) return;
+
         const isPacket = activeMode === 'packet';
         const items = isPacket ? aiPackets : aiDocTypes;
         docSectionLabel.textContent = isPacket ? 'Select Packet Type' : 'Select Document Type';
@@ -594,11 +603,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateGenerateBtn() {
-        generateBtn.disabled = !selectedDocId;
+        generateBtn.disabled = activeMode === 'fill' ? !referenceFile : !selectedDocId;
         const isPacket = activeMode === 'packet';
         generateBtn.querySelector('.btn-text').textContent = isPacket
             ? '📦 Build Packet'
-            : '✨ Generate Document';
+            : activeMode === 'fill' ? '📝 Fill Form' : '✨ Generate Document';
     }
 
     document.getElementById('ai-mode-pills').addEventListener('click', e => {
@@ -611,6 +620,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const needsRef = activeMode === 'recreate' || activeMode === 'fill';
         refSection.classList.toggle('hidden', !needsRef);
         scenarioSection.classList.toggle('hidden', activeMode === 'fill');
+        fillPromptSection.classList.toggle('hidden', activeMode !== 'fill');
         renderDocCards();
         updateGenerateBtn();
         setStatus('idle', 'Ready');
@@ -635,6 +645,7 @@ document.addEventListener('DOMContentLoaded', () => {
             refDrop.classList.add('has-file');
             analyzeBtn.classList.remove('hidden');
             analysisResult.classList.add('hidden');
+            updateGenerateBtn();
         }
     });
     ['dragenter', 'dragover'].forEach(ev => refDrop.addEventListener(ev, e => { e.preventDefault(); refDrop.classList.add('dragover'); }));
@@ -706,7 +717,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     generateBtn.addEventListener('click', async () => {
-        if (!selectedDocId) return;
+        if (activeMode === 'fill' ? !referenceFile : !selectedDocId) return;
 
         setStatus('running', 'Running agent...');
         const span = generateBtn.querySelector('.btn-text');
@@ -718,10 +729,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
         startProgressSimulation();
 
+        // Fill mode has no doc-type picker (it fills the uploaded document
+        // itself, not a template) - derive a label from the upload for the
+        // backend's required doc_type field, and send the free-text prompt
+        // as the scenario description instead of a picked scenario pill.
         const fd = new FormData();
-        fd.append('doc_type', selectedDocId);
+        fd.append('doc_type', activeMode === 'fill'
+            ? (referenceFile.name.replace(/\.[^.]+$/, '') || 'reference-document')
+            : selectedDocId);
         fd.append('mode', activeMode === 'packet' ? 'packet' : activeMode);
-        fd.append('scenario', selectedScenario);
+        fd.append('scenario', activeMode === 'fill' ? (fillPromptInput.value.trim() || 'general') : selectedScenario);
         fd.append('count', countInput.value);
         if (seedInput.value) fd.append('seed', seedInput.value);
         if (referenceFile && (activeMode === 'recreate' || activeMode === 'fill')) {

@@ -39,13 +39,19 @@ here at all.
 3. **Never report success without `verify_docx_fill`.** A fill that silently
    did not take is the failure mode this skill exists to prevent.
 4. All data is SYNTHETIC. Never use a real person, company, or identifier.
+5. **Never call `generate_synthetic_data` + `render_document_to_pdf` in this
+   skill.** Those build a brand new document from an HTML template - the
+   opposite of this task, which fills the user's OWN uploaded docx in place.
 
 ## Workflow
 
 ### 1. Discover the structure
 
-Call `inspect_docx_form_structure(docx_bytes)`. You get back a `controls`
-list, each with:
+Call `inspect_docx_form_structure()` - no arguments. It operates on the
+document the user uploaded for this request; that file's bytes are supplied
+to the tool automatically, you never see or pass them yourself (a docx's raw
+bytes cannot be written out as a tool-call argument, so don't try). You get
+back a `controls` list, each with:
 
 - `type` - one of `text`, `richText`, `date`, `checkbox`, `dropdown`, `combobox`.
 - `label` - the harvested context (the control's `alias`, or nearby text).
@@ -80,9 +86,14 @@ For a dropdown/comboBox, pick one of `choices[].display` - not the internal
 ### 4. Fill, verify, report
 
 ```
-filled = fill_docx_form_controls(docx_bytes, values={...}, checks={...}, choices={...})
+filled = fill_docx_form_controls(values={...}, checks={...}, choices={...})
 result = verify_docx_fill(filled, {**values, **checks, **choices})
 ```
+
+(`fill_docx_form_controls` also operates on the uploaded document
+automatically - no `docx_bytes` argument. `verify_docx_fill`'s first
+argument IS explicit: the `filled` bytes just returned, chained straight
+into the next call.)
 
 `values` is name -> text (text/richText/date controls). `checks` is name ->
 bool (checkbox controls - the actual checked glyph and font come from the
@@ -98,5 +109,5 @@ A `.docx` with zero content controls (plain prose, or a table meant to be
 read/typed into manually with no real form fields) has nothing this skill can
 address - `inspect_docx_form_structure` reports `stats.controls == 0` rather
 than erroring. Say so plainly. That document needs a different strategy
-(e.g. `analyze_reference_document` to extract its layout/style and regenerate
+(e.g. `analyze_uploaded_reference` to extract its layout/style and regenerate
 a new document from scratch), which this skill does not implement.

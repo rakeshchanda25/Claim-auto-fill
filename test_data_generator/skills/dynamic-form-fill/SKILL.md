@@ -32,12 +32,21 @@ each part means, and fill it.
 3. **Never report success without `verify_pdf_fill`.** A fill that silently did
    not take is the failure mode this whole skill exists to prevent.
 4. All data is SYNTHETIC. Never use a real person, company, or identifier.
+5. **Never call `generate_synthetic_data` + `render_document_to_pdf` in this
+   skill.** Those build a brand new document from an HTML template - the
+   opposite of this task, which fills the user's OWN uploaded PDF in place.
+   If you find yourself reaching for `render_document_to_pdf`, stop: you have
+   left this skill.
 
 ## Workflow
 
 ### 1. Discover the structure
 
-Call `inspect_pdf_form_structure(pdf_bytes)`. You get back:
+Call `inspect_pdf_form_structure()` - no arguments. It operates on the
+document the user uploaded for this request; that file's bytes are supplied
+to the tool automatically, you never see or pass them yourself (a PDF's raw
+bytes cannot be written out as a tool-call argument, so don't try). You get
+back:
 
 - `runs` - one logical text answer each, possibly spanning several stacked
   widgets, with the harvested `label`, `total_capacity`, and `multiline_box`.
@@ -95,8 +104,8 @@ values use `DD/MM/YYYY`, use that, not `MM/DD/YYYY`.
 ### 4. Fit the text
 
 - Multi-widget run, or any text that might not fit:
-  `flow_text_into_widgets(pdf_bytes, widget_names=run["widgets"], text=...)`.
-- One grid row: `fit_grid_row(pdf_bytes, widget_names=[...], cell_texts=[...])`
+  `flow_text_into_widgets(widget_names=run["widgets"], text=...)`.
+- One grid row: `fit_grid_row(widget_names=[...], cell_texts=[...])`
   - it returns one font size for the whole row, which is what you want.
 - Short value in a wide box: put it straight in `widget_values` with no font.
 
@@ -112,9 +121,14 @@ set the other to `/Off`. Setting only one leaves the other in an undefined state
 ### 6. Fill, verify, report
 
 ```
-filled = fill_pdf_widgets(pdf_bytes, widget_values, widget_fonts, watermark=...)
+filled = fill_pdf_widgets(widget_values, widget_fonts, watermark=...)
 result = verify_pdf_fill(filled, widget_values)
 ```
+
+(`fill_pdf_widgets` also operates on the uploaded document automatically -
+no `pdf_bytes` argument. `verify_pdf_fill`'s first argument IS an explicit
+argument: the `filled` bytes `fill_pdf_widgets` just returned, chained
+straight into the next call.)
 
 If `result["ok"]` is false, fix the mismatched widgets and fill again. Do not
 return a PDF whose verification failed without saying so explicitly.

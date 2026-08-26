@@ -1,5 +1,6 @@
 import base64
 import random
+import threading
 from faker import Faker
 try:
     from andromeda.tools import tool
@@ -25,6 +26,44 @@ from .packets import PACKET_REGISTRY
 
 
 _fake = Faker()
+
+
+# =============================================================================
+# Reference-document staging.
+#
+# A tool-calling LLM emits its arguments as text/JSON tokens - it cannot
+# transcribe a real PDF/docx/image's raw bytes as a tool-call argument (a
+# claim form is ~100-300KB of binary data; there is no way for the model to
+# "type out" that content correctly). The fill/recreate tools below used to
+# declare a `pdf_bytes`/`docx_bytes`/`file_bytes` parameter anyway, which the
+# model could never satisfy - it would silently fail or improvise, which is
+# the actual root cause of "fill" mode producing a brand-new generated
+# document instead of touching the uploaded one at all.
+#
+# The fix: the uploaded file's real bytes are staged here BEFORE the agent
+# runs (see agent_factory.run_with_reference), and the tools read them from
+# here instead of taking them as an LLM-supplied argument. Guarded by a lock
+# because the agent instance is shared/reused across requests (see
+# agent_factory.get_shared_agent) - run_with_reference holds this lock for
+# the whole run so two requests' reference documents can never cross.
+# =============================================================================
+
+reference_lock = threading.Lock()
+_reference_bytes: bytes | None = None
+
+
+def set_reference_document(data: bytes | None) -> None:
+    global _reference_bytes
+    _reference_bytes = data
+
+
+def _require_reference_bytes() -> bytes:
+    if _reference_bytes is None:
+        raise ValueError(
+            "No reference document is staged for this request. The user must upload a "
+            "reference file for fill/recreate mode - there is nothing to inspect or fill."
+        )
+    return _reference_bytes
 
 
 @tool
@@ -66,31 +105,34 @@ def get_pdf_form_fields(pdf_bytes: bytes) -> dict:
 # =============================================================================
 
 @tool
-def inspect_pdf_form_structure(pdf_bytes: bytes) -> dict:
-    """Analyze ANY AcroForm PDF and return its structural draft: every widget's
-    geometry, its harvested nearby label text, detected section headings,
-    detected repeating grids (tables), detected Yes/No checkbox pairs, and
-    detected multi-widget narrative runs (a single answer spanning several
-    stacked one-line boxes). This is purely geometric - no meaning is
-    assigned to anything yet. ALWAYS call this first for a form-filling
-    task; never infer a widget's purpose from its raw internal name alone
-    (e.g. "Text Field0" carries no information - the harvested label does).
-    Raises if the PDF has no /AcroForm at all (a flat/scanned form needs a
-    different strategy - see analyze_reference_document)."""
-    return build_draft(pdf_bytes)
+def inspect_pdf_form_structure() -> dict:
+    """Analyze the uploaded reference AcroForm PDF and return its structural
+    draft: every widget's geometry, its harvested nearby label text, detected
+    section headings, detected repeating grids (tables), detected Yes/No
+    checkbox pairs, and detected multi-widget narrative runs (a single answer
+    spanning several stacked one-line boxes). This is purely geometric - no
+    meaning is assigned to anything yet. Operates on the file the user
+    uploaded for this request - takes no arguments, there is nothing to pass.
+    ALWAYS call this first for a form-filling task; never infer a widget's
+    purpose from its raw internal name alone (e.g. "Text Field0" carries no
+    information - the harvested label does). Raises if the PDF has no
+    /AcroForm at all (a flat/scanned form needs a different strategy - see
+    analyze_uploaded_reference)."""
+    return build_draft(_require_reference_bytes())
 
 
 @tool
-def inspect_region_image(pdf_bytes: bytes, page: int, bbox: list, zoom: float = 2.0) -> dict:
-    """Render one page region to a PNG image (base64) plus the raw text found
-    there. Use when a run/pair/grid's harvested label is empty or ambiguous
-    and you need to actually look at the page. `page` is 1-based. `bbox` is
-    [x0, y0, x1, y1] in PDF points using the SAME bottom-up coordinate space
-    as inspect_pdf_form_structure's widget rects (a small margin is added
-    automatically so surrounding context is visible)."""
+def inspect_region_image(page: int, bbox: list, zoom: float = 2.0) -> dict:
+    """Render one page region of the uploaded reference PDF to a PNG image
+    (base64) plus the raw text found there. Use when a run/pair/grid's
+    harvested label is empty or ambiguous and you need to actually look at
+    the page. `page` is 1-based. `bbox` is [x0, y0, x1, y1] in PDF points
+    using the SAME bottom-up coordinate space as inspect_pdf_form_structure's
+    widget rects (a small margin is added automatically so surrounding
+    context is visible)."""
     import pymupdf
 
-    doc = pymupdf.open(stream=pdf_bytes, filetype="pdf")
+    doc = pymupdf.open(stream=_require_reference_bytes(), filetype="pdf")
     pg = doc[page - 1]
     page_h = pg.rect.height
     x0, y0, x1, y1 = bbox
@@ -106,15 +148,16 @@ def inspect_region_image(pdf_bytes: bytes, page: int, bbox: list, zoom: float = 
 
 
 @tool
-def flow_text_into_widgets(pdf_bytes: bytes, widget_names: list, text: str, base_font: float = 9.0) -> dict:
-    """Deterministically wraps `text` across one detected run's widgets, in
-    order, shrinking the font before ever truncating a word. Returns
-    {"values": {...}, "fonts": {...}, "warnings": [...]} - merge these
-    straight into fill_pdf_widgets' widget_values/widget_fonts. Use this for
-    any multi-widget run, or any single widget where the text might not fit
-    at the default size - font-fitting is exactly computable from widget
-    geometry, so never guess a font size yourself."""
-    widgets, _ = inventory(pdf_bytes)
+def flow_text_into_widgets(widget_names: list, text: str, base_font: float = 9.0) -> dict:
+    """Deterministically wraps `text` across one detected run's widgets (in
+    the uploaded reference PDF), in order, shrinking the font before ever
+    truncating a word. Returns {"values": {...}, "fonts": {...}, "warnings":
+    [...]} - merge these straight into fill_pdf_widgets' widget_values/
+    widget_fonts. Use this for any multi-widget run, or any single widget
+    where the text might not fit at the default size - font-fitting is
+    exactly computable from widget geometry, so never guess a font size
+    yourself."""
+    widgets, _ = inventory(_require_reference_bytes())
     index = {w.name: w for w in widgets}
     ws = [index[n] for n in widget_names if n in index]
     if not ws:
@@ -124,13 +167,14 @@ def flow_text_into_widgets(pdf_bytes: bytes, widget_names: list, text: str, base
 
 
 @tool
-def fit_grid_row(pdf_bytes: bytes, widget_names: list, cell_texts: list, base_font: float = 7.0) -> dict:
-    """For one row of a detected grid, computes ONE common font size that
-    fits every cell in the row - never mix font sizes within a row, it is
-    an obvious tell of a machine-filled form. `widget_names` and
-    `cell_texts` must be the same length and in the same left-to-right
-    column order. Returns {"values": {...}, "fonts": {...}, "warnings": [...]}."""
-    widgets, _ = inventory(pdf_bytes)
+def fit_grid_row(widget_names: list, cell_texts: list, base_font: float = 7.0) -> dict:
+    """For one row of a detected grid in the uploaded reference PDF, computes
+    ONE common font size that fits every cell in the row - never mix font
+    sizes within a row, it is an obvious tell of a machine-filled form.
+    `widget_names` and `cell_texts` must be the same length and in the same
+    left-to-right column order. Returns {"values": {...}, "fonts": {...},
+    "warnings": [...]}."""
+    widgets, _ = inventory(_require_reference_bytes())
     index = {w.name: w for w in widgets}
     pairs = [(n, t) for n, t in zip(widget_names, cell_texts) if n in index]
     if not pairs:
@@ -152,15 +196,15 @@ def fit_grid_row(pdf_bytes: bytes, widget_names: list, cell_texts: list, base_fo
 
 
 @tool
-def fill_pdf_widgets(pdf_bytes: bytes, widget_values: dict, widget_fonts: dict = None, watermark: str = None) -> bytes:
-    """Fill AcroForm widgets by exact widget name with already-fitted text
-    (from flow_text_into_widgets / fit_grid_row, or a short single-line
-    value with no font override needed) and return the filled PDF bytes.
-    Sets /NeedAppearances so real PDF viewers actually render the values
-    (many otherwise show nothing despite the value being saved in the
-    file). Always call verify_pdf_fill afterwards - never report success
-    without confirming the values actually took."""
-    return fill_widgets_precise(pdf_bytes, widget_values, widget_fonts, watermark)
+def fill_pdf_widgets(widget_values: dict, widget_fonts: dict = None, watermark: str = None) -> bytes:
+    """Fill the uploaded reference PDF's AcroForm widgets by exact widget name
+    with already-fitted text (from flow_text_into_widgets / fit_grid_row, or
+    a short single-line value with no font override needed) and return the
+    filled PDF bytes. Sets /NeedAppearances so real PDF viewers actually
+    render the values (many otherwise show nothing despite the value being
+    saved in the file). Always call verify_pdf_fill afterwards - never
+    report success without confirming the values actually took."""
+    return fill_widgets_precise(_require_reference_bytes(), widget_values, widget_fonts, watermark)
 
 
 @tool
@@ -186,37 +230,38 @@ def verify_pdf_fill(pdf_bytes: bytes, expected_values: dict) -> dict:
 # =============================================================================
 
 @tool
-def inspect_docx_form_structure(docx_bytes: bytes) -> dict:
-    """Analyze ANY .docx with Word content controls and return its structural
-    draft: every control's type (text/richText/date/checkbox/dropdown/
-    combobox), its harvested context label (the control's own `alias` if the
-    template author set one, else nearby paragraph/table-cell text), and -
-    for dropdown/comboBox controls - the exact list of selectable choices.
-    No meaning is assigned yet. ALWAYS call this first for a docx fill task;
-    never infer a control's purpose from its raw `tag` alone. A docx with no
-    content controls returns an empty controls list (0 = nothing to fill,
-    not an error) - the doc likely needs a different strategy (see
-    analyze_reference_document)."""
-    return build_docx_draft(docx_bytes)
+def inspect_docx_form_structure() -> dict:
+    """Analyze the uploaded reference .docx's Word content controls and
+    return its structural draft: every control's type (text/richText/date/
+    checkbox/dropdown/combobox), its harvested context label (the control's
+    own `alias` if the template author set one, else nearby paragraph/table-
+    cell text), and - for dropdown/comboBox controls - the exact list of
+    selectable choices. No meaning is assigned yet. Operates on the file the
+    user uploaded for this request - takes no arguments, there is nothing to
+    pass. ALWAYS call this first for a docx fill task; never infer a
+    control's purpose from its raw `tag` alone. A docx with no content
+    controls returns an empty controls list (0 = nothing to fill, not an
+    error) - the doc likely needs a different strategy (see
+    analyze_uploaded_reference)."""
+    return build_docx_draft(_require_reference_bytes())
 
 
 @tool
 def fill_docx_form_controls(
-    docx_bytes: bytes,
     values: dict = None,
     checks: dict = None,
     choices: dict = None,
 ) -> bytes:
-    """Fill Word content controls by exact control name (from
-    inspect_docx_form_structure). `values` is name->text for text/richText/
-    date controls. `checks` is name->bool for checkbox controls - never
-    assume a checkbox displays "X" when checked, the fill uses the
-    control's own configured checked-state glyph and font. `choices` is
-    name->displayText for dropdown/comboBox controls, and MUST be one of
-    that control's own listItem displayText values (raises otherwise -
-    never invent an option the template doesn't offer). Always call
-    verify_docx_fill afterwards."""
-    return fill_docx_controls(docx_bytes, values, checks, choices)
+    """Fill the uploaded reference .docx's Word content controls by exact
+    control name (from inspect_docx_form_structure). `values` is name->text
+    for text/richText/date controls. `checks` is name->bool for checkbox
+    controls - never assume a checkbox displays "X" when checked, the fill
+    uses the control's own configured checked-state glyph and font.
+    `choices` is name->displayText for dropdown/comboBox controls, and MUST
+    be one of that control's own listItem displayText values (raises
+    otherwise - never invent an option the template doesn't offer). Always
+    call verify_docx_fill afterwards."""
+    return fill_docx_controls(_require_reference_bytes(), values, checks, choices)
 
 
 @tool
@@ -235,10 +280,14 @@ def verify_docx_fill(docx_bytes: bytes, expected_values: dict) -> dict:
     return {"ok": len(mismatches) == 0, "checked": len(expected_values), "mismatches": mismatches}
 
 
-@tool
 def analyze_reference_document(file_bytes: bytes, file_type: str) -> dict:
     """Analyze a reference document and return its detected structure and field layout.
     Supported file_type: pdf, jpg, jpeg, png, tiff, docx, doc.
+
+    Plain function, not an @tool - used directly (with real bytes already in
+    hand) by the synchronous /api/ai-analyze-reference preview endpoint,
+    which has nothing to do with the agent/LLM. See
+    analyze_uploaded_reference below for the agent-facing version.
     """
     file_type = file_type.lower().lstrip(".")
 
@@ -269,6 +318,16 @@ def analyze_reference_document(file_bytes: bytes, file_type: str) -> dict:
         return result
 
     return {"file_type": file_type, "note": "image analysis requires vision-capable model"}
+
+
+@tool
+def analyze_uploaded_reference(file_type: str) -> dict:
+    """Analyze the reference document the user uploaded for this request and
+    return its detected structure and field layout. `file_type` is the
+    uploaded file's extension (pdf, jpg, jpeg, png, tiff, docx, doc) - the
+    file's own bytes are supplied automatically, do not attempt to pass
+    them."""
+    return analyze_reference_document(_require_reference_bytes(), file_type)
 
 
 @tool

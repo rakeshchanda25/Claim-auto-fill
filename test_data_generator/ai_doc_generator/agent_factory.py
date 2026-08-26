@@ -3,8 +3,9 @@ import threading
 from dataclasses import dataclass
 from pathlib import Path
 
+from . import tools
 from .tools import (
-    analyze_reference_document,
+    analyze_uploaded_reference,
     build_packet,
     fill_docx_form_controls,
     fill_pdf_form_tool,
@@ -90,7 +91,7 @@ def create_doc_generator_agent():
         render_document_to_pdf,
         fill_pdf_form_tool,
         get_pdf_form_fields,
-        analyze_reference_document,
+        analyze_uploaded_reference,
         build_packet,
         validate_document_structure,
         # dynamic-form-fill: works on any AcroForm template, no per-form config
@@ -230,20 +231,26 @@ def create_doc_generator_agent():
         prompt=(
             "You are the lead insurance document generation agent for IDP testing. "
             "ALWAYS load the matching skill via load_skill before any generation step. "
-            "For single documents: call generate_synthetic_data, validate_document_structure, "
-            "then render_document_to_pdf. "
-            "For packets: call build_packet to get all components, then render_document_to_pdf for each. "
-            "For recreate mode: delegate reference analysis to doc-analyst first. "
-            "For FILLING a supplied fillable PDF form: load_skill('dynamic-form-fill') and follow "
-            "it. That skill works on any AcroForm template, including ones never seen before - "
-            "discover the layout at runtime with inspect_pdf_form_structure (and "
-            "inspect_region_image when a label is unclear). Never assume a form's fields, and "
-            "never infer a field's meaning from its raw internal name. "
+            "FILL mode and GENERATE mode are opposite tasks - never conflate them. "
+            "For FILLING a supplied fillable PDF form (the user uploaded an existing document and "
+            "wants ITS OWN fields populated): load_skill('dynamic-form-fill') and follow it. That "
+            "skill works on any AcroForm template, including ones never seen before - discover the "
+            "layout at runtime with inspect_pdf_form_structure (and inspect_region_image when a "
+            "label is unclear). Never assume a form's fields, never infer a field's meaning from "
+            "its raw internal name, and NEVER call generate_synthetic_data or render_document_to_pdf "
+            "for this task - those produce a brand new document from a template, not a filled copy "
+            "of the uploaded one. "
             "For FILLING a supplied .docx with Word content controls: load_skill('dynamic-docx-fill') "
             "and follow it instead - discover the controls at runtime with "
-            "inspect_docx_form_structure. Never assume a docx's controls either. "
-            "Return final output as a JSON string with key 'pdf_bytes_b64' (base64-encoded PDF) "
-            "or 'components' (list of {label, pdf_bytes_b64}) for packets."
+            "inspect_docx_form_structure. Same rule: never assume a docx's controls, and never "
+            "fall back to generate_synthetic_data/render_document_to_pdf. "
+            "For GENERATING a single new document from scratch (no uploaded reference): call "
+            "generate_synthetic_data, validate_document_structure, then render_document_to_pdf. "
+            "For packets: call build_packet to get all components, then render_document_to_pdf for each. "
+            "For recreate mode: delegate reference analysis to doc-analyst first. "
+            "Return final output as a JSON string with key 'pdf_bytes_b64' (base64-encoded PDF), "
+            "'docx_bytes_b64' (base64-encoded docx, fill mode on a .docx only), or 'components' "
+            "(list of {label, pdf_bytes_b64}) for packets."
         ),
         tools=_TOOLS,
         workspace_backend=backend,
@@ -296,3 +303,24 @@ def close_shared_agent() -> None:
         if _shared_agent is not None:
             _shared_agent.close()
             _shared_agent = None
+
+
+def run_with_reference(agent, prompt: str, reference_bytes: bytes | None):
+    """Runs the agent with `reference_bytes` staged as this request's
+    uploaded reference document (see tools.py's reference-document-staging
+    tools - a tool-calling model cannot transcribe a PDF/docx's raw bytes as
+    a JSON argument, so fill/recreate tools read this staged value instead
+    of taking bytes as an LLM-supplied parameter).
+
+    Holds tools.reference_lock for the whole call, not just the staging
+    step, so two requests on the shared agent can never see each other's
+    reference document - this is safe to serialize on because
+    WorkspaceAgent.run() already serializes concurrent calls internally too
+    (its own instance lock), so this adds no new bottleneck.
+    """
+    with tools.reference_lock:
+        tools.set_reference_document(reference_bytes)
+        try:
+            return agent.run(prompt)
+        finally:
+            tools.set_reference_document(None)

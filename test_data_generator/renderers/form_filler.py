@@ -62,7 +62,7 @@ def fill_widgets_precise(
 
     acro_ref = writer._root_object.get("/AcroForm")
     if acro_ref is None:
-        raise ValueError("PDF has no /AcroForm - nothing to fill (see analyze_reference_document for flat/no-field PDFs)")
+        raise ValueError("PDF has no /AcroForm - nothing to fill (see analyze_uploaded_reference for flat/no-field PDFs)")
     acro = acro_ref.get_object() if hasattr(acro_ref, "get_object") else acro_ref
     acro[NameObject("/NeedAppearances")] = BooleanObject(True)
 

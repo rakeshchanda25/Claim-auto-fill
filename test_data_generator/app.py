@@ -165,11 +165,11 @@ async def ai_generate_document(
 
     def _run():
         import re
-        from ai_doc_generator.agent_factory import get_shared_agent
+        from ai_doc_generator.agent_factory import get_shared_agent, run_with_reference
 
         agent = get_shared_agent()
         prompt = build_generation_prompt(req)
-        result_str = agent.run(prompt)
+        result_str = run_with_reference(agent, prompt, req.reference_bytes)
         if hasattr(result_str, "content"):
             result_str = result_str.content
         elif hasattr(result_str, "output"):
@@ -255,7 +255,7 @@ async def ai_analyze_reference(file: UploadFile = File(...)):
 
     from ai_doc_generator.tools import analyze_reference_document
     try:
-        result = analyze_reference_document.invoke({"file_bytes": file_bytes, "file_type": file_ext})
+        result = analyze_reference_document(file_bytes, file_ext)
         return JSONResponse(content=result)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
