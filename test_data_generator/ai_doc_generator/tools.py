@@ -1,12 +1,34 @@
 import base64
+import functools
 import random
 import threading
+import traceback
 from faker import Faker
 try:
     from andromeda.tools import tool
 except Exception:
     def tool(func):
         return func
+
+
+def _log_exceptions(func):
+    """Prints the real traceback to the console before letting an exception
+    propagate. andromeda's ToolErrorHandlerMiddleware (andromeda/core/
+    middleware/tooling.py) catches every tool exception and reduces it to
+    just f"Tool error: ... ({exc})" - for something like IndexError that's
+    literally "list index out of range" with zero file/line context, which
+    is useless for diagnosing a real bug. This decorator is the only place
+    that traceback is still visible."""
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except Exception:
+            print(f"\n{'=' * 20} TOOL '{func.__name__}' RAISED {'=' * 20}")
+            traceback.print_exc()
+            print("=" * 70 + "\n")
+            raise
+    return wrapper
 
 from renderers.synthetic_data import build_synthetic_data
 from renderers.html_renderer import render_html_to_pdf
@@ -118,6 +140,7 @@ def _require_staged_artifact() -> bytes:
 
 
 @tool
+@_log_exceptions
 def generate_synthetic_data(doc_type: str, scenario: str = "general", seed: int = None) -> dict:
     """Generate synthetic insurance claim data for the given document type and scenario."""
     if seed is not None:
@@ -127,6 +150,7 @@ def generate_synthetic_data(doc_type: str, scenario: str = "general", seed: int 
 
 
 @tool
+@_log_exceptions
 def render_document_to_pdf(template_name: str, data: dict) -> dict:
     """Render a Jinja2 HTML template with the given data into the final PDF.
     Returns a small status object, NOT the PDF bytes - a tool-calling model
@@ -138,12 +162,14 @@ def render_document_to_pdf(template_name: str, data: dict) -> dict:
 
 
 @tool
+@_log_exceptions
 def fill_pdf_form_tool(pdf_bytes: bytes, field_map: dict, flatten: bool = True) -> bytes:
     """Fill AcroForm fields in a PDF and return the result as bytes."""
     return fill_pdf_form(pdf_bytes, field_map, flatten=flatten)
 
 
 @tool
+@_log_exceptions
 def get_pdf_form_fields(pdf_bytes: bytes) -> dict:
     """Return a mapping of AcroForm field names to their current values in the PDF.
     For a genuine form-FILLING task, prefer inspect_pdf_form_structure instead -
@@ -161,6 +187,7 @@ def get_pdf_form_fields(pdf_bytes: bytes) -> dict:
 # =============================================================================
 
 @tool
+@_log_exceptions
 def inspect_pdf_form_structure() -> dict:
     """Analyze the uploaded reference AcroForm PDF and return its structural
     draft: every widget's geometry, its harvested nearby label text, detected
@@ -178,6 +205,7 @@ def inspect_pdf_form_structure() -> dict:
 
 
 @tool
+@_log_exceptions
 def inspect_region_image(page: int, bbox: list, zoom: float = 2.0) -> dict:
     """Render one page region of the uploaded reference PDF to a PNG image
     (base64) plus the raw text found there. Use when a run/pair/grid's
@@ -204,6 +232,7 @@ def inspect_region_image(page: int, bbox: list, zoom: float = 2.0) -> dict:
 
 
 @tool
+@_log_exceptions
 def flow_text_into_widgets(widget_names: list, text: str, base_font: float = 9.0) -> dict:
     """Deterministically wraps `text` across one detected run's widgets (in
     the uploaded reference PDF), in order, shrinking the font before ever
@@ -223,6 +252,7 @@ def flow_text_into_widgets(widget_names: list, text: str, base_font: float = 9.0
 
 
 @tool
+@_log_exceptions
 def fit_grid_row(widget_names: list, cell_texts: list, base_font: float = 7.0) -> dict:
     """For one row of a detected grid in the uploaded reference PDF, computes
     ONE common font size that fits every cell in the row - never mix font
@@ -252,6 +282,7 @@ def fit_grid_row(widget_names: list, cell_texts: list, base_font: float = 7.0) -
 
 
 @tool
+@_log_exceptions
 def fill_pdf_widgets(widget_values: dict, widget_fonts: dict = None, watermark: str = None) -> dict:
     """Fill the uploaded reference PDF's AcroForm widgets by exact widget name
     with already-fitted text (from flow_text_into_widgets / fit_grid_row, or
@@ -268,6 +299,7 @@ def fill_pdf_widgets(widget_values: dict, widget_fonts: dict = None, watermark: 
 
 
 @tool
+@_log_exceptions
 def verify_pdf_fill(expected_values: dict) -> dict:
     """Reads the just-filled PDF's (staged by fill_pdf_widgets) AcroForm
     values back out and diffs them against what was requested - no PDF
@@ -292,6 +324,7 @@ def verify_pdf_fill(expected_values: dict) -> dict:
 # =============================================================================
 
 @tool
+@_log_exceptions
 def inspect_docx_form_structure() -> dict:
     """Analyze the uploaded reference .docx's Word content controls and
     return its structural draft: every control's type (text/richText/date/
@@ -309,6 +342,7 @@ def inspect_docx_form_structure() -> dict:
 
 
 @tool
+@_log_exceptions
 def fill_docx_form_controls(
     values: dict = None,
     checks: dict = None,
@@ -331,6 +365,7 @@ def fill_docx_form_controls(
 
 
 @tool
+@_log_exceptions
 def verify_docx_fill(expected_values: dict) -> dict:
     """Reads the just-filled docx's (staged by fill_docx_form_controls)
     content controls back out and diffs them against what was requested
@@ -389,6 +424,7 @@ def analyze_reference_document(file_bytes: bytes, file_type: str) -> dict:
 
 
 @tool
+@_log_exceptions
 def analyze_uploaded_reference(file_type: str) -> dict:
     """Analyze the reference document the user uploaded for this request and
     return its detected structure and field layout. `file_type` is the
@@ -399,6 +435,7 @@ def analyze_uploaded_reference(file_type: str) -> dict:
 
 
 @tool
+@_log_exceptions
 def build_packet(packet_name: str, scenario: str = "general", seed: int = None) -> list:
     """Generate all components of a named document packet and return list of {label, template, data} dicts."""
     spec = PACKET_REGISTRY.get(packet_name)
@@ -422,6 +459,7 @@ def build_packet(packet_name: str, scenario: str = "general", seed: int = None) 
 
 
 @tool
+@_log_exceptions
 def validate_document_structure(data: dict, doc_type: str) -> dict:
     """Validate that all required fields for the given document type are present in data."""
     required_fields = {
