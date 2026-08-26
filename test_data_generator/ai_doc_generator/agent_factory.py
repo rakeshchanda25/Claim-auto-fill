@@ -327,6 +327,41 @@ def _reset_agent_memory(agent) -> None:
         coworker.memory.clear()
 
 
+def _extract_final_text(messages: list) -> tuple[str | list | None, str]:
+    """Picks the final answer out of a finished conversation, and returns a
+    one-line diagnostic describing how it got there.
+
+    WorkspaceAgent.run() just returns `messages[-1].content`, which is wrong
+    whenever the model's true last turn was a tool call with no
+    accompanying text (a normal thing for a tool-calling model to do -
+    `content` is "" and the actual call lives in `.tool_calls`) - that turn
+    is functionally silent, not the answer, and the real final answer may
+    sit one or two turns earlier (e.g. after fill_pdf_widgets/verify_pdf_fill
+    are called, before or after the model's closing JSON summary). So this
+    walks backward for the last message that actually has non-empty text
+    content instead of blindly trusting the very last one.
+    """
+    if not messages:
+        return None, "no messages at all - the run produced nothing"
+
+    tool_call_tail = 0
+    for m in reversed(messages):
+        content = getattr(m, "content", None)
+        has_text = (isinstance(content, str) and content.strip()) or (isinstance(content, list) and content)
+        if has_text:
+            note = (
+                f"used message {len(messages) - 1 - tool_call_tail}/{len(messages) - 1} "
+                f"(last {tool_call_tail} trailing message(s) had empty content)"
+                if tool_call_tail
+                else f"used the last message ({len(messages)} total)"
+            )
+            return content, note
+        tool_call_tail += 1
+
+    roles = [type(m).__name__ for m in messages]
+    return None, f"ALL {len(messages)} messages had empty content - roles were: {roles}"
+
+
 def run_with_reference(agent, prompt: str, reference_bytes: bytes | None):
     """Runs the agent with `reference_bytes` staged as this request's
     uploaded reference document (see tools.py's reference-document-staging
@@ -340,11 +375,41 @@ def run_with_reference(agent, prompt: str, reference_bytes: bytes | None):
     WorkspaceAgent.run() already serializes concurrent calls internally too
     (its own instance lock), so this adds no new bottleneck. Also resets the
     agent's conversation memory before each run - see _reset_agent_memory.
+
+    Calls agent.supervise(...) directly instead of agent.run() - same call
+    WorkspaceAgent.run() makes internally (andromeda/core/workspace.py:656),
+    kept in sync with it here - so the full message list is available for
+    _extract_final_text and for the diagnostic print on an empty result,
+    instead of only the collapsed last-message string agent.run() returns.
+    This does skip agent.run()'s own lock/closed-check, which is fine here
+    since tools.reference_lock already serializes every call to this
+    function and it is the only caller of the agent in this codebase.
     """
+    import traceback
+    from langchain_core.messages import HumanMessage
+
     with tools.reference_lock:
         _reset_agent_memory(agent)
         tools.set_reference_document(reference_bytes)
         try:
-            return agent.run(prompt)
+            try:
+                result = agent.supervise({"messages": [HumanMessage(content=prompt)], "plan": []})
+            except Exception:
+                # Printed here (not just re-raised) because app.py's outer handler only
+                # surfaces str(e) to the browser - the full traceback would otherwise
+                # never reach this process's console at all.
+                print("\n" + "=" * 30 + " AGENT RUN RAISED " + "=" * 30)
+                traceback.print_exc()
+                print("=" * 79 + "\n")
+                raise
+
+            messages = result.get("messages", []) if isinstance(result, dict) else []
+            final, note = _extract_final_text(messages)
+            print(f"[run_with_reference] {note}")
+            if final is None:
+                for m in messages:
+                    tc = getattr(m, "tool_calls", None)
+                    print(f"  - {type(m).__name__}: content={getattr(m, 'content', None)!r} tool_calls={tc}")
+            return final
         finally:
             tools.set_reference_document(None)

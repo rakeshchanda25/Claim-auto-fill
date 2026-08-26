@@ -199,9 +199,15 @@ async def ai_generate_document(
                         pass
 
         if not result or not isinstance(result, dict):
+            hint = (
+                " Empty response from the agent - this usually means the model's final turn "
+                "was a tool call with no follow-up text, or the model backend (Ollama) failed "
+                "to produce a completion. Check the Ollama server is running and the configured "
+                "model is available."
+            ) if isinstance(result_str, str) and not result_str.strip() else ""
             raise HTTPException(
                 status_code=500,
-                detail=f"Raw LLM Response [{type(result_str).__name__}]: {repr(result_str)}"
+                detail=f"Raw LLM Response [{type(result_str).__name__}]: {repr(result_str)}.{hint}"
             )
 
         if "components" in result:
@@ -231,9 +237,14 @@ async def ai_generate_document(
 
     try:
         file_type, content, filename = await run_in_threadpool(_run)
-    except HTTPException:
+    except HTTPException as e:
+        print(f"\n[ai_generate] HTTPException {e.status_code}: {e.detail}\n")
         raise
     except Exception as e:
+        import traceback
+        print("\n" + "=" * 30 + " /api/ai-generate FAILED " + "=" * 30)
+        traceback.print_exc()
+        print("=" * 79 + "\n")
         raise HTTPException(status_code=500, detail=str(e))
 
     media_types = {
