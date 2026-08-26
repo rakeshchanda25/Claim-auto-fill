@@ -305,6 +305,28 @@ def close_shared_agent() -> None:
             _shared_agent = None
 
 
+def _reset_agent_memory(agent) -> None:
+    """Clears the shared agent's conversation memory and plan before each
+    run. `WorkspaceAgent.memory`/`.plan` are plain instance state
+    (andromeda/core/agent.py:69, andromeda/core/supervisor.py:103) that the
+    framework accumulates forever across `.run()` calls with no built-in
+    reset or per-thread isolation (its own docstring: "two runs on the same
+    agent share and grow the same history no matter what thread_id is
+    passed" - `thread_id` only scopes model-side tracing, not this memory).
+    Reusing one agent across requests (get_shared_agent) means every request
+    after the first would otherwise see every prior request's full prompt +
+    output still in context - eventually large enough to blow past the
+    model's context window, at which point it produces empty or truncated
+    output instead of the requested JSON. Each specialist coworker keeps its
+    own separate `.memory` too, so those are cleared alongside the
+    supervisor's.
+    """
+    agent.memory.clear()
+    agent.plan.clear()
+    for coworker in agent.agents:
+        coworker.memory.clear()
+
+
 def run_with_reference(agent, prompt: str, reference_bytes: bytes | None):
     """Runs the agent with `reference_bytes` staged as this request's
     uploaded reference document (see tools.py's reference-document-staging
@@ -316,9 +338,11 @@ def run_with_reference(agent, prompt: str, reference_bytes: bytes | None):
     step, so two requests on the shared agent can never see each other's
     reference document - this is safe to serialize on because
     WorkspaceAgent.run() already serializes concurrent calls internally too
-    (its own instance lock), so this adds no new bottleneck.
+    (its own instance lock), so this adds no new bottleneck. Also resets the
+    agent's conversation memory before each run - see _reset_agent_memory.
     """
     with tools.reference_lock:
+        _reset_agent_memory(agent)
         tools.set_reference_document(reference_bytes)
         try:
             return agent.run(prompt)
