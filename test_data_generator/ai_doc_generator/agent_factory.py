@@ -431,10 +431,21 @@ def run_with_reference(agent, prompt: str, reference_bytes: bytes | None):
             messages = result.get("messages", []) if isinstance(result, dict) else []
             final, note = _extract_final_text(messages)
             print(f"[run_with_reference] {note}")
-            if final is None:
-                for m in messages:
-                    tc = getattr(m, "tool_calls", None)
-                    print(f"  - {type(m).__name__}: content={getattr(m, 'content', None)!r} tool_calls={tc}")
+            # Always dump the tail of the conversation, not just when nothing was found -
+            # `final` can be a real AIMessage that isn't actually the finished answer (e.g.
+            # early mid-task narration like "Let me check X first"), which _extract_final_text
+            # has no way to distinguish from a genuine closing answer since both are non-empty
+            # AI text. Seeing the last few messages is what tells them apart.
+            tail = messages[-8:]
+            skipped = len(messages) - len(tail)
+            print(f"[run_with_reference] conversation tail ({len(messages)} total"
+                  f"{f', showing last {len(tail)}' if skipped > 0 else ''}):")
+            for m in tail:
+                tc = getattr(m, "tool_calls", None)
+                content = getattr(m, "content", None)
+                if isinstance(content, str) and len(content) > 300:
+                    content = content[:300] + f"...<+{len(content) - 300} chars>"
+                print(f"  - {type(m).__name__}: content={content!r} tool_calls={tc}")
 
             artifact_bytes, artifact_kind = tools.get_staged_artifact()
             if artifact_bytes is not None:

@@ -27,12 +27,6 @@ allowed-tools: generate_synthetic_data render_document_to_pdf validate_document_
 - FL74: Principal Procedure Code/Date · DRG code
 - FL76: Attending Provider Name/NPI · FL77: Operating Physician
 
-## Template-authoring constraint (read before editing ub_04.html)
-Same as cms-1500: this template is rendered through the placeholder-then-fill pipeline, so no
-arithmetic or data-driven `{% if %}` in the template - compute totals in `synthetic_data.py`
-(e.g. `total_charges` is the precomputed sum of the revenue-code lines actually listed, not
-recomputed inline) and use the `|format` filter for money values.
-
 ## Revenue Codes (common)
 - 0110 = Room & Board – Medical/Surgical · 0250 = Pharmacy · 0300 = Laboratory
 - 0310 = Hematology · 0450 = Emergency Room · 0710 = Recovery Room

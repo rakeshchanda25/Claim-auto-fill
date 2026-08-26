@@ -1,3 +1,12 @@
+{#
+  Maintainer note: render_document_to_pdf (renderers/html_renderer.py) renders THIS template
+  TWICE for standardized forms - once with every leaf value replaced by a placeholder token (to
+  turn each variable into a real AcroForm field), then fills that form with the real data. So:
+  never do arithmetic or conditional branching on a data value in here (it's a placeholder
+  string during the first pass) - compute everything in synthetic_data.py instead (e.g.
+  balance_due is precomputed, not total_charge minus amount_paid inline) and use the format
+  filter, which already special-cases placeholder strings, rather than raw string operations.
+#}
 <!DOCTYPE html>
 <html lang="en">
 <head>

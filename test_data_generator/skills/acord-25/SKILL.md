@@ -30,14 +30,6 @@ allowed-tools: generate_synthetic_data render_document_to_pdf validate_document_
 7. Cancellation clause (fixed boilerplate text)
 8. Authorized Representative
 
-## Template-authoring constraint (read before editing acord_25.html)
-Same as cms-1500/ub-04: rendered through the placeholder-then-fill pipeline, so no arithmetic
-or data-driven `{% if %}` in the template. The coverage-limit dollar VALUES are data
-(`gl_each_occurrence` etc., flat top-level fields), but the LIMIT LABELS ("Each Occurrence",
-"E.L. Disease - Ea Employee", ...) are fixed template text, not data - a limit label is
-determined by which coverage row it's in, not by anything that varies per certificate, and
-looping over data-driven labels would turn static captions into fillable fields for no reason.
-
 ## Coverage Limits (standard defaults used across all generated certificates)
 - CGL Each Occurrence: $1,000,000 · General Aggregate: $2,000,000
 - Auto Combined Single Limit: $1,000,000

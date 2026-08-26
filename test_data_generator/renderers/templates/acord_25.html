@@ -1,3 +1,10 @@
+{#
+  Maintainer note: same placeholder-then-fill pipeline as cms_1500.html (see its comment) -
+  never do arithmetic or conditional branching on a data value here. The coverage-limit dollar
+  VALUES are data (gl_each_occurrence etc., flat top-level fields), but the LIMIT LABELS ("Each
+  Occurrence", "E.L. Disease - Ea Employee", ...) are fixed template text, not data - a limit
+  label is determined by which coverage row it's in, not by anything that varies per certificate.
+#}
 <!DOCTYPE html>
 <html lang="en">
 <head>

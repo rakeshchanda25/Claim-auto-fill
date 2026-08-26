@@ -29,15 +29,6 @@ allowed-tools: generate_synthetic_data render_document_to_pdf validate_document_
 - 28/29/30: Total Charge / Amount Paid / Balance Due
 - 31: Physician Signature · 32/32a: Service Facility + NPI · 33/33a: Billing Provider + NPI
 
-## Template-authoring constraint (read before editing cms_1500.html)
-`render_document_to_pdf` renders this template TWICE for standardized forms: once with every
-leaf value replaced by a placeholder token (to turn each `{{ variable }}` into a real AcroForm
-field), then fills that form with the real data. This means the template must NEVER do
-arithmetic or `{% if %}` branching on a data value (the value is a placeholder string during
-that first pass) - compute everything in `synthetic_data.py` instead (e.g. `balance_due` is
-precomputed, not `total_charge - amount_paid` inline) and use the `|format` filter (which
-already special-cases placeholder strings) rather than raw string operations.
-
 ## Place of Service Codes
 - 11 = Office · 21 = Inpatient Hospital · 22 = Outpatient Hospital · 23 = Emergency Room
 
