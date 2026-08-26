@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Auto Accident Report – {{ claim_number }}</title>
+<style>
+  @page { size: letter portrait; margin: 0.85in; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 10pt; color: #000; line-height: 1.5; }
+  .header { background: #1c3557; color: #fff; padding: 12px 16px; border-radius: 4px; margin-bottom: 14px; }
+  .header h1 { font-size: 14pt; margin: 0; }
+  .header p { font-size: 9pt; margin: 3px 0 0; opacity: 0.85; }
+  h2 { font-size: 11pt; background: #1c3557; color: #fff; padding: 3px 8px; margin: 14px 0 6px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 24px; margin-bottom: 10px; }
+  .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px 16px; margin-bottom: 10px; }
+  .label { font-weight: bold; font-size: 9pt; color: #444; }
+  .sig-block { margin-top: 28px; border-top: 1px solid #aaa; padding-top: 12px; }
+  .sig-line { width: 220px; border-bottom: 1px solid #000; margin: 18px 0 4px; display: inline-block; }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>AUTO ACCIDENT CLAIM REPORT</h1>
+  <p>Insurer: {{ insurer_name }} | Claim #: {{ claim_number }} | Policy #: {{ policy_number }}</p>
+</div>
+
+<h2>Policyholder Information</h2>
+<div class="grid2">
+  <div><span class="label">Insured Name:</span> {{ insured_name }}</div>
+  <div><span class="label">Policy Number:</span> {{ policy_number }}</div>
+  <div><span class="label">Date of Birth:</span> {{ dob }}</div>
+  <div><span class="label">Phone:</span> {{ phone }}</div>
+</div>
+
+<h2>Accident Details</h2>
+<div class="grid3">
+  <div><span class="label">Accident Date:</span> {{ accident_date }}</div>
+  <div><span class="label">Location:</span> {{ accident_location }}</div>
+  <div><span class="label">Police Report #:</span> {{ police_report_number }}</div>
+  <div><span class="label">Bodily Injury:</span> {{ bodily_injury }}</div>
+  <div><span class="label">At Fault:</span> {{ at_fault }}</div>
+  <div><span class="label">Airbags Deployed:</span> {{ airbags_deployed }}</div>
+</div>
+
+<h2>Vehicle Information</h2>
+<div class="grid3">
+  <div><span class="label">Year/Make/Model:</span> {{ vehicle_info.year }} {{ vehicle_info.make }} {{ vehicle_info.model }}</div>
+  <div><span class="label">VIN:</span> {{ vehicle_info.vin }}</div>
+  <div><span class="label">License Plate:</span> {{ vehicle_info.license_plate }}</div>
+</div>
+
+<h2>Damage Description</h2>
+<p>{{ damage_description }}</p>
+
+<div class="sig-block">
+  <div class="grid2">
+    <div>
+      <div class="label">Claimant Signature</div>
+      <div class="sig-line"></div>
+      <div>{{ insured_name }}</div>
+    </div>
+    <div>
+      <div class="label">Date</div>
+      <div class="sig-line"></div>
+      <div>{{ accident_date }}</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

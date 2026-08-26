@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>EOB – {{ claim_number }}</title>
+<style>
+  @page { size: letter portrait; margin: 0.85in; @bottom-center { content: "Claim: {{ claim_number }} | Page " counter(page) " of " counter(pages); font-size: 8pt; color:#666; } }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 10pt; color: #111; line-height: 1.5; }
+  .header { background: #1a3a6b; color: #fff; padding: 14px 18px; border-radius: 4px 4px 0 0; }
+  .header h1 { font-size: 15pt; margin: 0; }
+  .header p { font-size: 9pt; margin: 3px 0 0; opacity: 0.85; }
+  .info-band { background: #eef2fa; border: 1px solid #c0d0e8; padding: 10px 18px; margin-bottom: 14px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px 20px; }
+  .label { font-weight: bold; font-size: 9pt; color: #444; }
+  h2 { font-size: 11pt; color: #1a3a6b; border-bottom: 2px solid #1a3a6b; padding-bottom: 3px; margin: 14px 0 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: 9pt; }
+  th { background: #1a3a6b; color: #fff; padding: 5px 8px; border: 1px solid #1a3a6b; text-align: right; }
+  th:first-child { text-align: left; }
+  td { padding: 5px 8px; border: 1px solid #ccc; text-align: right; }
+  td:first-child { text-align: left; }
+  tr:nth-child(even) td { background: #f5f8ff; }
+  .totals { margin-top: 16px; float: right; width: 320px; }
+  .totals table td { font-size: 10pt; }
+  .totals .grand { font-weight: bold; font-size: 12pt; color: #1a3a6b; background: #eef2fa; }
+  .notice { font-size: 8pt; color: #777; margin-top: 40px; border-top: 1px solid #ddd; padding-top: 8px; clear: both; }
+  .denial-box { background: #fff3cd; border-left: 4px solid #f0ad4e; padding: 8px 12px; margin-top: 10px; font-size: 9pt; }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>EXPLANATION OF BENEFITS</h1>
+  <p>{{ insurer_name }} | Member Services: 1-800-555-0199</p>
+</div>
+
+<div class="info-band">
+  <div><span class="label">Member Name:</span><br>{{ patient_name }}</div>
+  <div><span class="label">Member ID:</span><br>{{ member_id }}</div>
+  <div><span class="label">Group Number:</span><br>{{ group_number }}</div>
+  <div><span class="label">Claim Number:</span><br>{{ claim_number }}</div>
+  <div><span class="label">Date of Service:</span><br>{{ dos }}</div>
+  <div><span class="label">Provider:</span><br>{{ physician_name }}</div>
+</div>
+
+<h2>Claim Summary</h2>
+<table>
+  <tr>
+    <th>Service Description</th>
+    <th>Date</th>
+    <th>Billed Amount</th>
+    <th>Allowed Amount</th>
+    <th>Plan Paid</th>
+    <th>Your Responsibility</th>
+  </tr>
+  {% for item in line_items %}
+  <tr>
+    <td>{{ item.description }} ({{ item.cpt }})</td>
+    <td>{{ dos }}</td>
+    <td>${{ "%.2f"|format(item.charge) }}</td>
+    <td>${{ "%.2f"|format(item.charge * 0.8) }}</td>
+    <td>${{ "%.2f"|format(item.charge * 0.64) }}</td>
+    <td>${{ "%.2f"|format(item.charge * 0.16) }}</td>
+  </tr>
+  {% endfor %}
+</table>
+
+<div class="totals">
+  <table>
+    <tr><td>Total Billed:</td><td>${{ "%.2f"|format(billed_amount) }}</td></tr>
+    <tr><td>Total Allowed:</td><td>${{ "%.2f"|format(allowed_amount) }}</td></tr>
+    <tr><td>Deductible Applied:</td><td>-${{ "%.2f"|format(deductible_applied) }}</td></tr>
+    <tr><td>Copay:</td><td>-${{ "%.2f"|format(copay) }}</td></tr>
+    <tr><td>Coinsurance:</td><td>-${{ "%.2f"|format(coinsurance) }}</td></tr>
+    <tr><td>Plan Paid:</td><td>${{ "%.2f"|format(plan_paid) }}</td></tr>
+    <tr class="grand"><td>Your Responsibility:</td><td>${{ "%.2f"|format(patient_responsibility) }}</td></tr>
+  </table>
+</div>
+
+{% if denial_reason %}
+<div class="denial-box">
+  <strong>Denial Reason:</strong> {{ denial_reason }}
+</div>
+{% endif %}
+
+<div class="notice">
+  This is not a bill. Keep this Explanation of Benefits for your records. Claim processed on {{ dos }}.
+  This document is generated for IDP testing purposes and contains synthetic data only.
+  Denial reason codes: CO = Contractual Obligation, PR = Patient Responsibility, OA = Other Adjustment.
+</div>
+</body>
+</html>

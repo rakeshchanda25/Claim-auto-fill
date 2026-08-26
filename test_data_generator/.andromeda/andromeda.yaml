@@ -1,0 +1,10 @@
+agent_defaults:
+  workspace_backend: "${WORKSPACE_BACKEND:bubblewrap_process}"
+  skill_sources:
+    - /skills
+  skills_backend: filesystem
+  middleware:
+    tool_error_handler: true
+
+environment:
+  - WORKSPACE_BACKEND

@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Discharge Summary – {{ mrn }}</title>
+<style>
+  @page { size: letter portrait; margin: 1in; @top-left { content: "DISCHARGE SUMMARY – CONFIDENTIAL"; font-size: 8pt; color: #666; } @bottom-center { content: "MRN: {{ mrn }} | Page " counter(page) " of " counter(pages); font-size: 8pt; } }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 10pt; color: #111; line-height: 1.6; }
+  .header { text-align: center; border-bottom: 3px solid #1a3a6b; padding-bottom: 10px; margin-bottom: 14px; }
+  .hospital { font-size: 16pt; font-weight: bold; color: #1a3a6b; }
+  h2 { font-size: 11pt; background: #1a3a6b; color: #fff; padding: 3px 8px; margin: 14px 0 6px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 24px; margin-bottom: 10px; }
+  .label { font-weight: bold; font-size: 9pt; color: #444; }
+  table { width: 100%; border-collapse: collapse; font-size: 9pt; margin-top: 6px; }
+  th { background: #e8eef7; padding: 4px 8px; border: 1px solid #bbb; text-align: left; font-weight: bold; }
+  td { padding: 4px 8px; border: 1px solid #ccc; }
+  .sig-block { margin-top: 28px; border-top: 1px solid #ccc; padding-top: 14px; }
+  .sig-line { width: 240px; border-bottom: 1px solid #555; margin: 18px 0 4px; display: inline-block; }
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="hospital">{{ hospital }}</div>
+  <div style="font-size:9pt;color:#555;">Department of Medical Records</div>
+  <div style="font-size:13pt; font-weight:bold; margin-top:6px;">DISCHARGE SUMMARY</div>
+</div>
+
+<div class="grid2">
+  <div><span class="label">Patient Name:</span> {{ patient_name }}</div>
+  <div><span class="label">MRN:</span> {{ mrn }}</div>
+  <div><span class="label">Date of Birth:</span> {{ dob }}</div>
+  <div><span class="label">Gender:</span> {{ gender }}</div>
+  <div><span class="label">Admission Date:</span> {{ admission_date }}</div>
+  <div><span class="label">Discharge Date:</span> {{ discharge_date }}</div>
+  <div><span class="label">Length of Stay:</span> {{ length_of_stay }} day(s)</div>
+  <div><span class="label">DRG Code:</span> {{ drg_code }}</div>
+  <div><span class="label">Attending Physician:</span> {{ physician_name }}</div>
+  <div><span class="label">Specialty:</span> {{ specialty }}</div>
+  <div><span class="label">Insurance:</span> {{ insurer_name }}</div>
+  <div><span class="label">Insurance ID:</span> {{ insurance_id }}</div>
+</div>
+
+<h2>Diagnosis on Admission</h2>
+<p>{{ admission_diagnosis }}</p>
+
+<h2>Hospital Course</h2>
+<p>{{ hospital_course }}</p>
+
+<h2>Discharge Diagnoses (ICD-10)</h2>
+<table>
+  <tr><th>Code</th><th>Description</th></tr>
+  {% for code, desc in diagnosis_codes %}
+  <tr><td>{{ code }}</td><td>{{ desc }}</td></tr>
+  {% endfor %}
+</table>
+
+<h2>Condition at Discharge</h2>
+<p>{{ discharge_condition }}</p>
+
+<h2>Medications at Discharge</h2>
+<table>
+  <tr><th>Medication</th><th>Dose</th><th>Frequency</th></tr>
+  {% for med in medications_at_discharge %}
+  <tr><td>{{ med.name }}</td><td>{{ med.dose }}</td><td>{{ med.frequency }}</td></tr>
+  {% endfor %}
+</table>
+
+<h2>Discharge Instructions</h2>
+<p>{{ discharge_instructions }}</p>
+
+<h2>Follow-Up</h2>
+<p>{{ follow_up }}</p>
+
+<div class="sig-block">
+  <div class="grid2">
+    <div>
+      <div class="label">Attending Physician</div>
+      <div class="sig-line"></div>
+      <div>{{ physician_name }}, {{ specialty }}</div>
+      <div style="font-size:9pt;color:#555;">NPI: {{ npi }}</div>
+    </div>
+    <div>
+      <div class="label">Date</div>
+      <div class="sig-line"></div>
+      <div>{{ discharge_date }}</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

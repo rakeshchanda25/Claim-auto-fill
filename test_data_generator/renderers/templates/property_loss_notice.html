@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Property Loss Notice – {{ policy_number }}</title>
+<style>
+  @page { size: letter portrait; margin: 0.85in; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 10pt; color: #000; line-height: 1.5; }
+  .header { text-align: center; border-bottom: 3px solid #7b2d00; padding-bottom: 10px; margin-bottom: 14px; }
+  .insurer { font-size: 16pt; font-weight: bold; color: #7b2d00; }
+  .form-title { font-size: 13pt; font-weight: bold; margin-top: 4px; }
+  h2 { font-size: 11pt; background: #7b2d00; color: #fff; padding: 3px 8px; margin: 14px 0 6px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 24px; margin-bottom: 10px; }
+  .label { font-weight: bold; font-size: 9pt; color: #444; }
+  table { width: 100%; border-collapse: collapse; font-size: 9pt; margin-top: 6px; }
+  th { background: #e8d5cc; padding: 4px 8px; border: 1px solid #aaa; font-weight: bold; text-align: left; }
+  td { padding: 4px 8px; border: 1px solid #ccc; }
+  .sig-block { margin-top: 28px; border-top: 1px solid #aaa; padding-top: 12px; }
+  .sig-line { width: 220px; border-bottom: 1px solid #000; margin: 18px 0 4px; display: inline-block; }
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="insurer">{{ insurer_name }}</div>
+  <div class="form-title">PROPERTY LOSS NOTICE</div>
+  <div style="font-size:9pt;color:#555;">Claim Number: {{ claim_number }}</div>
+</div>
+
+<h2>Insured Information</h2>
+<div class="grid2">
+  <div><span class="label">Insured Name:</span> {{ insured_name }}</div>
+  <div><span class="label">Policy Number:</span> {{ policy_number }}</div>
+  <div><span class="label">Phone:</span> {{ phone }}</div>
+  <div><span class="label">Loss Date:</span> {{ loss_date }}</div>
+  <div><span class="label">Coverage Type:</span> {{ coverage_type }}</div>
+  <div><span class="label">Deductible:</span> ${{ "%.2f"|format(deductible) }}</div>
+</div>
+
+<h2>Loss Information</h2>
+<div class="grid2">
+  <div><span class="label">Loss Location:</span> {{ loss_location }}</div>
+  <div><span class="label">Cause of Loss:</span> {{ cause_of_loss }}</div>
+  <div><span class="label">Property Description:</span> {{ property_description }}</div>
+  <div><span class="label">Estimated Loss:</span> ${{ "%.2f"|format(estimated_loss) }}</div>
+</div>
+
+<h2>Mortgage / Lienholder</h2>
+<div class="grid2">
+  <div><span class="label">Mortgagee Name:</span> {{ mortgagee_name }}</div>
+  <div><span class="label">Loan Number:</span> {{ loan_number }}</div>
+</div>
+
+<h2>Adjuster Assignment</h2>
+<div class="grid2">
+  <div><span class="label">Adjuster Name:</span> {{ adjuster_name }}</div>
+  <div><span class="label">Adjuster Phone:</span> {{ adjuster_phone }}</div>
+</div>
+
+<div class="sig-block">
+  <div class="grid2">
+    <div>
+      <div class="label">Insured Signature</div>
+      <div class="sig-line"></div>
+      <div>{{ insured_name }}</div>
+    </div>
+    <div>
+      <div class="label">Date</div>
+      <div class="sig-line"></div>
+      <div>{{ loss_date }}</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>UB-04 – {{ patient_control_number }}</title>
+<style>
+  @page { size: letter landscape; margin: 0.4in; }
+  body { font-family: "Courier New", Courier, monospace; font-size: 7.5pt; color: #000; line-height: 1.2; }
+  .title { text-align: center; font-size: 11pt; font-weight: bold; margin-bottom: 6px; }
+  table.ub { width: 100%; border-collapse: collapse; }
+  table.ub td, table.ub th { border: 1px solid #000; padding: 2px 4px; vertical-align: top; font-size: 7pt; }
+  .box-label { font-size: 5.5pt; color: #333; display: block; }
+  .box-value { font-size: 7.5pt; font-weight: bold; }
+  .section-bar { background: #000; color: #fff; font-size: 7pt; padding: 1px 4px; }
+  th { background: #ddd; font-size: 6.5pt; }
+</style>
+</head>
+<body>
+<div class="title">UB-04 UNIFORM BILLING CLAIM FORM</div>
+<table class="ub">
+  <tr>
+    <td colspan="3">
+      <span class="box-label">1. PROVIDER NAME</span>
+      <span class="box-value">{{ hospital }}</span>
+    </td>
+    <td colspan="2">
+      <span class="box-label">4. TYPE OF BILL</span>
+      <span class="box-value">{{ type_of_bill }}</span>
+    </td>
+    <td colspan="2">
+      <span class="box-label">5. FEDERAL TAX NO.</span>
+      <span class="box-value">{{ federal_tax_id }}</span>
+    </td>
+    <td>
+      <span class="box-label">6. STATEMENT PERIOD FROM</span>
+      <span class="box-value">{{ admission_date }}</span>
+    </td>
+    <td>
+      <span class="box-label">THROUGH</span>
+      <span class="box-value">{{ discharge_date }}</span>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2">
+      <span class="box-label">8. PATIENT NAME</span>
+      <span class="box-value">{{ patient_name }}</span>
+    </td>
+    <td>
+      <span class="box-label">10. BIRTHDATE</span>
+      <span class="box-value">{{ dob }}</span>
+    </td>
+    <td>
+      <span class="box-label">11. SEX</span>
+      <span class="box-value">{{ gender[0] }}</span>
+    </td>
+    <td colspan="2">
+      <span class="box-label">14. ADMISSION DATE</span>
+      <span class="box-value">{{ admission_date }}</span>
+    </td>
+    <td colspan="2">
+      <span class="box-label">16. DISCHARGE DATE</span>
+      <span class="box-value">{{ discharge_date }}</span>
+    </td>
+    <td>
+      <span class="box-label">18. DRG CODE</span>
+      <span class="box-value">{{ drg_code }}</span>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2">
+      <span class="box-label">38. RESPONSIBLE PARTY</span>
+      <span class="box-value">{{ patient_name }}</span>
+    </td>
+    <td colspan="3">
+      <span class="box-label">50. PAYER NAME</span>
+      <span class="box-value">{{ payer_name }}</span>
+    </td>
+    <td colspan="2">
+      <span class="box-label">60. INSURED'S ID NO.</span>
+      <span class="box-value">{{ insurance_id }}</span>
+    </td>
+    <td colspan="2">
+      <span class="box-label">63. TREATMENT AUTHORIZATION</span>
+      <span class="box-value">AUTH{{ medical_record_number }}</span>
+    </td>
+  </tr>
+</table>
+
+<div class="section-bar" style="margin-top:4px;">REVENUE CODES &amp; CHARGES</div>
+<table class="ub">
+  <tr>
+    <th>Revenue Code</th><th>Description</th><th>HCPCS/CPT</th><th>Service Date</th><th>Units</th><th>Total Charges</th>
+  </tr>
+  {% for rev in revenue_codes %}
+  <tr>
+    <td>{{ rev.code }}</td>
+    <td>{{ rev.description }}</td>
+    <td>{{ procedure_codes[loop.index0] if loop.index0 < procedure_codes|length else '' }}</td>
+    <td>{{ admission_date }}</td>
+    <td>{{ rev.units }}</td>
+    <td style="text-align:right;">${{ "%.2f"|format(rev.charge) }}</td>
+  </tr>
+  {% endfor %}
+  <tr>
+    <td colspan="5" style="text-align:right;font-weight:bold;">47. TOTAL CHARGES</td>
+    <td style="text-align:right;font-weight:bold;">${{ "%.2f"|format(total_charges) }}</td>
+  </tr>
+</table>
+
+<table class="ub" style="margin-top:4px;">
+  <tr>
+    <td colspan="4">
+      <span class="box-label">67. PRINCIPAL DIAGNOSIS CODE (ICD-10)</span>
+      {% for code, desc in diagnosis_codes %}
+      <span class="box-value">{{ code }} </span>
+      {% endfor %}
+    </td>
+    <td colspan="2">
+      <span class="box-label">76. ATTENDING PHYSICIAN NPI</span>
+      <span class="box-value">{{ attending_physician_npi }}</span>
+    </td>
+    <td colspan="3">
+      <span class="box-label">ATTENDING PHYSICIAN NAME</span>
+      <span class="box-value">{{ physician_name }}</span>
+    </td>
+  </tr>
+</table>
+<div style="font-size:6pt;margin-top:4px;color:#555;">UB-04 NUBC — SYNTHETIC DATA FOR IDP TESTING ONLY</div>
+</body>
+</html>

@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Pharmacy Invoice – {{ rx_number }}</title>
+<style>
+  @page { size: letter portrait; margin: 0.85in; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 10pt; color: #111; line-height: 1.5; }
+  .header { display: flex; justify-content: space-between; border-bottom: 3px solid #2d6a4f; padding-bottom: 10px; margin-bottom: 14px; }
+  .pharmacy { font-size: 16pt; font-weight: bold; color: #2d6a4f; }
+  .rx-badge { font-size: 14pt; font-weight: bold; color: #2d6a4f; text-align: right; }
+  h2 { font-size: 11pt; background: #2d6a4f; color: #fff; padding: 3px 8px; margin: 14px 0 6px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 24px; margin-bottom: 10px; }
+  .label { font-weight: bold; font-size: 9pt; color: #444; }
+  table { width: 100%; border-collapse: collapse; font-size: 9pt; margin-top: 6px; }
+  th { background: #2d6a4f; color: #fff; padding: 5px 8px; border: 1px solid #2d6a4f; text-align: right; }
+  th:first-child { text-align: left; }
+  td { padding: 5px 8px; border: 1px solid #ccc; text-align: right; }
+  td:first-child { text-align: left; }
+  .total-box { background: #f0f9f4; border: 1px solid #a8d5b5; border-radius: 4px; padding: 10px 14px; margin-top: 14px; width: 260px; float: right; }
+  .total-row { display: flex; justify-content: space-between; margin-bottom: 3px; }
+  .total-final { font-weight: bold; font-size: 12pt; color: #2d6a4f; border-top: 2px solid #2d6a4f; padding-top: 5px; margin-top: 5px; }
+</style>
+</head>
+<body>
+<div class="header">
+  <div>
+    <div class="pharmacy">{{ pharmacy_name }}</div>
+    <div style="font-size:9pt;color:#555;">{{ pharmacy_address.street }}, {{ pharmacy_address.city }}, {{ pharmacy_address.state }} {{ pharmacy_address.zip }}</div>
+    <div style="font-size:9pt;color:#555;">NPI: {{ pharmacy_npi }}</div>
+  </div>
+  <div>
+    <div class="rx-badge">PHARMACY INVOICE</div>
+    <div style="font-size:9pt;color:#555;text-align:right;">Rx #: {{ rx_number }}</div>
+    <div style="font-size:9pt;color:#555;text-align:right;">Fill Date: {{ fill_date }}</div>
+  </div>
+</div>
+
+<h2>Patient Information</h2>
+<div class="grid2">
+  <div><span class="label">Patient Name:</span> {{ patient_name }}</div>
+  <div><span class="label">Date of Birth:</span> {{ dob }}</div>
+  <div><span class="label">Insurance ID:</span> {{ insurance_id }}</div>
+  <div><span class="label">Group Number:</span> {{ group_number }}</div>
+  <div><span class="label">Insurer:</span> {{ insurer_name }}</div>
+  <div><span class="label">Claim Number:</span> {{ claim_number }}</div>
+</div>
+
+<h2>Prescription Details</h2>
+<div class="grid2">
+  <div><span class="label">Drug Name:</span> {{ drug_name }}</div>
+  <div><span class="label">NDC Code:</span> {{ ndc_code }}</div>
+  <div><span class="label">Form:</span> {{ form }}</div>
+  <div><span class="label">Quantity Dispensed:</span> {{ quantity }}</div>
+  <div><span class="label">Days Supply:</span> {{ days_supply }}</div>
+  <div><span class="label">Prescriber:</span> {{ prescriber_name }}</div>
+  <div><span class="label">Prescriber NPI:</span> {{ prescriber_npi }}</div>
+  <div><span class="label">DEA Number:</span> {{ prescriber_dea }}</div>
+</div>
+
+<h2>Charges</h2>
+<table>
+  <tr><th>Item</th><th>Qty</th><th>Unit Price</th><th>Amount</th></tr>
+  <tr>
+    <td>{{ drug_name }}</td>
+    <td>{{ quantity }}</td>
+    <td>${{ "%.2f"|format(unit_price) }}</td>
+    <td>${{ "%.2f"|format(total_charge) }}</td>
+  </tr>
+  <tr>
+    <td>Dispensing Fee</td>
+    <td>1</td>
+    <td>${{ "%.2f"|format(dispensing_fee) }}</td>
+    <td>${{ "%.2f"|format(dispensing_fee) }}</td>
+  </tr>
+</table>
+
+<div class="total-box">
+  <div class="total-row"><span>Subtotal:</span><span>${{ "%.2f"|format(total_charge + dispensing_fee) }}</span></div>
+  <div class="total-row"><span>Copay Collected:</span><span>-${{ "%.2f"|format(copay) }}</span></div>
+  <div class="total-row total-final"><span>Insurance Billed:</span><span>${{ "%.2f"|format(total_charge + dispensing_fee - copay) }}</span></div>
+</div>
+</body>
+</html>

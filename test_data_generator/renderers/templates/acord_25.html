@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ACORD 25 – {{ policy_number }}</title>
+<style>
+  @page { size: letter portrait; margin: 0.6in; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 8pt; color: #000; line-height: 1.3; }
+  .acord-header { display: flex; justify-content: space-between; align-items: flex-start; border: 2px solid #000; padding: 4px 8px; margin-bottom: 0; }
+  .acord-title { font-size: 14pt; font-weight: bold; }
+  .acord-sub { font-size: 8pt; }
+  .acord-num { font-size: 10pt; font-weight: bold; text-align: right; }
+  table.main { width: 100%; border-collapse: collapse; }
+  table.main td, table.main th { border: 1px solid #000; padding: 2px 5px; vertical-align: top; font-size: 7.5pt; }
+  .section-header { background: #000; color: #fff; font-size: 8pt; font-weight: bold; padding: 2px 6px; }
+  .box-label { font-size: 6pt; font-style: italic; color: #333; display: block; }
+  .box-value { font-size: 8pt; font-weight: bold; }
+  .coverage-row th { background: #d0d8e8; color: #000; }
+</style>
+</head>
+<body>
+<div class="acord-header">
+  <div>
+    <div class="acord-title">CERTIFICATE OF LIABILITY INSURANCE</div>
+    <div class="acord-sub">DATE (MM/DD/YYYY): {{ effective_date }}</div>
+  </div>
+  <div class="acord-num">ACORD 25 (2016/03)</div>
+</div>
+
+<table class="main">
+  <tr>
+    <td colspan="4" style="background:#ffe;font-size:7pt;font-style:italic;">
+      THIS CERTIFICATE IS ISSUED AS A MATTER OF INFORMATION ONLY AND CONFERS NO RIGHTS UPON THE CERTIFICATE HOLDER.
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2">
+      <span class="box-label">PRODUCER (AGENCY)</span>
+      <span class="box-value">{{ agency_name }}</span><br>
+      {{ agency_address.street }}<br>{{ agency_address.city }}, {{ agency_address.state }} {{ agency_address.zip }}
+    </td>
+    <td colspan="2">
+      <span class="box-label">INSURED</span>
+      <span class="box-value">{{ insured_name }}</span><br>
+      {{ address.street }}<br>{{ address.city }}, {{ address.state }} {{ address.zip }}
+    </td>
+  </tr>
+  <tr>
+    <td colspan="4" class="section-header">COVERAGES &nbsp; CERTIFICATE NUMBER: {{ policy_number }}</td>
+  </tr>
+  <tr class="coverage-row">
+    <th>TYPE OF INSURANCE</th><th>POLICY NUMBER</th><th>EFFECTIVE DATE</th><th>EXPIRATION DATE</th>
+  </tr>
+  <tr>
+    <td>COMMERCIAL GENERAL LIABILITY<br><small>☑ OCCUR &nbsp; ☐ CLAIMS-MADE</small></td>
+    <td>{{ policy_number }}</td>
+    <td>{{ effective_date }}</td>
+    <td>{{ expiration_date }}</td>
+  </tr>
+  <tr>
+    <td colspan="2"><span class="box-label">EACH OCCURRENCE LIMIT</span><span class="box-value">${{ general_liability_limit }}</span></td>
+    <td colspan="2"><span class="box-label">GENERAL AGGREGATE LIMIT</span><span class="box-value">${{ umbrella_limit }}</span></td>
+  </tr>
+  <tr>
+    <td>WORKERS COMPENSATION &amp; EMPLOYERS LIABILITY</td>
+    <td>WC-{{ policy_number }}</td>
+    <td>{{ effective_date }}</td>
+    <td>{{ expiration_date }}</td>
+  </tr>
+  <tr>
+    <td colspan="2"><span class="box-label">E.L. EACH ACCIDENT</span><span class="box-value">${{ workers_comp_limit }}</span></td>
+    <td colspan="2"><span class="box-label">E.L. DISEASE – EA EMPLOYEE</span><span class="box-value">${{ workers_comp_limit }}</span></td>
+  </tr>
+  <tr>
+    <td colspan="4" class="section-header">CERTIFICATE HOLDER</td>
+  </tr>
+  <tr>
+    <td colspan="4">
+      <strong>{{ certificate_holder }}</strong><br>
+      {{ certificate_holder_address.street }}<br>
+      {{ certificate_holder_address.city }}, {{ certificate_holder_address.state }} {{ certificate_holder_address.zip }}
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2">
+      <span class="box-label">AUTHORIZED REPRESENTATIVE</span>
+      <div style="height:20px;border-bottom:1px solid #000;width:200px;margin-top:8px;"></div>
+    </td>
+    <td colspan="2">
+      <span class="box-label">INSURER NAME</span>
+      <span class="box-value">{{ insurer_name }}</span>
+    </td>
+  </tr>
+</table>
+<div style="font-size:7pt;color:#555;margin-top:4px;">ACORD 25 (2016/03) &copy; 1988-2016 ACORD CORPORATION. All rights reserved. SYNTHETIC DATA – FOR IDP TESTING ONLY.</div>
+</body>
+</html>
