@@ -9,6 +9,11 @@ inspect_docx_form_structure / fill_docx_form_controls take NO docx_bytes
 argument - a tool-calling LLM cannot transcribe a docx's raw bytes as a JSON
 argument, so they read a staged "current reference document" instead
 (tools.set_reference_document). Tests stage it via the `staged_docx` fixture.
+
+Symmetrically, fill_docx_form_controls does not RETURN the filled docx's
+bytes either - it stages the result (tools.stage_artifact) and
+verify_docx_fill reads that staged result instead of taking it as an
+argument. Tests read the staged bytes back via tools.get_staged_artifact().
 """
 
 from __future__ import annotations
@@ -40,6 +45,7 @@ def staged_docx():
         yield
     finally:
         tools.set_reference_document(None)
+        tools.clear_staged_artifact()
 
 
 def test_inspect_docx_form_structure_returns_the_real_draft(staged_docx):
@@ -53,19 +59,30 @@ def test_fill_docx_form_controls_then_verify_round_trips(staged_docx):
     checks = {"is_policyholder": True}
     choices = {"state": "Tamil Nadu"}
 
-    filled = tools.fill_docx_form_controls(values, checks, choices)
-    verification = tools.verify_docx_fill(filled, {**values, **checks, **choices})
+    status = tools.fill_docx_form_controls(values, checks, choices)
+    assert status["status"] == "staged" and status["kind"] == "docx"
+    verification = tools.verify_docx_fill({**values, **checks, **choices})
 
     assert verification["ok"] is True
     assert verification["mismatches"] == {}
 
+    staged_bytes, staged_kind = tools.get_staged_artifact()
+    assert staged_kind == "docx"
+    assert staged_bytes[:2] == b"PK"  # docx is a zip archive
+
 
 def test_verify_docx_fill_reports_a_real_mismatch(staged_docx):
-    filled = tools.fill_docx_form_controls({"full_name": "actual value"})
-    verification = tools.verify_docx_fill(filled, {"full_name": "expected different value"})
+    tools.fill_docx_form_controls({"full_name": "actual value"})
+    verification = tools.verify_docx_fill({"full_name": "expected different value"})
 
     assert verification["ok"] is False
     assert "full_name" in verification["mismatches"]
+
+
+def test_verify_docx_fill_without_a_staged_result_raises(staged_docx):
+    tools.clear_staged_artifact()
+    with pytest.raises(ValueError, match="No document has been staged"):
+        tools.verify_docx_fill({"anything": "value"})
 
 
 def test_inspect_docx_form_structure_on_plain_docx_reports_zero_controls():

@@ -332,26 +332,36 @@ def _extract_final_text(messages: list) -> tuple[str | list | None, str]:
     one-line diagnostic describing how it got there.
 
     WorkspaceAgent.run() just returns `messages[-1].content`, which is wrong
-    whenever the model's true last turn was a tool call with no
-    accompanying text (a normal thing for a tool-calling model to do -
-    `content` is "" and the actual call lives in `.tool_calls`) - that turn
-    is functionally silent, not the answer, and the real final answer may
-    sit one or two turns earlier (e.g. after fill_pdf_widgets/verify_pdf_fill
-    are called, before or after the model's closing JSON summary). So this
-    walks backward for the last message that actually has non-empty text
-    content instead of blindly trusting the very last one.
+    whenever the model's true last turn was a tool call with no accompanying
+    text (a normal thing for a tool-calling model to do - `content` is ""
+    and the actual call lives in `.tool_calls`) - that turn is functionally
+    silent, not the answer, and the real final answer may sit one or two
+    turns earlier. So this walks backward for the last AIMessage that
+    actually has non-empty text content.
+
+    Deliberately restricted to AIMessage: a ToolMessage's `content` is a
+    tool's raw return value stringified by the framework's tool-execution
+    layer, never the model's own answer - naively accepting the last
+    non-empty message regardless of type previously meant this could return
+    the literal `str()` of a tool's raw bytes (e.g. "b'%PDF-1.3\\n...'") as
+    if it were the agent's response, which is exactly what a user once saw.
     """
+    from langchain_core.messages import AIMessage
+
     if not messages:
         return None, "no messages at all - the run produced nothing"
 
     tool_call_tail = 0
     for m in reversed(messages):
+        if not isinstance(m, AIMessage):
+            tool_call_tail += 1
+            continue
         content = getattr(m, "content", None)
         has_text = (isinstance(content, str) and content.strip()) or (isinstance(content, list) and content)
         if has_text:
             note = (
-                f"used message {len(messages) - 1 - tool_call_tail}/{len(messages) - 1} "
-                f"(last {tool_call_tail} trailing message(s) had empty content)"
+                f"used AIMessage {len(messages) - 1 - tool_call_tail}/{len(messages) - 1} "
+                f"(skipped {tool_call_tail} trailing message(s) with no AI text)"
                 if tool_call_tail
                 else f"used the last message ({len(messages)} total)"
             )
@@ -359,7 +369,7 @@ def _extract_final_text(messages: list) -> tuple[str | list | None, str]:
         tool_call_tail += 1
 
     roles = [type(m).__name__ for m in messages]
-    return None, f"ALL {len(messages)} messages had empty content - roles were: {roles}"
+    return None, f"NO AIMessage had text content among {len(messages)} messages - roles were: {roles}"
 
 
 def run_with_reference(agent, prompt: str, reference_bytes: bytes | None):
@@ -367,14 +377,28 @@ def run_with_reference(agent, prompt: str, reference_bytes: bytes | None):
     uploaded reference document (see tools.py's reference-document-staging
     tools - a tool-calling model cannot transcribe a PDF/docx's raw bytes as
     a JSON argument, so fill/recreate tools read this staged value instead
-    of taking bytes as an LLM-supplied parameter).
+    of taking bytes as an LLM-supplied parameter). Also clears and then
+    returns whatever OUTPUT document got staged during the run (see
+    tools.stage_artifact) - the same "can't carry bytes through the model's
+    own text" problem applies just as much on the way out, so
+    render_document_to_pdf/fill_pdf_widgets/fill_docx_form_controls stage
+    their result here instead of returning it, and this function is where
+    that staged result actually gets retrieved - never by parsing it out of
+    the model's final answer.
+
+    Returns (final_text, artifact_bytes, artifact_kind). `artifact_bytes` is
+    None if nothing was staged this run (e.g. packet mode, which still
+    relies on the model's own text - see app.py's TODO there).
 
     Holds tools.reference_lock for the whole call, not just the staging
     step, so two requests on the shared agent can never see each other's
-    reference document - this is safe to serialize on because
-    WorkspaceAgent.run() already serializes concurrent calls internally too
-    (its own instance lock), so this adds no new bottleneck. Also resets the
-    agent's conversation memory before each run - see _reset_agent_memory.
+    reference document or output artifact - this is safe to serialize on
+    because WorkspaceAgent.run() already serializes concurrent calls
+    internally too (its own instance lock), so this adds no new bottleneck.
+    Also resets the agent's conversation memory before each run - see
+    _reset_agent_memory. The artifact is read out INSIDE this lock (not by
+    the caller afterward) so a concurrent request queued behind this one
+    cannot clear/overwrite it before it's retrieved.
 
     Calls agent.supervise(...) directly instead of agent.run() - same call
     WorkspaceAgent.run() makes internally (andromeda/core/workspace.py:656),
@@ -391,6 +415,7 @@ def run_with_reference(agent, prompt: str, reference_bytes: bytes | None):
     with tools.reference_lock:
         _reset_agent_memory(agent)
         tools.set_reference_document(reference_bytes)
+        tools.clear_staged_artifact()
         try:
             try:
                 result = agent.supervise({"messages": [HumanMessage(content=prompt)], "plan": []})
@@ -410,6 +435,10 @@ def run_with_reference(agent, prompt: str, reference_bytes: bytes | None):
                 for m in messages:
                     tc = getattr(m, "tool_calls", None)
                     print(f"  - {type(m).__name__}: content={getattr(m, 'content', None)!r} tool_calls={tc}")
-            return final
+
+            artifact_bytes, artifact_kind = tools.get_staged_artifact()
+            if artifact_bytes is not None:
+                print(f"[run_with_reference] staged artifact: kind={artifact_kind} size={len(artifact_bytes)} bytes")
+            return final, artifact_bytes, artifact_kind
         finally:
             tools.set_reference_document(None)

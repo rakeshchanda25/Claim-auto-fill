@@ -36,6 +36,13 @@ def build_generation_prompt(req: GenerationRequest) -> str:
             + json_footer
         )
 
+    staged_footer = (
+        "\nThe rendered PDF is staged automatically the moment render_document_to_pdf runs - "
+        "you never see or handle its bytes, and must NOT attempt to encode or embed them "
+        "yourself (a document is far too large to transcribe as text). Once it's staged, just "
+        "return a short JSON status object: {\"status\": \"ok\"}."
+    )
+
     if req.mode == "generate":
         return (
             f"Generate a single '{req.doc_type}' document for scenario '{req.scenario}'.\n"
@@ -43,9 +50,8 @@ def build_generation_prompt(req: GenerationRequest) -> str:
             f"2. Call generate_synthetic_data(doc_type='{req.doc_type}', scenario='{req.scenario}'"
             + (f", seed={req.seed}" if req.seed is not None else "") + ").\n"
             "3. Call validate_document_structure(data, doc_type) and fix any missing fields.\n"
-            f"4. Call render_document_to_pdf(template_name='{req.doc_type.replace('-', '_')}', data=data).\n"
-            "5. Encode the returned PDF bytes as a base64 string.\n"
-            "6. Return JSON object: {\"pdf_bytes_b64\": \"<base64_string>\"}."
+            f"4. Call render_document_to_pdf(template_name='{req.doc_type.replace('-', '_')}', data=data)."
+            + staged_footer
             + _custom_fields_block(req)
             + json_footer
         )
@@ -59,9 +65,8 @@ def build_generation_prompt(req: GenerationRequest) -> str:
             f"2. Load the skill: load_skill('{req.doc_type}').\n"
             f"3. Call generate_synthetic_data(doc_type='{req.doc_type}', scenario='{req.scenario}').\n"
             "4. Adapt the data to match the layout detected in step 1.\n"
-            f"5. Call render_document_to_pdf(template_name='{req.doc_type.replace('-', '_')}', data=data).\n"
-            "6. Encode the returned PDF bytes as base64.\n"
-            "7. Return JSON object: {\"pdf_bytes_b64\": \"<base64_string>\"}."
+            f"5. Call render_document_to_pdf(template_name='{req.doc_type.replace('-', '_')}', data=data)."
+            + staged_footer
             + _custom_fields_block(req)
             + json_footer
         )
@@ -86,9 +91,12 @@ def build_generation_prompt(req: GenerationRequest) -> str:
             "4. Choose values, keeping ONE coherent identity, date order, and arithmetic across "
             "the whole document.\n"
             "5. Call fill_docx_form_controls(values={...}, checks={...}, choices={...}), then "
-            "verify_docx_fill(...) and resolve any mismatch.\n"
-            "6. Encode the verified docx bytes as base64.\n"
-            "7. Return JSON object: {\"docx_bytes_b64\": \"<base64_string>\"}."
+            "verify_docx_fill(...) (no argument needed - it reads the just-filled docx "
+            "automatically) and resolve any mismatch.\n"
+            "6. The filled docx is staged automatically the moment fill_docx_form_controls runs - "
+            "you never see or handle its bytes, and must NOT attempt to encode or embed them "
+            "yourself. Once verify_docx_fill confirms ok, just return a short JSON status object: "
+            "{\"status\": \"ok\"}."
             + _custom_fields_block(req)
             + json_footer
         )
@@ -116,9 +124,12 @@ def build_generation_prompt(req: GenerationRequest) -> str:
             "5. Fit text with flow_text_into_widgets (runs) and fit_grid_row (table rows) - never "
             "guess a font size.\n"
             "6. Call fill_pdf_widgets(widget_values, widget_fonts, watermark=...), then "
-            "verify_pdf_fill(...) and resolve any mismatch.\n"
-            "7. Encode the verified PDF bytes as base64.\n"
-            "8. Return JSON object: {\"pdf_bytes_b64\": \"<base64_string>\"}."
+            "verify_pdf_fill(expected_values) (no PDF argument needed - it reads the just-filled "
+            "PDF automatically) and resolve any mismatch.\n"
+            "7. The filled PDF is staged automatically the moment fill_pdf_widgets runs - you never "
+            "see or handle its bytes, and must NOT attempt to encode or embed them yourself (a "
+            "document is far too large to transcribe as text). Once verify_pdf_fill confirms ok, "
+            "just return a short JSON status object: {\"status\": \"ok\"}."
             + _custom_fields_block(req)
             + json_footer
         )

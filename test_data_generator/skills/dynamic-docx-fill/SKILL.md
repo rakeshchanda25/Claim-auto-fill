@@ -86,22 +86,26 @@ For a dropdown/comboBox, pick one of `choices[].display` - not the internal
 ### 4. Fill, verify, report
 
 ```
-filled = fill_docx_form_controls(values={...}, checks={...}, choices={...})
-result = verify_docx_fill(filled, {**values, **checks, **choices})
+fill_docx_form_controls(values={...}, checks={...}, choices={...})
+result = verify_docx_fill({**values, **checks, **choices})
 ```
 
-(`fill_docx_form_controls` also operates on the uploaded document
-automatically - no `docx_bytes` argument. `verify_docx_fill`'s first
-argument IS explicit: the `filled` bytes just returned, chained straight
-into the next call.)
+Neither call takes a docx argument - both operate on the uploaded document /
+just-filled result automatically. **`fill_docx_form_controls` does NOT
+return the filled docx's bytes** - it stages them server-side and returns a
+small status object instead (`verify_docx_fill` reads that same staged
+result). Never try to read, encode, or embed the filled document's content
+yourself; it is far too large to transcribe as text and you are never given
+it to transcribe.
 
 `values` is name -> text (text/richText/date controls). `checks` is name ->
 bool (checkbox controls - the actual checked glyph and font come from the
 control's own definition, never assume "X"). `choices` is name -> the chosen
 `display` string (dropdown/comboBox controls).
 
-If `result["ok"]` is false, fix the mismatched controls and fill again. Do
-not return a docx whose verification failed without saying so explicitly.
+If `result["ok"]` is false, fix the mismatched controls and fill again. Your
+final answer is just a short JSON status object confirming success (e.g.
+`{"status": "ok"}`) - do not attempt to include the document itself.
 
 ## When this skill does not apply
 

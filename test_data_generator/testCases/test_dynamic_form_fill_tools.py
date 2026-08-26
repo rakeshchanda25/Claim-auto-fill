@@ -14,6 +14,12 @@ transcribe a PDF's raw bytes as a JSON argument, so they read a staged
 "current reference document" instead (tools.set_reference_document, held
 for the run by agent_factory.run_with_reference in real requests). Tests
 stage it themselves via the `staged_pdf` fixture.
+
+Symmetrically, fill_pdf_widgets does not RETURN the filled PDF's bytes
+either - the same "can't carry raw bytes through an LLM's own text" problem
+applies on the way out, so it stages the result (tools.stage_artifact) and
+verify_pdf_fill reads that staged result instead of taking it as an
+argument. Tests read the staged bytes back via tools.get_staged_artifact().
 """
 
 from __future__ import annotations
@@ -51,6 +57,7 @@ def staged_pdf():
         yield
     finally:
         tools.set_reference_document(None)
+        tools.clear_staged_artifact()
 
 
 def test_inspect_pdf_form_structure_returns_the_real_draft(staged_pdf):
@@ -93,22 +100,33 @@ def test_fill_pdf_widgets_then_verify_pdf_fill_round_trips(staged_pdf):
     run = next(r for r in draft["runs"] if r["widgets"])
     fitted = tools.flow_text_into_widgets(run["widgets"], "Synthetic value")
 
-    filled = tools.fill_pdf_widgets(fitted["values"], fitted["fonts"])
-    verification = tools.verify_pdf_fill(filled, fitted["values"])
+    status = tools.fill_pdf_widgets(fitted["values"], fitted["fonts"])
+    assert status["status"] == "staged" and status["kind"] == "pdf"
+    verification = tools.verify_pdf_fill(fitted["values"])
 
     assert verification["ok"] is True
     assert verification["mismatches"] == {}
+
+    staged_bytes, staged_kind = tools.get_staged_artifact()
+    assert staged_kind == "pdf"
+    assert staged_bytes[:4] == b"%PDF"
 
 
 def test_verify_pdf_fill_reports_a_real_mismatch(staged_pdf):
     draft = tools.inspect_pdf_form_structure()
     run = next(r for r in draft["runs"] if r["widgets"])
-    filled = tools.fill_pdf_widgets({run["widgets"][0]: "actual value"}, {})
+    tools.fill_pdf_widgets({run["widgets"][0]: "actual value"}, {})
 
-    verification = tools.verify_pdf_fill(filled, {run["widgets"][0]: "expected different value"})
+    verification = tools.verify_pdf_fill({run["widgets"][0]: "expected different value"})
 
     assert verification["ok"] is False
     assert run["widgets"][0] in verification["mismatches"]
+
+
+def test_verify_pdf_fill_without_a_staged_result_raises(staged_pdf):
+    tools.clear_staged_artifact()
+    with pytest.raises(ValueError, match="No document has been staged"):
+        tools.verify_pdf_fill({"anything": "value"})
 
 
 def test_inspect_pdf_form_structure_on_flat_pdf_reports_no_widgets():

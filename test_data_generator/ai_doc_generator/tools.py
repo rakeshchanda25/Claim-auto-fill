@@ -66,6 +66,57 @@ def _require_reference_bytes() -> bytes:
     return _reference_bytes
 
 
+# =============================================================================
+# Output-artifact staging.
+#
+# The same "an LLM cannot carry raw bytes through its own text" problem that
+# reference-document staging fixes on the way IN also applies on the way
+# OUT: render_document_to_pdf/fill_pdf_widgets/fill_docx_form_controls used
+# to return the finished document as raw `bytes`. LangChain's tool-calling
+# layer stringifies a non-string tool return with plain str() when it builds
+# the ToolMessage - for bytes that produces exactly "b'%PDF-1.3\\n...'", the
+# garbled text a user actually saw appear as the agent's "response". Even if
+# it hadn't been mangled, the prompt was then asking the model to read that
+# blob back out of its own context and hand-transcribe it as a base64 string
+# in its final answer - tens to hundreds of thousands of characters, which is
+# both why generation was slow (huge, pointless output) and why it broke down
+# entirely on anything past a trivial document.
+#
+# The fix mirrors reference-document staging: a tool that produces a
+# document stages the real bytes here and returns a small status object
+# instead. agent_factory.run_with_reference reads the staged bytes directly
+# once the run finishes - the actual file content never has to pass through
+# the model's generated text at all.
+# =============================================================================
+
+_staged_artifact_bytes: bytes | None = None
+_staged_artifact_kind: str | None = None
+
+
+def stage_artifact(data: bytes, kind: str) -> dict:
+    global _staged_artifact_bytes, _staged_artifact_kind
+    _staged_artifact_bytes = data
+    _staged_artifact_kind = kind
+    return {"status": "staged", "kind": kind, "size_bytes": len(data)}
+
+
+def get_staged_artifact() -> tuple[bytes | None, str | None]:
+    return _staged_artifact_bytes, _staged_artifact_kind
+
+
+def clear_staged_artifact() -> None:
+    global _staged_artifact_bytes, _staged_artifact_kind
+    _staged_artifact_bytes = None
+    _staged_artifact_kind = None
+
+
+def _require_staged_artifact() -> bytes:
+    data, _ = get_staged_artifact()
+    if data is None:
+        raise ValueError("No document has been staged yet in this request.")
+    return data
+
+
 @tool
 def generate_synthetic_data(doc_type: str, scenario: str = "general", seed: int = None) -> dict:
     """Generate synthetic insurance claim data for the given document type and scenario."""
@@ -76,9 +127,14 @@ def generate_synthetic_data(doc_type: str, scenario: str = "general", seed: int 
 
 
 @tool
-def render_document_to_pdf(template_name: str, data: dict) -> bytes:
-    """Render a Jinja2 HTML template with the given data and return PDF bytes."""
-    return render_html_to_pdf(template_name, data)
+def render_document_to_pdf(template_name: str, data: dict) -> dict:
+    """Render a Jinja2 HTML template with the given data into the final PDF.
+    Returns a small status object, NOT the PDF bytes - a tool-calling model
+    cannot carry a document's binary content through its own generated text.
+    The rendered PDF is staged automatically and attached to the response
+    once you finish; just confirm success in your final answer."""
+    pdf_bytes = render_html_to_pdf(template_name, data)
+    return stage_artifact(pdf_bytes, "pdf")
 
 
 @tool
@@ -196,23 +252,29 @@ def fit_grid_row(widget_names: list, cell_texts: list, base_font: float = 7.0) -
 
 
 @tool
-def fill_pdf_widgets(widget_values: dict, widget_fonts: dict = None, watermark: str = None) -> bytes:
+def fill_pdf_widgets(widget_values: dict, widget_fonts: dict = None, watermark: str = None) -> dict:
     """Fill the uploaded reference PDF's AcroForm widgets by exact widget name
     with already-fitted text (from flow_text_into_widgets / fit_grid_row, or
-    a short single-line value with no font override needed) and return the
-    filled PDF bytes. Sets /NeedAppearances so real PDF viewers actually
-    render the values (many otherwise show nothing despite the value being
-    saved in the file). Always call verify_pdf_fill afterwards - never
-    report success without confirming the values actually took."""
-    return fill_widgets_precise(_require_reference_bytes(), widget_values, widget_fonts, watermark)
+    a short single-line value with no font override needed). Sets
+    /NeedAppearances so real PDF viewers actually render the values (many
+    otherwise show nothing despite the value being saved in the file).
+    Returns a small status object, NOT the filled PDF bytes - a tool-calling
+    model cannot carry a document's binary content through its own generated
+    text. The filled PDF is staged automatically; call verify_pdf_fill next
+    (it reads the staged result automatically too) - never report success
+    without confirming the values actually took."""
+    pdf_bytes = fill_widgets_precise(_require_reference_bytes(), widget_values, widget_fonts, watermark)
+    return stage_artifact(pdf_bytes, "pdf")
 
 
 @tool
-def verify_pdf_fill(pdf_bytes: bytes, expected_values: dict) -> dict:
-    """Reads the filled PDF's AcroForm values back out and diffs them
-    against what was requested. Call this after every fill_pdf_widgets -
-    a mismatch here means the fill silently did not take for that widget."""
-    back = read_back_widgets(pdf_bytes)
+def verify_pdf_fill(expected_values: dict) -> dict:
+    """Reads the just-filled PDF's (staged by fill_pdf_widgets) AcroForm
+    values back out and diffs them against what was requested - no PDF
+    argument, it reads the staged result automatically. Call this after
+    every fill_pdf_widgets - a mismatch here means the fill silently did not
+    take for that widget."""
+    back = read_back_widgets(_require_staged_artifact())
     mismatches = {
         k: {"expected": v, "actual": back.get(k, "<absent>")}
         for k, v in expected_values.items()
@@ -251,7 +313,7 @@ def fill_docx_form_controls(
     values: dict = None,
     checks: dict = None,
     choices: dict = None,
-) -> bytes:
+) -> dict:
     """Fill the uploaded reference .docx's Word content controls by exact
     control name (from inspect_docx_form_structure). `values` is name->text
     for text/richText/date controls. `checks` is name->bool for checkbox
@@ -259,19 +321,25 @@ def fill_docx_form_controls(
     uses the control's own configured checked-state glyph and font.
     `choices` is name->displayText for dropdown/comboBox controls, and MUST
     be one of that control's own listItem displayText values (raises
-    otherwise - never invent an option the template doesn't offer). Always
-    call verify_docx_fill afterwards."""
-    return fill_docx_controls(_require_reference_bytes(), values, checks, choices)
+    otherwise - never invent an option the template doesn't offer). Returns
+    a small status object, NOT the filled docx bytes - a tool-calling model
+    cannot carry a document's binary content through its own generated text.
+    The filled docx is staged automatically; always call verify_docx_fill
+    afterwards (it reads the staged result automatically too)."""
+    docx_bytes = fill_docx_controls(_require_reference_bytes(), values, checks, choices)
+    return stage_artifact(docx_bytes, "docx")
 
 
 @tool
-def verify_docx_fill(docx_bytes: bytes, expected_values: dict) -> dict:
-    """Reads the filled docx's content controls back out and diffs them
-    against what was requested (expected_values maps name -> the text, or
-    the bool for a checkbox, or the displayText for a dropdown/comboBox, that
-    was written). Call this after every fill_docx_form_controls - a
-    mismatch means the fill silently did not take for that control."""
-    back = read_back_docx_controls(docx_bytes)
+def verify_docx_fill(expected_values: dict) -> dict:
+    """Reads the just-filled docx's (staged by fill_docx_form_controls)
+    content controls back out and diffs them against what was requested
+    (expected_values maps name -> the text, or the bool for a checkbox, or
+    the displayText for a dropdown/comboBox, that was written) - no docx
+    argument, it reads the staged result automatically. Call this after
+    every fill_docx_form_controls - a mismatch means the fill silently did
+    not take for that control."""
+    back = read_back_docx_controls(_require_staged_artifact())
     mismatches = {
         k: {"expected": v, "actual": back.get(k, "<absent>")}
         for k, v in expected_values.items()

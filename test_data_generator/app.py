@@ -169,7 +169,7 @@ async def ai_generate_document(
 
         agent = get_shared_agent()
         prompt = build_generation_prompt(req)
-        result_str = run_with_reference(agent, prompt, req.reference_bytes)
+        result_str, artifact_bytes, artifact_kind = run_with_reference(agent, prompt, req.reference_bytes)
         if hasattr(result_str, "content"):
             result_str = result_str.content
         elif hasattr(result_str, "output"):
@@ -181,6 +181,17 @@ async def ai_generate_document(
         print("CONTENT:")
         print(result_str)
         print("=" * 40 + " RAW AGENT RESPONSE END " + "=" * 40 + "\n")
+
+        # Single-document modes (generate/fill/recreate) stage their finished
+        # document server-side instead of routing it through the model's own
+        # text (see agent_factory.run_with_reference / tools.stage_artifact) -
+        # if one was staged this run, it IS the answer; no need to parse
+        # anything out of result_str for the actual file content. Only
+        # packet mode (multiple documents) still relies on the model's text
+        # below, since staging currently only tracks one document at a time.
+        if artifact_bytes is not None:
+            ext = artifact_kind or "pdf"
+            return (ext, artifact_bytes, f"{doc_type}_{scenario}.{ext}")
 
         result = None
         if isinstance(result_str, dict):

@@ -121,17 +121,20 @@ set the other to `/Off`. Setting only one leaves the other in an undefined state
 ### 6. Fill, verify, report
 
 ```
-filled = fill_pdf_widgets(widget_values, widget_fonts, watermark=...)
-result = verify_pdf_fill(filled, widget_values)
+fill_pdf_widgets(widget_values, widget_fonts, watermark=...)
+result = verify_pdf_fill(widget_values)
 ```
 
-(`fill_pdf_widgets` also operates on the uploaded document automatically -
-no `pdf_bytes` argument. `verify_pdf_fill`'s first argument IS an explicit
-argument: the `filled` bytes `fill_pdf_widgets` just returned, chained
-straight into the next call.)
+Neither call takes a PDF argument - both operate on the uploaded document /
+just-filled result automatically. **`fill_pdf_widgets` does NOT return the
+filled PDF's bytes** - it stages them server-side and returns a small status
+object instead (`verify_pdf_fill` reads that same staged result). Never try
+to read, encode, or embed the filled document's content yourself; it is far
+too large to transcribe as text and you are never given it to transcribe.
 
-If `result["ok"]` is false, fix the mismatched widgets and fill again. Do not
-return a PDF whose verification failed without saying so explicitly.
+If `result["ok"]` is false, fix the mismatched widgets and fill again. Your
+final answer is just a short JSON status object confirming success (e.g.
+`{"status": "ok"}`) - do not attempt to include the document itself.
 
 ## When this skill does not apply
 
