@@ -1,3 +1,5 @@
+import html as _html
+import io
 import logging
 import re
 from pathlib import Path
@@ -64,23 +66,48 @@ _INPUT_STYLE = (
 )
 
 
-def substitute_form_inputs(html_str: str) -> tuple[str, dict[str, str]]:
-    """Replace every __FORM_FIELD_x__ token with an <input>, giving each
-    occurrence a UNIQUE widget name. Returns (html, {widget_name: data_key}).
+# WeasyPrint's PDF-forms UA stylesheet (weasyprint/css/html5_ua_form.css,
+# loaded ONLY when pdf_forms=True) contains:
+#     input:not([type="submit"])::before { visibility: hidden }
+# which hides the ::before pseudo-element that html5_ua.css:175 would
+# otherwise use to draw an input's text:
+#     input[value]:not(...)::before { content: attr(value); ... }
+# That is deliberate on WeasyPrint's part - with pdf_forms=True it assumes the
+# PDF VIEWER will paint each field's value from the AcroForm data. But
+# honouring that is optional per the PDF spec (it hinges on /NeedAppearances)
+# and plenty of viewers simply don't, which is exactly why these forms came
+# out completely blank. Un-hiding it puts the value back into the page's own
+# content stream - visible in every viewer - while the real AcroForm field
+# stays underneath, so the output is still a genuine fillable form.
+_FORM_TEXT_VISIBLE_CSS = (
+    "<style>"
+    'input:not([type="submit"])::before{visibility:visible !important;}'
+    "</style>"
+)
 
-    A template legitimately renders the same data key more than once: ACORD-25
-    repeats effective_date/expiration_date across all four coverage rows,
-    CMS-1500 repeats dos_from and the NPIs per service line, UB-04 repeats
-    discharge_date on every revenue-code row. Emitting <input
-    name="discharge_date"> six times produces six widgets sharing one /T,
-    which AcroForm treats as ONE field with six appearances - pypdf then
+
+def substitute_form_inputs(
+    html_str: str, value_for: dict[str, str] | None = None
+) -> tuple[str, dict[str, str]]:
+    """Replace every __FORM_FIELD_x__ token with an <input>, giving each
+    occurrence a UNIQUE widget name and (when `value_for` is supplied) its
+    real value. Returns (html, {widget_name: data_key}).
+
+    Unique names matter because a template legitimately renders the same data
+    key more than once: ACORD-25 repeats effective_date/expiration_date across
+    all four coverage rows, CMS-1500 repeats dos_from and the NPIs per service
+    line, UB-04 repeats discharge_date on every revenue-code row. Emitting
+    <input name="discharge_date"> six times produces six widgets sharing one
+    /T, which AcroForm treats as ONE field with six appearances - pypdf then
     collides on the per-field XObject it builds while flattening ("XObject
     '/Fm effective_date' already added to page resources. This might be an
     issue.") and only one of those locations can be drawn correctly.
 
-    Naming them discharge_date, discharge_date__2, ... makes each its own
-    field with its own appearance stream, while the returned mapping keeps
-    every one of them pointed at the original data key for the fill.
+    The value attribute matters because it is the ONLY thing WeasyPrint can
+    draw from (html5_ua.css uses `content: attr(value)`) and the only thing it
+    writes into the field's /V (pdf/anchors.py: `field['V'] =
+    element.attrib.get('value', '')`). Without it both the visible text and
+    the form value are empty.
     """
     seen: dict[str, int] = {}
     widget_source: dict[str, str] = {}
@@ -91,9 +118,28 @@ def substitute_form_inputs(html_str: str) -> tuple[str, dict[str, str]]:
         seen[base] = n + 1
         unique = base if n == 0 else f"{base}__{n + 1}"
         widget_source[unique] = base
-        return f'<input type="text" name="{unique}" style="{_INPUT_STYLE}" />'
+
+        value_attr = ""
+        if value_for:
+            raw = value_for.get(base, "")
+            if raw:
+                value_attr = f' value="{_html.escape(str(raw), quote=True)}"'
+        return f'<input type="text" name="{unique}"{value_attr} style="{_INPUT_STYLE}" />'
 
     return re.sub(r"__FORM_FIELD_([a-zA-Z0-9_]+)__", repl, html_str), widget_source
+
+
+def _visible_text(pdf_bytes: bytes) -> str:
+    """Text actually present in the pages' content streams - i.e. what a
+    viewer draws without interpreting any AcroForm data."""
+    from pypdf import PdfReader
+
+    try:
+        reader = PdfReader(io.BytesIO(pdf_bytes))
+        return " ".join((page.extract_text() or "") for page in reader.pages)
+    except Exception:
+        logger.exception("could not extract text to verify the render")
+        return ""
 
 
 def render_html_to_pdf(template_name: str, data: dict) -> bytes:
@@ -105,37 +151,59 @@ def render_html_to_pdf(template_name: str, data: dict) -> bytes:
     logger.info(f"render path: {'standardized-form (placeholder-then-fill)' if is_standard_form else 'direct render'}")
 
     if is_standard_form:
+        flat_data = flatten_data(data)
         placeholders = make_placeholder_data(data)
         html_str = template.render(**placeholders)
         logger.info(f"placeholder pass rendered: {len(html_str)} chars")
 
-        html_str, widget_source = substitute_form_inputs(html_str)
+        # Values go INTO the input elements: that is both what WeasyPrint draws
+        # (content: attr(value)) and what it writes into each field's /V.
+        html_str, widget_source = substitute_form_inputs(html_str, value_for=flat_data)
         dupes = len(widget_source) - len(set(widget_source.values()))
+        with_values = sum(1 for src in widget_source.values() if flat_data.get(src))
         logger.info(f"substituted {len(widget_source)} placeholder token(s) with <input> elements "
                     f"({len(set(widget_source.values()))} distinct data key(s), "
-                    f"{dupes} repeated occurrence(s) given unique widget names)")
+                    f"{dupes} repeated occurrence(s) given unique widget names, "
+                    f"{with_values} carrying a non-empty value)")
+
+        # Re-enable the input text WeasyPrint's PDF-forms stylesheet hides.
+        if "</head>" in html_str:
+            html_str = html_str.replace("</head>", _FORM_TEXT_VISIBLE_CSS + "</head>", 1)
+        else:
+            html_str = _FORM_TEXT_VISIBLE_CSS + html_str
+        logger.info("injected CSS to un-hide input text (WeasyPrint hides it when pdf_forms=True)")
 
         # pdf_forms=True is required for WeasyPrint to emit a /AcroForm at
         # all - it's off by default (weasyprint/__init__.py's DEFAULT_OPTIONS
         # has pdf_forms=None), so every <input> element above would
         # otherwise be laid out as plain, non-interactive visual boxes with
-        # no PDF form fields behind them. Without this flag,
-        # fill_pdf_form()'s update_page_form_field_values() call below fails
-        # with "No /AcroForm dictionary in PDF of PdfWriter Object" - the
-        # rendered PDF literally has nothing for it to fill.
+        # no PDF form fields behind them.
         logger.info("calling WeasyPrint (pdf_forms=True)...")
         pdf_bytes = HTML(string=html_str, base_url=str(_TEMPLATES_DIR)).write_pdf(pdf_forms=True)
         logger.info(f"WeasyPrint produced {len(pdf_bytes)} bytes")
 
-        # Build the fill map from the widgets actually emitted, not from every
-        # key in `data`. The latter sent ~100 keys at a form with ~41 widgets,
-        # so most were silent no-ops (update_page_form_field_values ignores
-        # unknown names without warning) and a genuinely missing widget would
-        # have been invisible in that noise.
-        flat_data = flatten_data(data)
+        # Set /V for every field and flag /NeedAppearances. flatten=False: the
+        # text is already drawn in the page content by WeasyPrint above, so
+        # letting pypdf bake its own appearance on top would double-print it.
         field_map = {widget: flat_data.get(src, "") for widget, src in widget_source.items()}
-        logger.info(f"filling AcroForm with {len(field_map)} field(s) mapped from {len(flat_data)} data value(s)")
-        filled_pdf = fill_pdf_form(pdf_bytes, field_map, flatten=True)
+        logger.info(f"setting AcroForm values for {len(field_map)} field(s)")
+        filled_pdf = fill_pdf_form(pdf_bytes, field_map, flatten=False)
+
+        # Verify the values are genuinely in the page content, not merely in
+        # the form data - that distinction is the whole bug this guards.
+        samples = [v for v in {flat_data.get(s, "") for s in widget_source.values()} if len(v) >= 4][:8]
+        visible = _visible_text(filled_pdf)
+        found = [s for s in samples if s in visible]
+        logger.info(f"visible-text check: {len(found)}/{len(samples)} sampled value(s) found in page content")
+        if samples and not found:
+            logger.warning(
+                "NO sampled values are visible in the page content - the AcroForm render did not "
+                "paint them. Falling back to a plain (non-fillable) direct render so the document "
+                "is at least readable; the output will have no form fields."
+            )
+            html_str = template.render(**data)
+            filled_pdf = HTML(string=html_str, base_url=str(_TEMPLATES_DIR)).write_pdf()
+
         logger.info(f"render_html_to_pdf done: {len(filled_pdf)} bytes")
         return filled_pdf
 
