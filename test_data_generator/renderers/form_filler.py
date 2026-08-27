@@ -50,6 +50,28 @@ def fill_pdf_form(pdf_bytes: bytes, field_map: dict, flatten: bool = True) -> by
     acro[NameObject("/NeedAppearances")] = BooleanObject(True)
     logger.info(f"writer has {len(writer.pages)} page(s), /AcroForm present, /NeedAppearances set - filling...")
 
+    # Diagnostic: names actually present as real widgets in the PDF vs.
+    # names field_map is trying to set. If these two sets barely overlap,
+    # update_page_form_field_values silently no-ops for every name it can't
+    # find - it does not warn or raise, which is exactly how a fill can
+    # "succeed" (no exception, correct byte count) while nothing visible
+    # changes.
+    real_names = set()
+    for page in writer.pages:
+        for annot in (page.get("/Annots") or []):
+            d = annot.get_object()
+            if d.get("/Subtype") == "/Widget" and d.get("/T"):
+                real_names.add(str(d["/T"]))
+    matched = real_names & set(field_map.keys())
+    logger.info(f"widget names in PDF: {len(real_names)}, field_map keys: {len(field_map)}, "
+                f"matched: {len(matched)}")
+    if len(matched) < len(real_names):
+        logger.warning(f"{len(real_names) - len(matched)} real widget name(s) have NO matching "
+                        f"field_map key - sample unmatched widget names: {sorted(real_names - matched)[:10]}")
+    if len(matched) < len(field_map):
+        logger.warning(f"{len(field_map) - len(matched)} field_map key(s) don't match any real "
+                        f"widget - sample: {sorted(set(field_map.keys()) - matched)[:10]}")
+
     for page_num in range(len(writer.pages)):
         writer.update_page_form_field_values(writer.pages[page_num], field_map, auto_regenerate=False)
 
