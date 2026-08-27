@@ -191,7 +191,9 @@ async def ai_generate_document(
         prompt = build_generation_prompt(req)
         logger.info(f"[2/6] prompt built ({len(prompt)} chars) - handing off to agent")
 
-        result_str, artifact_bytes, artifact_kind = run_with_reference(agent, prompt, req.reference_bytes)
+        result_str, artifact_bytes, artifact_kind, packet_components = run_with_reference(
+            agent, prompt, req.reference_bytes
+        )
         if hasattr(result_str, "content"):
             result_str = result_str.content
         elif hasattr(result_str, "output"):
@@ -200,24 +202,36 @@ async def ai_generate_document(
         logger.info(
             f"[3/6] agent run returned: text_type={type(result_str).__name__} "
             f"text_len={len(result_str) if isinstance(result_str, str) else 'n/a'} "
-            f"artifact={f'{artifact_kind} ({len(artifact_bytes)} bytes)' if artifact_bytes else 'none'}"
+            f"artifact={f'{artifact_kind} ({len(artifact_bytes)} bytes)' if artifact_bytes else 'none'} "
+            f"packet={f'{len(packet_components)} component(s)' if packet_components else 'none'}"
         )
         logger.debug(f"[3/6] raw agent text: {result_str!r}")
 
-        # Single-document modes (generate/fill/recreate) stage their finished
-        # document server-side instead of routing it through the model's own
-        # text (see agent_factory.run_with_reference / tools.stage_artifact) -
-        # if one was staged this run, it IS the answer; no need to parse
-        # anything out of result_str for the actual file content. Only
-        # packet mode (multiple documents) still relies on the model's text
-        # below, since staging currently only tracks one document at a time.
+        # Single-document modes (generate/fill/recreate) and packet mode both
+        # stage their finished document(s) server-side instead of routing them
+        # through the model's own text (see agent_factory.run_with_reference /
+        # tools.stage_artifact / tools.stage_packet_component) - if either was
+        # staged this run, it IS the answer; no need to parse anything out of
+        # result_str for the actual file content. The JSON-text parsing below
+        # is a legacy fallback only, for the rare case nothing got staged.
         if artifact_bytes is not None:
             ext = artifact_kind or "pdf"
             logger.info(f"[4/6] using staged artifact directly (kind={ext}), skipping text-JSON parsing")
             logger.info(f"[6/6] responding with {ext} file, {len(artifact_bytes)} bytes")
             return (ext, artifact_bytes, f"{doc_type}_{scenario}.{ext}")
 
-        logger.info("[4/6] no staged artifact - parsing agent text as JSON (packet mode / legacy path)")
+        if packet_components:
+            buf = io.BytesIO()
+            with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+                for comp in packet_components:
+                    safe_label = comp["label"].replace(" ", "_").replace("/", "-")
+                    ext = comp["kind"] or "pdf"
+                    zf.writestr(f"{safe_label}.{ext}", comp["bytes"])
+            logger.info("[4/6] using staged packet directly, skipping text-JSON parsing")
+            logger.info(f"[6/6] responding with packet zip, {len(packet_components)} components")
+            return ("zip", buf.getvalue(), f"{doc_type}_packet.zip")
+
+        logger.info("[4/6] no staged artifact or packet - parsing agent text as JSON (legacy fallback path)")
         result = None
         if isinstance(result_str, dict):
             result = result_str

@@ -157,6 +157,48 @@ def _require_staged_artifact() -> bytes:
     return data
 
 
+# Packet mode needs several documents to survive one request, but the single
+# staging slot above is overwritten by each render_document_to_pdf call - by
+# the time a packet's last component renders, every earlier one is already
+# gone. This is a second, list-shaped staging slot that ACCUMULATES instead
+# of overwriting: stage_packet_component moves whatever render_document_to_pdf
+# just staged into this list (under a label) and clears the single slot so
+# the next component can use it. Same non-negotiable rule as the single slot -
+# the bytes never pass through the model's own text.
+_staged_packet: list[dict] | None = None
+
+
+def get_staged_packet() -> list[dict] | None:
+    return _staged_packet
+
+
+def clear_staged_packet() -> None:
+    global _staged_packet
+    _staged_packet = None
+
+
+@tool
+@_log_exceptions
+def stage_packet_component(label: str) -> dict:
+    """Add the document render_document_to_pdf just produced to this
+    packet's component list, under `label`, then free the single-document
+    staging slot for the next component. Call this once, immediately after
+    each render_document_to_pdf call, when building a packet (never in
+    single-document generate/fill/recreate modes)."""
+    global _staged_packet
+    data, kind = get_staged_artifact()
+    if data is None:
+        raise ValueError(
+            "No document has been staged yet - call render_document_to_pdf before "
+            "stage_packet_component."
+        )
+    if _staged_packet is None:
+        _staged_packet = []
+    _staged_packet.append({"label": label, "kind": kind or "pdf", "bytes": data})
+    clear_staged_artifact()
+    return {"status": "added_to_packet", "label": label, "components_so_far": len(_staged_packet)}
+
+
 @tool
 @_log_exceptions
 def generate_synthetic_data(doc_type: str, scenario: str = "general", seed: int = None) -> dict:
@@ -174,7 +216,11 @@ def render_document_to_pdf(template_name: str, data: dict) -> dict:
     Returns a small status object, NOT the PDF bytes - a tool-calling model
     cannot carry a document's binary content through its own generated text.
     The rendered PDF is staged automatically and attached to the response
-    once you finish; just confirm success in your final answer."""
+    once you finish; just confirm success in your final answer.
+    Building a packet (multiple documents in one request)? Call
+    stage_packet_component(label) immediately after EACH render_document_to_pdf
+    call, before rendering the next component - this slot only holds one
+    document at a time and the next render overwrites it."""
     pdf_bytes = render_html_to_pdf(template_name, data)
     return stage_artifact(pdf_bytes, "pdf")
 

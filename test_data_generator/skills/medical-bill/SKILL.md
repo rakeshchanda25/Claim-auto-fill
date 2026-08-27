@@ -22,7 +22,7 @@ allowed-tools: generate_synthetic_data render_document_to_pdf validate_document_
 
 ## Financial Rules
 - Line items: 1-5 CPT codes
-- Adjustment: ~15% contractual reduction
+- Adjustment: 5% to 30% contractual reduction (randomized per bill, not a fixed rate)
 - Balance due = total - adjustments - amount_paid
 - Amount paid defaults to 0.00
 

@@ -22,6 +22,7 @@ from .tools import (
     inspect_pdf_form_structure,
     inspect_region,
     render_document_to_pdf,
+    stage_packet_component,
     validate_document_structure,
     verify_docx_fill,
     verify_pdf_fill,
@@ -99,6 +100,7 @@ def create_doc_generator_agent():
         get_pdf_form_fields,
         analyze_uploaded_reference,
         build_packet,
+        stage_packet_component,
         validate_document_structure,
         # dynamic-form-fill: works on any AcroForm template, no per-form config
         inspect_pdf_form_structure,
@@ -252,16 +254,23 @@ def create_doc_generator_agent():
             "fall back to generate_synthetic_data/render_document_to_pdf. "
             "For GENERATING a single new document from scratch (no uploaded reference): call "
             "generate_synthetic_data, validate_document_structure, then render_document_to_pdf. "
-            "For packets: call build_packet to get all components, then render_document_to_pdf for each. "
+            "For packets: call build_packet to get all components, then for EACH one call "
+            "render_document_to_pdf followed immediately by stage_packet_component(label) before "
+            "moving to the next component - render_document_to_pdf's staging slot holds only one "
+            "document at a time, so skipping stage_packet_component between components silently "
+            "loses every one but the last. Never try to read, encode, or return a document's bytes "
+            "yourself in any mode. "
             "For recreate mode: delegate reference analysis to doc-analyst first. "
             "STAY ON TASK: do not browse the workspace, list directories, read skill files "
             "directly, or run shell commands to 'look around' - load_skill already gives you "
             "everything a skill contains. Every step must be one of the tool calls the loaded "
             "skill names; if you catch yourself exploring the filesystem instead of calling "
             "those tools, stop and call the next tool in the skill's workflow. "
-            "Return final output as a JSON string with key 'pdf_bytes_b64' (base64-encoded PDF), "
-            "'docx_bytes_b64' (base64-encoded docx, fill mode on a .docx only), or 'components' "
-            "(list of {label, pdf_bytes_b64}) for packets."
+            "Every mode's output is staged server-side (single documents via render_document_to_pdf/"
+            "fill_pdf_widgets/fill_docx_form_controls, packets via stage_packet_component) - once "
+            "staging is done, your final answer is just a short JSON status object, e.g. "
+            "{\"status\": \"ok\"} or {\"status\": \"ok\", \"components\": 4}. Never put a document's "
+            "bytes in your own output."
         ),
         tools=_TOOLS,
         workspace_backend=backend,
@@ -407,9 +416,12 @@ def run_with_reference(agent, prompt: str, reference_bytes: bytes | None):
     that staged result actually gets retrieved - never by parsing it out of
     the model's final answer.
 
-    Returns (final_text, artifact_bytes, artifact_kind). `artifact_bytes` is
-    None if nothing was staged this run (e.g. packet mode, which still
-    relies on the model's own text - see app.py's TODO there).
+    Returns (final_text, artifact_bytes, artifact_kind, packet_components).
+    `artifact_bytes` is None if no single document was staged this run (e.g.
+    packet mode, which stages N documents into packet_components instead -
+    see tools.stage_packet_component). `packet_components` is None if
+    nothing was added to it this run, otherwise a list of
+    {label, kind, bytes} in the order they were staged.
 
     Holds tools.reference_lock for the whole call, not just the staging
     step, so two requests on the shared agent can never see each other's
@@ -440,6 +452,7 @@ def run_with_reference(agent, prompt: str, reference_bytes: bytes | None):
         if reference_bytes is not None:
             logger.info(f"staged reference document: {len(reference_bytes)} bytes")
         tools.clear_staged_artifact()
+        tools.clear_staged_packet()
 
         try:
             _t0 = time.monotonic()
@@ -477,7 +490,15 @@ def run_with_reference(agent, prompt: str, reference_bytes: bytes | None):
                 logger.info(f"staged artifact ready: kind={artifact_kind} size={len(artifact_bytes)} bytes")
             else:
                 logger.info("no artifact was staged this run")
-            return final, artifact_bytes, artifact_kind
+
+            packet_components = tools.get_staged_packet()
+            if packet_components:
+                logger.info(f"staged packet ready: {len(packet_components)} component(s) - "
+                            f"{[c['label'] for c in packet_components]}")
+            else:
+                logger.info("no packet was staged this run")
+
+            return final, artifact_bytes, artifact_kind, packet_components
         finally:
             tools.set_reference_document(None)
             logger.info("released reference_lock")

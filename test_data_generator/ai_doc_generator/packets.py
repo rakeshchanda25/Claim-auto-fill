@@ -1,12 +1,13 @@
 PACKET_REGISTRY = {
     "medical-packet": {
         "display_name": "Medical Claims Packet",
-        "description": "Full medical bundle: bill, clinical notes, discharge summary, CMS-1500",
+        "description": "Full medical bundle: bill, clinical notes, discharge summary, CMS-1500, UB-04",
         "components": [
             {"doc_type": "medical-bill",      "label": "Medical Bill",         "order": 1},
             {"doc_type": "medical-record",    "label": "Clinical Visit Notes", "order": 2},
             {"doc_type": "discharge-summary", "label": "Discharge Summary",    "order": 3},
             {"doc_type": "cms-1500",          "label": "CMS-1500 Claim Form",  "order": 4},
+            {"doc_type": "ub-04",             "label": "UB-04 Institutional Claim", "order": 5},
         ],
         "compatible_scenarios": [
             "hospital_admission", "surgery", "emergency_visit", "outpatient_procedure"
@@ -36,12 +37,13 @@ PACKET_REGISTRY = {
     },
     "litigation-packet": {
         "display_name": "Litigation Support Packet",
-        "description": "Demand letter, medical records, EOB, and medical bills",
+        "description": "Demand letter, filed complaint, medical records, EOB, and medical bills",
         "components": [
-            {"doc_type": "demand-letter",    "label": "Demand Letter",   "order": 1},
-            {"doc_type": "medical-record",   "label": "Medical Records", "order": 2},
-            {"doc_type": "eob-explanation",  "label": "EOB",             "order": 3},
-            {"doc_type": "medical-bill",     "label": "Medical Bills",   "order": 4},
+            {"doc_type": "demand-letter",       "label": "Demand Letter",       "order": 1},
+            {"doc_type": "litigation-document", "label": "Filed Complaint",     "order": 2},
+            {"doc_type": "medical-record",      "label": "Medical Records",     "order": 3},
+            {"doc_type": "eob-explanation",     "label": "EOB",                 "order": 4},
+            {"doc_type": "medical-bill",        "label": "Medical Bills",       "order": 5},
         ],
         "compatible_scenarios": ["slip_and_fall", "medical_malpractice", "product_liability"],
     },

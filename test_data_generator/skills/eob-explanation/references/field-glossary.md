@@ -5,8 +5,8 @@
 - `dos`: Date of Service (`MM/DD/YYYY`)
 - `provider_name`: Rendering Physician/Hospital Name
 - `billed_amount`: Gross Billed Charge (`Currency`)
-- `allowed_amount`: Contractual Allowed Charge (`Currency`, 80% of Billed)
-- `plan_paid`: Net Insurance Payment (`Currency`, 80% of Allowed)
+- `allowed_amount`: Contractual Allowed Charge (`Currency`, 60% to 90% of Billed, randomized)
+- `plan_paid`: Net Insurance Payment (`Currency`, 70% to 95% of Allowed, randomized)
 - `patient_responsibility`: Member Balance Due (`Currency`)
 - `deductible_applied`: Deductible Amount (`Currency`)
 - `copay`: Fixed Copay Amount (`Currency`)

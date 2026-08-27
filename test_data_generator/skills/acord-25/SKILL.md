@@ -30,11 +30,16 @@ allowed-tools: generate_synthetic_data render_document_to_pdf validate_document_
 7. Cancellation clause (fixed boilerplate text)
 8. Authorized Representative
 
-## Coverage Limits (standard defaults used across all generated certificates)
-- CGL Each Occurrence: $1,000,000 · General Aggregate: $2,000,000
-- Auto Combined Single Limit: $1,000,000
-- Umbrella Each Occurrence / Aggregate: $2,000,000
-- Workers Comp E.L.: $500,000 (each accident / disease-employee / disease-policy)
+## Coverage Limits (randomized per certificate from standard real-world tiers)
+- CGL Each Occurrence / General Aggregate: one of $500K/$1M, $1M/$2M, $1M/$2M, $2M/$4M
+  (sub-limits - damage to rented premises, med exp, personal & adv injury, products-comp/op
+  agg - scale with the chosen tier, not independently random)
+- Auto Combined Single Limit: $500,000 to $2,000,000
+- Umbrella Each Occurrence / Aggregate (same value): $1,000,000 to $10,000,000
+- Workers Comp E.L. (each accident / disease-ea-employee / disease-policy): $100,000 to
+  $1,000,000, drawn from standard combos - never invent an in-between number
+- Every certificate should land on a different tier than the last one you generated;
+  don't default to $1,000,000/$2,000,000 out of habit
 
 ## Synthetic Data Rules
 - Insured and certificate holder should be different company names (Faker.company)

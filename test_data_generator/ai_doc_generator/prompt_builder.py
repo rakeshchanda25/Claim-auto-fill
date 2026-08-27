@@ -26,12 +26,17 @@ def build_generation_prompt(req: GenerationRequest) -> str:
         return (
             f"Generate a '{req.doc_type}' document packet for scenario '{req.scenario}'.\n"
             f"1. Call build_packet(packet_name='{req.doc_type}', scenario='{req.scenario}'"
-            + (f", seed={req.seed}" if req.seed is not None else "") + ").\n"
-            "2. For each component returned, call render_document_to_pdf(template_name, data) "
-            "to produce the PDF bytes.\n"
-            "3. Encode each component's PDF bytes as base64 string.\n"
-            "4. Return final result as JSON object: {\"components\": [{\"label\": \"...\", \"pdf_bytes_b64\": \"...\"}]}.\n"
-            "Always load the skill for each component doc_type before rendering it."
+            + (f", seed={req.seed}" if req.seed is not None else "") + ") to get every component's "
+            "label, template_name, and data.\n"
+            "2. For EACH component, in order: call render_document_to_pdf(template_name, data), then "
+            "IMMEDIATELY call stage_packet_component(label=<that component's label>) before moving to "
+            "the next component. render_document_to_pdf's staging slot holds only one document at a "
+            "time - skip stage_packet_component between components and every one but the last is "
+            "silently lost.\n"
+            "3. Always load the skill for each component's doc_type before rendering it.\n"
+            "4. You never see, handle, or encode any component's bytes - stage_packet_component moves "
+            "them into the packet for you. Once every component is staged, your final response is just "
+            "a short JSON status object: {\"status\": \"ok\", \"components\": <count>}."
             + _custom_fields_block(req)
             + json_footer
         )

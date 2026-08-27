@@ -7,6 +7,6 @@
 - `service_date`: Encounter Date (`MM/DD/YYYY`)
 - `line_items`: Array of CPT items (`cpt, description, units, charge`)
 - `total_amount`: Gross Billed (`Currency`)
-- `adjustments`: Insurance Discount (`Currency`, ~15%)
+- `adjustments`: Insurance Discount (`Currency`, 5% to 30% of total_amount, randomized)
 - `amount_paid`: Previous Payments (`Currency`)
 - `balance`: Net Balance Due (`Currency`)

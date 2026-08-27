@@ -25,11 +25,15 @@ allowed-tools: generate_synthetic_data render_document_to_pdf validate_document_
 - Denial reason (if any)
 
 ## Financial Calculation Rules
-- Allowed = Billed × 0.80 (contractual reduction)
-- Plan Paid = Allowed × 0.80 (coinsurance after deductible)
+- Allowed = Billed × a rate between 0.60 and 0.90 (contractual reduction - varies by
+  plan/network, randomized once per claim and reused for every line so the breakdown stays
+  internally consistent)
+- Plan Paid = Allowed × a rate between 0.70 and 0.95 (coinsurance after deductible - same
+  per-claim randomization approach)
 - Patient Responsibility = Allowed − Plan Paid
 - Copay: $20-$60
 - Deductible Applied: $0-$500
+- Network Status: In-Network in most cases, occasionally Out-of-Network
 
 ## EOB Remark Codes (for denial testing)
 - CO-97: Service included in global surgical package

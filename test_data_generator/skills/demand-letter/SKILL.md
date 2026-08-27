@@ -26,8 +26,8 @@ allowed-tools: generate_synthetic_data render_document_to_pdf validate_document_
 
 ## Financial Rules
 - Demand amount: $25,000 to $500,000
-- Special damages: ~40% of demand
-- General damages: ~60% of demand
+- Special damages: 25% to 55% of demand (randomized per letter, not a fixed split)
+- General damages: remainder of demand after special damages
 - Settlement deadline: letter date + 30 days
 
 ## Tone and Format

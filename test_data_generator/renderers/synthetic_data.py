@@ -36,6 +36,27 @@ _NDC_DRUGS = [
     ("Hydrocodone 5mg/Acetaminophen 325mg", "00406-0512-01", "tablet"),
 ]
 
+# Real insurance limits cluster on round, standard tiers - the realism is in
+# varying WHICH tier lands on a given certificate, not in avoiding round
+# numbers altogether. Each GL tier keeps its own sub-limits internally
+# consistent (aggregate tracks occurrence, products-comp/op agg = general
+# aggregate), matching how these are actually sold as a package.
+_GL_LIMIT_TIERS = [
+    # (each_occurrence, damage_rented_premises, med_exp, personal_adv_injury, general_aggregate, products_comp_op_agg)
+    (500_000, 100_000, 5_000, 500_000, 1_000_000, 1_000_000),
+    (1_000_000, 100_000, 5_000, 1_000_000, 2_000_000, 2_000_000),
+    (1_000_000, 300_000, 10_000, 1_000_000, 2_000_000, 2_000_000),
+    (2_000_000, 300_000, 10_000, 2_000_000, 4_000_000, 4_000_000),
+]
+_AUTO_CSL_TIERS = [500_000, 1_000_000, 2_000_000]
+_UMBRELLA_TIERS = [1_000_000, 2_000_000, 5_000_000, 10_000_000]
+_WC_EL_TIERS = [
+    # (each_accident, disease_ea_employee, disease_policy_limit)
+    (100_000, 500_000, 500_000),
+    (500_000, 500_000, 500_000),
+    (1_000_000, 1_000_000, 1_000_000),
+]
+
 _STATES = ["CA", "TX", "FL", "NY", "PA", "OH", "GA", "NC", "MI", "NJ"]
 _INSURERS = ["BlueCross BlueShield", "Aetna", "Cigna", "United Healthcare", "Humana", "Anthem", "Kaiser Permanente"]
 _HOSPITALS = ["St. Mary's Medical Center", "General Hospital", "Regional Medical Center", "University Hospital", "Memorial Health System"]
@@ -217,14 +238,18 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
         })
 
     elif doc_type == "medical-bill":
+        # Adjustment (contractual write-off) rate varies by payer/negotiated
+        # rate in reality - was pinned to 15% on every bill, so "balance" was
+        # always exactly 85% of the charge no matter what.
+        adjustments = round(total * random.uniform(0.05, 0.30), 2)
         base.update({
             "account_number": "ACC" + "".join(random.choices(string.digits, k=8)),
             "statement_date": date.today().strftime("%m/%d/%Y"),
             "due_date": (date.today() + timedelta(days=30)).strftime("%m/%d/%Y"),
             "amount_due": total,
             "amount_paid": 0.00,
-            "adjustments": round(total * 0.15, 2),
-            "balance": round(total * 0.85, 2),
+            "adjustments": adjustments,
+            "balance": round(total - adjustments, 2),
         })
 
     elif doc_type == "cms-1500":
@@ -287,14 +312,21 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
         })
 
     elif doc_type == "eob-explanation":
-        allowed = round(total * 0.80, 2)
-        paid = round(allowed * 0.80, 2)
+        # Allowed-of-billed and paid-of-allowed rates depend on the specific
+        # plan/network - both were pinned to 80% on every EOB, so the ratio
+        # between billed/allowed/paid never actually varied between claims.
+        # Computed once and reused for both the claim total and each line, so
+        # the per-line breakdown still reconciles exactly to the totals.
+        allowed_rate = round(random.uniform(0.60, 0.90), 2)
+        paid_rate = round(random.uniform(0.70, 0.95), 2)
+        allowed = round(total * allowed_rate, 2)
+        paid = round(allowed * paid_rate, 2)
         eob_lines = []
         remaining_allowed, remaining_paid = allowed, paid
         for i, item in enumerate(line_items):
             is_last = i == len(line_items) - 1
-            line_allowed = remaining_allowed if is_last else round(item["charge"] * 0.80, 2)
-            line_paid = remaining_paid if is_last else round(line_allowed * 0.80, 2)
+            line_allowed = remaining_allowed if is_last else round(item["charge"] * allowed_rate, 2)
+            line_paid = remaining_paid if is_last else round(line_allowed * paid_rate, 2)
             remaining_allowed -= line_allowed
             remaining_paid -= line_paid
             eob_lines.append({
@@ -316,7 +348,7 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
             "copay": round(random.uniform(20, 60), 2),
             "coinsurance": round(random.uniform(0, 200), 2),
             "denial_reason": None,
-            "network_status": "In-Network",
+            "network_status": random.choices(["In-Network", "Out-of-Network"], weights=[85, 15])[0],
             "processed_date": date.today().strftime("%m/%d/%Y"),
             "check_number": "CHK" + "".join(random.choices(string.digits, k=8)),
             "reason_code_legend": "CO-45: Charge exceeds fee schedule/maximum allowable amount",
@@ -336,6 +368,10 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
         umb_ded_or_retention = random.choice(["ded", "retention"])
         wc_officer_excluded = random.choices(["Y", "N"], weights=[25, 75])[0]
         wc_limits_basis = random.choices(["statutory", "other"], weights=[85, 15])[0]
+        gl_occ, gl_rented, gl_med, gl_pers, gl_agg, gl_prod = random.choice(_GL_LIMIT_TIERS)
+        auto_csl = random.choice(_AUTO_CSL_TIERS)
+        umb_limit = random.choice(_UMBRELLA_TIERS)
+        wc_accident, wc_disease_ee, wc_disease_policy = random.choice(_WC_EL_TIERS)
         base.update({
             "certificate_date": date.today().strftime("%m/%d/%Y"),
             "producer_name": _fake.company() + " Insurance Agency",
@@ -350,12 +386,12 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
             "expiration_date": exp.strftime("%m/%d/%Y"),
             # Commercial General Liability
             "gl_policy_number": "GL" + "".join(random.choices(string.digits, k=8)),
-            "gl_each_occurrence": "1,000,000",
-            "gl_damage_rented_premises": "300,000",
-            "gl_med_exp": "10,000",
-            "gl_personal_injury": "1,000,000",
-            "gl_general_aggregate": "2,000,000",
-            "gl_products_agg": "2,000,000",
+            "gl_each_occurrence": f"{gl_occ:,}",
+            "gl_damage_rented_premises": f"{gl_rented:,}",
+            "gl_med_exp": f"{gl_med:,}",
+            "gl_personal_injury": f"{gl_pers:,}",
+            "gl_general_aggregate": f"{gl_agg:,}",
+            "gl_products_agg": f"{gl_prod:,}",
             "gl_occurrence_mark": _mark(gl_claims_basis == "occurrence"),
             "gl_claims_made_mark": _mark(gl_claims_basis == "claims_made"),
             "gl_agg_policy_mark": _mark(gl_aggregate_applies_per == "policy"),
@@ -363,7 +399,7 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
             "gl_agg_loc_mark": _mark(gl_aggregate_applies_per == "loc"),
             # Automobile Liability
             "auto_policy_number": "CA" + "".join(random.choices(string.digits, k=8)),
-            "auto_combined_single_limit": "1,000,000",
+            "auto_combined_single_limit": f"{auto_csl:,}",
             "auto_any_auto_mark": _mark(auto_any_auto),
             "auto_all_owned_mark": _mark(not auto_any_auto),
             "auto_scheduled_mark": _mark(not auto_any_auto),
@@ -371,8 +407,8 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
             "auto_non_owned_mark": _mark(not auto_any_auto),
             # Umbrella Liability
             "umb_policy_number": "UMB" + "".join(random.choices(string.digits, k=8)),
-            "umb_each_occurrence": "2,000,000",
-            "umb_aggregate": "2,000,000",
+            "umb_each_occurrence": f"{umb_limit:,}",
+            "umb_aggregate": f"{umb_limit:,}",
             "umb_umbrella_mark": _mark(umbrella_form == "umbrella"),
             "umb_excess_mark": _mark(umbrella_form == "excess"),
             "umb_occur_mark": _mark(umbrella_basis == "occur"),
@@ -385,12 +421,12 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
             "wc_officer_excluded_n_mark": _mark(wc_officer_excluded == "N"),
             "wc_statutory_mark": _mark(wc_limits_basis == "statutory"),
             "wc_other_mark": _mark(wc_limits_basis == "other"),
-            "wc_el_each_accident": "500,000",
-            "wc_el_disease_employee": "500,000",
-            "wc_el_disease_policy": "500,000",
-            "general_liability_limit": "1,000,000",
-            "umbrella_limit": "2,000,000",
-            "workers_comp_limit": "500,000",
+            "wc_el_each_accident": f"{wc_accident:,}",
+            "wc_el_disease_employee": f"{wc_disease_ee:,}",
+            "wc_el_disease_policy": f"{wc_disease_policy:,}",
+            "general_liability_limit": f"{gl_occ:,}",
+            "umbrella_limit": f"{umb_limit:,}",
+            "workers_comp_limit": f"{wc_accident:,}",
             "description_of_operations": (
                 "Certificate holder is named as additional insured with respect to General Liability, "
                 "per attached endorsement, in connection with work performed by the insured."
@@ -423,6 +459,11 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
 
     elif doc_type == "demand-letter":
         demand_amt = round(random.uniform(25000, 500000), 2)
+        # Special-vs-general damages split depends on the case's own medical
+        # specials, not a fixed formula - was pinned to a 40/60 split on every
+        # letter. special_damages computed first, general_damages takes the
+        # remainder so the two still sum exactly to demand_amt.
+        special_damages = round(demand_amt * random.uniform(0.25, 0.55), 2)
         base.update({
             "claimant_name": patient["patient_name"],
             "claimant_attorney": "Law Offices of " + _fake.last_name() + " & " + _fake.last_name(),
@@ -430,8 +471,8 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
             "bar_number": "BAR" + "".join(random.choices(string.digits, k=6)),
             "incident_date": dos.strftime("%m/%d/%Y"),
             "demand_amount": demand_amt,
-            "special_damages": round(demand_amt * 0.4, 2),
-            "general_damages": round(demand_amt * 0.6, 2),
+            "special_damages": special_damages,
+            "general_damages": round(demand_amt - special_damages, 2),
             "settlement_deadline": (date.today() + timedelta(days=30)).strftime("%m/%d/%Y"),
             "letter_date": date.today().strftime("%m/%d/%Y"),
             "facts_summary": _fake.paragraph(nb_sentences=6),
