@@ -17,12 +17,15 @@ from __future__ import annotations
 
 import copy
 import io
+import logging
 
 from docx import Document
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 
 from .docx_structure import _choices, _control_type, iter_sdt
+
+logger = logging.getLogger(__name__)
 
 W14_CHECKBOX = qn("w14:checkbox")
 
@@ -83,6 +86,8 @@ def fill_docx_controls(
     values = values or {}
     checks = checks or {}
     choices = choices or {}
+    logger.info(f"fill_docx_controls: input={len(docx_bytes)} bytes, "
+                f"{len(values)} value(s), {len(checks)} check(s), {len(choices)} choice(s)")
 
     doc = Document(io.BytesIO(docx_bytes))
 
@@ -116,7 +121,9 @@ def fill_docx_controls(
 
     out = io.BytesIO()
     doc.save(out)
-    return out.getvalue()
+    result = out.getvalue()
+    logger.info(f"fill_docx_controls done: output={len(result)} bytes")
+    return result
 
 
 def read_back_docx_controls(docx_bytes: bytes) -> dict[str, str | bool]:

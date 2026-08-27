@@ -15,9 +15,12 @@ from __future__ import annotations
 
 import hashlib
 import io
+import logging
 
 from docx import Document
 from docx.oxml.ns import qn
+
+logger = logging.getLogger(__name__)
 
 W14_CHECKBOX = qn("w14:checkbox")
 
@@ -156,12 +159,15 @@ def fingerprint(controls: list[dict]) -> str:
 
 
 def build_draft(docx_bytes: bytes) -> dict:
+    logger.info(f"build_draft: analyzing {len(docx_bytes)} bytes of docx")
     doc = Document(io.BytesIO(docx_bytes))
     controls = _iter_controls(doc)
 
     by_type: dict[str, int] = {}
     for c in controls:
         by_type[c["type"]] = by_type.get(c["type"], 0) + 1
+
+    logger.info(f"build_draft done: {len(controls)} control(s) - {by_type}")
 
     return {
         "blueprint_version": 1,

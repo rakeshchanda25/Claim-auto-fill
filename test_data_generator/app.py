@@ -6,6 +6,7 @@ from starlette.concurrency import run_in_threadpool
 import base64
 import io
 import json
+import logging
 import zipfile
 import uvicorn
 from pathlib import Path
@@ -16,6 +17,19 @@ from ai_doc_generator.config import GenerationRequest
 from ai_doc_generator.prompt_builder import build_generation_prompt
 from ai_doc_generator.packets import PACKET_REGISTRY, SCENARIO_REGISTRY
 
+# Single place that configures logging for the whole process - every other
+# module just does `logger = logging.getLogger(__name__)` and its records
+# propagate up to this. Called here (the entrypoint) so it runs exactly
+# once regardless of import order. Deliberately not touching uvicorn's own
+# "uvicorn.error"/"uvicorn.access" loggers (different names, no collision) -
+# this is what makes the [INFO] ai_doc_generator.* / renderers.* lines show
+# up alongside uvicorn's own request lines in the same console.
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%H:%M:%S",
+)
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="PDF Test Data Generator API")
 
@@ -152,6 +166,12 @@ async def ai_generate_document(
         ref_bytes = await reference_file.read()
         ref_ext = Path(reference_file.filename).suffix.lstrip(".").lower()
 
+    logger.info(
+        f"[1/6] request received: mode={mode} doc_type={doc_type} scenario={scenario!r} "
+        f"count={count} seed={seed} reference={ref_ext or 'none'}"
+        f"{f' ({len(ref_bytes)} bytes)' if ref_bytes else ''}"
+    )
+
     req = GenerationRequest(
         doc_type=doc_type,
         mode=mode,
@@ -169,18 +189,20 @@ async def ai_generate_document(
 
         agent = get_shared_agent()
         prompt = build_generation_prompt(req)
+        logger.info(f"[2/6] prompt built ({len(prompt)} chars) - handing off to agent")
+
         result_str, artifact_bytes, artifact_kind = run_with_reference(agent, prompt, req.reference_bytes)
         if hasattr(result_str, "content"):
             result_str = result_str.content
         elif hasattr(result_str, "output"):
             result_str = result_str.output
 
-        print("\n" + "=" * 40 + " RAW AGENT RESPONSE START " + "=" * 40)
-        print(f"TYPE: {type(result_str)}")
-        print(f"REPR: {repr(result_str)}")
-        print("CONTENT:")
-        print(result_str)
-        print("=" * 40 + " RAW AGENT RESPONSE END " + "=" * 40 + "\n")
+        logger.info(
+            f"[3/6] agent run returned: text_type={type(result_str).__name__} "
+            f"text_len={len(result_str) if isinstance(result_str, str) else 'n/a'} "
+            f"artifact={f'{artifact_kind} ({len(artifact_bytes)} bytes)' if artifact_bytes else 'none'}"
+        )
+        logger.debug(f"[3/6] raw agent text: {result_str!r}")
 
         # Single-document modes (generate/fill/recreate) stage their finished
         # document server-side instead of routing it through the model's own
@@ -191,8 +213,11 @@ async def ai_generate_document(
         # below, since staging currently only tracks one document at a time.
         if artifact_bytes is not None:
             ext = artifact_kind or "pdf"
+            logger.info(f"[4/6] using staged artifact directly (kind={ext}), skipping text-JSON parsing")
+            logger.info(f"[6/6] responding with {ext} file, {len(artifact_bytes)} bytes")
             return (ext, artifact_bytes, f"{doc_type}_{scenario}.{ext}")
 
+        logger.info("[4/6] no staged artifact - parsing agent text as JSON (packet mode / legacy path)")
         result = None
         if isinstance(result_str, dict):
             result = result_str
@@ -216,10 +241,12 @@ async def ai_generate_document(
                 "to produce a completion. Check the Ollama server is running and the configured "
                 "model is available."
             ) if isinstance(result_str, str) and not result_str.strip() else ""
+            logger.error(f"[5/6] could not parse a usable result from agent text: {result_str!r}")
             raise HTTPException(
                 status_code=500,
                 detail=f"Raw LLM Response [{type(result_str).__name__}]: {repr(result_str)}.{hint}"
             )
+        logger.info(f"[5/6] parsed JSON result with keys: {list(result.keys())}")
 
         if "components" in result:
             buf = io.BytesIO()
@@ -228,34 +255,32 @@ async def ai_generate_document(
                     pdf_data = base64.b64decode(comp["pdf_bytes_b64"])
                     safe_label = comp["label"].replace(" ", "_").replace("/", "-")
                     zf.writestr(f"{safe_label}.pdf", pdf_data)
+            logger.info(f"[6/6] responding with packet zip, {len(result['components'])} components")
             return ("zip", buf.getvalue(), f"{doc_type}_packet.zip")
 
         if "docx_bytes_b64" in result:
             docx_bytes = base64.b64decode(result["docx_bytes_b64"])
+            logger.info(f"[6/6] responding with docx file, {len(docx_bytes)} bytes")
             return ("docx", docx_bytes, f"{doc_type}_{scenario}.docx")
 
         if "pdf_bytes_b64" not in result:
+            logger.error(f"[6/6] result JSON has no pdf_bytes_b64/docx_bytes_b64/components: keys={list(result.keys())}")
             raise HTTPException(
                 status_code=500,
                 detail=f"Missing 'pdf_bytes_b64' in keys: {list(result.keys())}. Raw response: {repr(result_str)}"
             )
 
         pdf_bytes = base64.b64decode(result["pdf_bytes_b64"])
+        logger.info(f"[6/6] responding with pdf file, {len(pdf_bytes)} bytes")
         return ("pdf", pdf_bytes, f"{doc_type}_{scenario}.pdf")
-
-
-
 
     try:
         file_type, content, filename = await run_in_threadpool(_run)
     except HTTPException as e:
-        print(f"\n[ai_generate] HTTPException {e.status_code}: {e.detail}\n")
+        logger.warning(f"ai-generate request failed: HTTP {e.status_code}: {e.detail}")
         raise
     except Exception as e:
-        import traceback
-        print("\n" + "=" * 30 + " /api/ai-generate FAILED " + "=" * 30)
-        traceback.print_exc()
-        print("=" * 79 + "\n")
+        logger.exception("ai-generate request failed with an unhandled exception")
         raise HTTPException(status_code=500, detail=str(e))
 
     media_types = {

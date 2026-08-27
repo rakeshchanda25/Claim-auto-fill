@@ -1,9 +1,13 @@
+import logging
 import os
 import threading
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
 from . import tools
+
+logger = logging.getLogger(__name__)
 from .tools import (
     analyze_uploaded_reference,
     build_packet,
@@ -63,6 +67,8 @@ class ScopedDirectorySeed:
 
 
 def create_doc_generator_agent():
+    logger.info("building doc-generator agent: seeding sandbox, compiling 5 LangGraph agents...")
+    _t0 = time.monotonic()
     try:
         from andromeda.config import (
             AgentConfig,
@@ -264,12 +270,15 @@ def create_doc_generator_agent():
     )
 
 
-    return WorkspaceAgent(
+    agent = WorkspaceAgent(
         config,
         agents=specialists,
         session=session,
         min_agents=3,
     )
+    logger.info(f"doc-generator agent ready in {time.monotonic() - _t0:.1f}s "
+                f"({len(specialists)} named specialists + auto-coworkers, backend={backend})")
+    return agent
 
 
 # ---------------------------------------------------------------------------
@@ -293,6 +302,8 @@ def get_shared_agent():
         with _shared_agent_lock:
             if _shared_agent is None:
                 _shared_agent = create_doc_generator_agent()
+    else:
+        logger.debug("reusing existing shared agent")
     return _shared_agent
 
 
@@ -301,6 +312,7 @@ def close_shared_agent() -> None:
     global _shared_agent
     with _shared_agent_lock:
         if _shared_agent is not None:
+            logger.info("closing shared agent")
             _shared_agent.close()
             _shared_agent = None
 
@@ -321,10 +333,14 @@ def _reset_agent_memory(agent) -> None:
     own separate `.memory` too, so those are cleared alongside the
     supervisor's.
     """
+    prior_memory, prior_plan = len(agent.memory), len(agent.plan)
     agent.memory.clear()
     agent.plan.clear()
     for coworker in agent.agents:
         coworker.memory.clear()
+    if prior_memory or prior_plan:
+        logger.info(f"cleared prior agent state before this run: {prior_memory} memory "
+                    f"message(s), {prior_plan} plan item(s)")
 
 
 def _extract_final_text(messages: list) -> tuple[str | list | None, str]:
@@ -409,28 +425,32 @@ def run_with_reference(agent, prompt: str, reference_bytes: bytes | None):
     since tools.reference_lock already serializes every call to this
     function and it is the only caller of the agent in this codebase.
     """
-    import traceback
     from langchain_core.messages import HumanMessage
 
     with tools.reference_lock:
+        logger.info("acquired reference_lock - starting agent run")
         _reset_agent_memory(agent)
+
         tools.set_reference_document(reference_bytes)
+        if reference_bytes is not None:
+            logger.info(f"staged reference document: {len(reference_bytes)} bytes")
         tools.clear_staged_artifact()
+
         try:
+            _t0 = time.monotonic()
             try:
                 result = agent.supervise({"messages": [HumanMessage(content=prompt)], "plan": []})
             except Exception:
-                # Printed here (not just re-raised) because app.py's outer handler only
+                # Logged here (not just re-raised) because app.py's outer handler only
                 # surfaces str(e) to the browser - the full traceback would otherwise
                 # never reach this process's console at all.
-                print("\n" + "=" * 30 + " AGENT RUN RAISED " + "=" * 30)
-                traceback.print_exc()
-                print("=" * 79 + "\n")
+                logger.exception(f"agent.supervise() raised after {time.monotonic() - _t0:.1f}s")
                 raise
+            logger.info(f"agent.supervise() completed in {time.monotonic() - _t0:.1f}s")
 
             messages = result.get("messages", []) if isinstance(result, dict) else []
             final, note = _extract_final_text(messages)
-            print(f"[run_with_reference] {note}")
+            logger.info(f"answer extraction: {note}")
             # Always dump the tail of the conversation, not just when nothing was found -
             # `final` can be a real AIMessage that isn't actually the finished answer (e.g.
             # early mid-task narration like "Let me check X first"), which _extract_final_text
@@ -438,18 +458,21 @@ def run_with_reference(agent, prompt: str, reference_bytes: bytes | None):
             # AI text. Seeing the last few messages is what tells them apart.
             tail = messages[-8:]
             skipped = len(messages) - len(tail)
-            print(f"[run_with_reference] conversation tail ({len(messages)} total"
-                  f"{f', showing last {len(tail)}' if skipped > 0 else ''}):")
+            logger.info(f"conversation tail ({len(messages)} total"
+                        f"{f', showing last {len(tail)}' if skipped > 0 else ''}):")
             for m in tail:
                 tc = getattr(m, "tool_calls", None)
                 content = getattr(m, "content", None)
                 if isinstance(content, str) and len(content) > 300:
                     content = content[:300] + f"...<+{len(content) - 300} chars>"
-                print(f"  - {type(m).__name__}: content={content!r} tool_calls={tc}")
+                logger.info(f"  - {type(m).__name__}: content={content!r} tool_calls={tc}")
 
             artifact_bytes, artifact_kind = tools.get_staged_artifact()
             if artifact_bytes is not None:
-                print(f"[run_with_reference] staged artifact: kind={artifact_kind} size={len(artifact_bytes)} bytes")
+                logger.info(f"staged artifact ready: kind={artifact_kind} size={len(artifact_bytes)} bytes")
+            else:
+                logger.info("no artifact was staged this run")
             return final, artifact_bytes, artifact_kind
         finally:
             tools.set_reference_document(None)
+            logger.info("released reference_lock")

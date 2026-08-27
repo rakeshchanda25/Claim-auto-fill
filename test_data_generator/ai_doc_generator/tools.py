@@ -1,8 +1,9 @@
 import base64
 import functools
+import logging
 import random
 import threading
-import traceback
+import time
 from faker import Faker
 try:
     from andromeda.tools import tool
@@ -10,24 +11,42 @@ except Exception:
     def tool(func):
         return func
 
+logger = logging.getLogger(__name__)
+
+
+def _summarize(value, maxlen=120):
+    """Short, log-safe representation of a tool argument/return value -
+    never dumps a full document's bytes or a huge dict into the log."""
+    if isinstance(value, bytes):
+        return f"<bytes: {len(value)}>"
+    if isinstance(value, dict):
+        return f"<dict: {len(value)} keys>"
+    if isinstance(value, (list, tuple)):
+        return f"<{type(value).__name__}: {len(value)} items>"
+    r = repr(value)
+    return r if len(r) <= maxlen else r[: maxlen] + f"...<+{len(r) - maxlen} chars>"
+
 
 def _log_exceptions(func):
-    """Prints the real traceback to the console before letting an exception
-    propagate. andromeda's ToolErrorHandlerMiddleware (andromeda/core/
-    middleware/tooling.py) catches every tool exception and reduces it to
-    just f"Tool error: ... ({exc})" - for something like IndexError that's
-    literally "list index out of range" with zero file/line context, which
-    is useless for diagnosing a real bug. This decorator is the only place
-    that traceback is still visible."""
+    """Logs every tool call's entry (args), success (result), and full
+    traceback on failure - this is the only place a real traceback survives:
+    andromeda's ToolErrorHandlerMiddleware (andromeda/core/middleware/
+    tooling.py) catches every tool exception and reduces it to just
+    f"Tool error: ... ({exc})" before it reaches the model or the console -
+    for something like IndexError that's literally "list index out of
+    range" with zero file/line context."""
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
+        parts = [_summarize(a) for a in args] + [f"{k}={_summarize(v)}" for k, v in kwargs.items()]
+        logger.info(f"tool call -> {func.__name__}({', '.join(parts)})")
+        t0 = time.monotonic()
         try:
-            return func(*args, **kwargs)
+            result = func(*args, **kwargs)
         except Exception:
-            print(f"\n{'=' * 20} TOOL '{func.__name__}' RAISED {'=' * 20}")
-            traceback.print_exc()
-            print("=" * 70 + "\n")
+            logger.exception(f"tool '{func.__name__}' raised after {time.monotonic() - t0:.2f}s")
             raise
+        logger.info(f"tool ok    <- {func.__name__} ({time.monotonic() - t0:.2f}s) = {_summarize(result)}")
+        return result
     return wrapper
 
 from renderers.synthetic_data import build_synthetic_data

@@ -23,12 +23,15 @@ from __future__ import annotations
 
 import hashlib
 import io
+import logging
 import re
 from collections import defaultdict
 from dataclasses import asdict, dataclass
 
 import pdfplumber
 from pypdf import PdfReader
+
+logger = logging.getLogger(__name__)
 
 
 # =============================================================================
@@ -425,7 +428,9 @@ def build_draft(pdf_bytes: bytes) -> dict:
     Every widget is present; nothing about MEANING is decided here - every
     'concept'/'dtype' field is left null for the agent to fill via tool
     calls, per skills/dynamic-form-fill/SKILL.md."""
+    logger.info(f"build_draft: analyzing {len(pdf_bytes)} bytes of PDF")
     widgets, pagesizes = inventory(pdf_bytes)
+    logger.info(f"inventory: {len(widgets)} widget(s) across {len(pagesizes)} page(s)")
     words = harvest_text(pdf_bytes)
 
     grids = detect_grids(widgets)
@@ -452,6 +457,10 @@ def build_draft(pdf_bytes: bytes) -> dict:
 
     covered = grid_names | pair_names | {n for r in runs for n in r["widgets"]}
     unclassified = sorted({w.name for w in widgets} - covered)
+    coverage_pct = round(100 * len(covered) / len(widgets), 1) if widgets else 0.0
+
+    logger.info(f"build_draft done: {len(runs)} run(s), {len(grids)} grid(s), {len(pairs)} bool_pair(s), "
+                f"{len(sections)} section(s), coverage={coverage_pct}%, {len(unclassified)} unclassified")
 
     return {
         "blueprint_version": 1,
@@ -468,7 +477,7 @@ def build_draft(pdf_bytes: bytes) -> dict:
             "runs": len(runs),
             "sections": len(sections),
             "unclassified": len(unclassified),
-            "structural_coverage_pct": round(100 * len(covered) / len(widgets), 1) if widgets else 0.0,
+            "structural_coverage_pct": coverage_pct,
         },
         "sections": sections,
         "bool_pairs": pairs,

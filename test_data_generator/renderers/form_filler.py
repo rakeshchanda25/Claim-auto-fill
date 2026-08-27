@@ -1,6 +1,9 @@
 import io
+import logging
 from pypdf import PdfReader, PdfWriter
 from pypdf.generic import BooleanObject, NameObject, NumberObject, TextStringObject
+
+logger = logging.getLogger(__name__)
 
 
 def enumerate_pdf_fields(pdf_bytes: bytes) -> dict:
@@ -12,6 +15,8 @@ def enumerate_pdf_fields(pdf_bytes: bytes) -> dict:
 
 
 def fill_pdf_form(pdf_bytes: bytes, field_map: dict, flatten: bool = True) -> bytes:
+    logger.info(f"fill_pdf_form: input={len(pdf_bytes)} bytes, {len(field_map)} field(s) to set, flatten={flatten}")
+
     # PdfWriter(clone_from=...) does one atomic clone of the whole document
     # graph. The old add_page()-per-page + clone_reader_document_root()
     # combo clones the pages once via add_page, then clones the WHOLE
@@ -23,20 +28,47 @@ def fill_pdf_form(pdf_bytes: bytes, field_map: dict, flatten: bool = True) -> by
     # pattern fill_widgets_precise (below) already uses reliably.
     writer = PdfWriter(clone_from=io.BytesIO(pdf_bytes))
 
+    acro_ref = writer._root_object.get("/AcroForm")
+    if acro_ref is None:
+        # Fails loudly and specifically here instead of letting pypdf's
+        # update_page_form_field_values raise its own generic PyPdfError a
+        # few lines down - this is exactly what happens if the source PDF
+        # was never given real form fields to begin with (e.g. WeasyPrint's
+        # pdf_forms=True flag wasn't set when it was generated).
+        raise ValueError(
+            "PDF has no /AcroForm dictionary - nothing to fill. If this PDF came from "
+            "render_html_to_pdf's placeholder pipeline, check that pdf_forms=True was "
+            "passed to WeasyPrint's write_pdf()."
+        )
+    # /NeedAppearances is required or most real PDF viewers render the page
+    # exactly as before the fill - blank - even though the value is saved
+    # correctly in the file (auto_regenerate=False so pypdf doesn't attempt
+    # its own appearance-stream generation, which is what produced blank
+    # fields against WeasyPrint's own field structure here). Same fix
+    # fill_widgets_precise below already relies on for the dynamic-fill path.
+    acro = acro_ref.get_object() if hasattr(acro_ref, "get_object") else acro_ref
+    acro[NameObject("/NeedAppearances")] = BooleanObject(True)
+    logger.info(f"writer has {len(writer.pages)} page(s), /AcroForm present, /NeedAppearances set - filling...")
+
     for page_num in range(len(writer.pages)):
-        writer.update_page_form_field_values(writer.pages[page_num], field_map)
+        writer.update_page_form_field_values(writer.pages[page_num], field_map, auto_regenerate=False)
 
     if flatten:
+        flattened = 0
         for page in writer.pages:
             if "/Annots" in page:
                 for annot in page["/Annots"]:
                     annot_obj = annot.get_object()
                     if annot_obj.get("/Subtype") == "/Widget":
                         annot_obj.update({NameObject("/F"): NumberObject(4)})
+                        flattened += 1
+        logger.info(f"flattened {flattened} widget(s)")
 
     output = io.BytesIO()
     writer.write(output)
-    return output.getvalue()
+    result = output.getvalue()
+    logger.info(f"fill_pdf_form done: output={len(result)} bytes")
+    return result
 
 
 # =============================================================================
@@ -60,6 +92,8 @@ def fill_widgets_precise(
     fonts: dict[str, float] | None = None,
     watermark: str | None = None,
 ) -> bytes:
+    logger.info(f"fill_widgets_precise: input={len(pdf_bytes)} bytes, {len(values)} value(s), "
+                f"{len(fonts or {})} font override(s), watermark={'yes' if watermark else 'no'}")
     fonts = fonts or {}
     writer = PdfWriter(clone_from=io.BytesIO(pdf_bytes))
 
@@ -101,7 +135,9 @@ def fill_widgets_precise(
 
     output = io.BytesIO()
     writer.write(output)
-    return output.getvalue()
+    result = output.getvalue()
+    logger.info(f"fill_widgets_precise done: output={len(result)} bytes")
+    return result
 
 
 def _stamp(writer: PdfWriter, text: str) -> None:
