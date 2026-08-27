@@ -20,7 +20,7 @@ from .tools import (
     get_pdf_form_fields,
     inspect_docx_form_structure,
     inspect_pdf_form_structure,
-    inspect_region_image,
+    inspect_region,
     render_document_to_pdf,
     validate_document_structure,
     verify_docx_fill,
@@ -102,7 +102,7 @@ def create_doc_generator_agent():
         validate_document_structure,
         # dynamic-form-fill: works on any AcroForm template, no per-form config
         inspect_pdf_form_structure,
-        inspect_region_image,
+        inspect_region,
         flow_text_into_widgets,
         fit_grid_row,
         fill_pdf_widgets,
@@ -241,7 +241,7 @@ def create_doc_generator_agent():
             "For FILLING a supplied fillable PDF form (the user uploaded an existing document and "
             "wants ITS OWN fields populated): load_skill('dynamic-form-fill') and follow it. That "
             "skill works on any AcroForm template, including ones never seen before - discover the "
-            "layout at runtime with inspect_pdf_form_structure (and inspect_region_image when a "
+            "layout at runtime with inspect_pdf_form_structure (and inspect_region when a "
             "label is unclear). Never assume a form's fields, never infer a field's meaning from "
             "its raw internal name, and NEVER call generate_synthetic_data or render_document_to_pdf "
             "for this task - those produce a brand new document from a template, not a filled copy "
@@ -254,6 +254,11 @@ def create_doc_generator_agent():
             "generate_synthetic_data, validate_document_structure, then render_document_to_pdf. "
             "For packets: call build_packet to get all components, then render_document_to_pdf for each. "
             "For recreate mode: delegate reference analysis to doc-analyst first. "
+            "STAY ON TASK: do not browse the workspace, list directories, read skill files "
+            "directly, or run shell commands to 'look around' - load_skill already gives you "
+            "everything a skill contains. Every step must be one of the tool calls the loaded "
+            "skill names; if you catch yourself exploring the filesystem instead of calling "
+            "those tools, stop and call the next tool in the skill's workflow. "
             "Return final output as a JSON string with key 'pdf_bytes_b64' (base64-encoded PDF), "
             "'docx_bytes_b64' (base64-encoded docx, fill mode on a .docx only), or 'components' "
             "(list of {label, pdf_bytes_b64}) for packets."

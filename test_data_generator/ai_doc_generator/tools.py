@@ -1,4 +1,3 @@
-import base64
 import functools
 import logging
 import random
@@ -225,14 +224,16 @@ def inspect_pdf_form_structure() -> dict:
 
 @tool
 @_log_exceptions
-def inspect_region_image(page: int, bbox: list, zoom: float = 2.0) -> dict:
-    """Render one page region of the uploaded reference PDF to a PNG image
-    (base64) plus the raw text found there. Use when a run/pair/grid's
-    harvested label is empty or ambiguous and you need to actually look at
-    the page. `page` is 1-based. `bbox` is [x0, y0, x1, y1] in PDF points
-    using the SAME bottom-up coordinate space as inspect_pdf_form_structure's
-    widget rects (a small margin is added automatically so surrounding
-    context is visible)."""
+def inspect_region(page: int, bbox: list) -> dict:
+    """Read ALL printed text inside one region of the uploaded reference PDF,
+    including text that sits outside a widget's own harvested label. Use when
+    a run/pair/grid's label came back empty or ambiguous and you need more of
+    the surrounding page to decide what a field is asking for. `page` is
+    1-based. `bbox` is [x0, y0, x1, y1] in PDF points using the SAME
+    bottom-up coordinate space as inspect_pdf_form_structure's widget rects
+    (a margin is added automatically so surrounding context is included).
+    Returns the region's text - there is no image: you cannot see pictures,
+    so asking for one would only waste your context."""
     import pymupdf
 
     doc = pymupdf.open(stream=_require_reference_bytes(), filetype="pdf")
@@ -244,10 +245,18 @@ def inspect_region_image(page: int, bbox: list, zoom: float = 2.0) -> dict:
     pad = 20
     clip = pymupdf.Rect(raw_clip.x0 - pad, raw_clip.y0 - pad, raw_clip.x1 + pad, raw_clip.y1 + pad) & pg.rect
 
-    pix = pg.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom), clip=clip)
-    image_b64 = base64.b64encode(pix.tobytes("png")).decode("ascii")
-    nearby_text = pg.get_textbox(clip).strip()
-    return {"image_base64_png": image_b64, "nearby_text": nearby_text}
+    # This deliberately does NOT return a rendered image. It used to hand back
+    # a base64 PNG, but a tool result reaches the model as plain text: even a
+    # vision-capable model cannot see an image smuggled through a JSON string
+    # field, so those thousands of base64 characters were pure context
+    # poison. A real run spent 32 minutes and 38 messages after four such
+    # calls and never produced an answer at all. The extracted text is the
+    # part the model can actually use.
+    return {
+        "page": page,
+        "region": [round(v, 1) for v in (clip.x0, clip.y0, clip.x1, clip.y1)],
+        "text": pg.get_textbox(clip).strip(),
+    }
 
 
 @tool

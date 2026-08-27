@@ -119,7 +119,7 @@ def build_generation_prompt(req: GenerationRequest) -> str:
             "section headings.\n"
             "3. Decide what each run/pair/grid column is asking for FROM ITS LABEL, never from "
             "its internal widget name. If a label is empty or ambiguous, call "
-            "inspect_region_image on that widget's rect and look at the page.\n"
+            "inspect_region on that widget's rect to read more of the surrounding page text.\n"
             "4. Choose values, keeping ONE coherent identity, date order, and arithmetic across "
             "the whole form.\n"
             "5. Fit text with flow_text_into_widgets (runs) and fit_grid_row (table rows) - never "

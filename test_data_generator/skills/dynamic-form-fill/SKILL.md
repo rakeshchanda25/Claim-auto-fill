@@ -10,7 +10,7 @@ metadata:
   owner: idp-test-team
   version: "1"
   template: none-required
-allowed-tools: inspect_pdf_form_structure inspect_region_image flow_text_into_widgets fit_grid_row fill_pdf_widgets verify_pdf_fill generate_synthetic_data
+allowed-tools: inspect_pdf_form_structure inspect_region flow_text_into_widgets fit_grid_row fill_pdf_widgets verify_pdf_fill generate_synthetic_data
 ---
 # Dynamic Form Fill Skill
 
@@ -59,7 +59,7 @@ back:
 - `unclassified_widgets` - anything the geometry pass could not place.
 
 If `stats.structural_coverage_pct` is low, or a `label` is empty/ambiguous, call
-`inspect_region_image` on that widget's rect and read the page yourself before
+`inspect_region` on that widget's rect and read the page yourself before
 deciding. That is exactly what it is for - looking is always better than guessing.
 
 ### 2. Decide what the form is asking for

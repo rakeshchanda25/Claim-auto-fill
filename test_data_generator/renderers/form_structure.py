@@ -15,7 +15,7 @@ inventory (including /Kids), nearest-label harvesting, repeating grids,
 Yes/No checkbox pairs, multi-widget narrative runs, and section
 headings. Meaning (what a run/pair/grid actually represents) is
 deliberately NOT decided here - that is the agent's job, using this
-structural draft plus the inspect_region_image tool for anything
+structural draft plus the inspect_region tool for anything
 ambiguous.
 """
 

@@ -8,7 +8,7 @@ defines), so this exercises the real tool bodies without needing a live
 Agent or Ollama.
 
 The reference-consuming tools (inspect_pdf_form_structure,
-inspect_region_image, flow_text_into_widgets, fit_grid_row,
+inspect_region, flow_text_into_widgets, fit_grid_row,
 fill_pdf_widgets) take NO pdf_bytes argument - a tool-calling LLM cannot
 transcribe a PDF's raw bytes as a JSON argument, so they read a staged
 "current reference document" instead (tools.set_reference_document, held
@@ -147,13 +147,20 @@ def test_inspect_pdf_form_structure_without_a_staged_document_raises():
         tools.inspect_pdf_form_structure()
 
 
-def test_inspect_region_image_returns_a_real_png(staged_pdf):
+def test_inspect_region_returns_text_and_never_an_image(staged_pdf):
     draft = tools.inspect_pdf_form_structure()
     widget = draft["widgets"][0]
 
-    result = tools.inspect_region_image(page=widget["page"], bbox=widget["rect"])
+    result = tools.inspect_region(page=widget["page"], bbox=widget["rect"])
 
-    import base64
-    png_bytes = base64.b64decode(result["image_base64_png"])
-    assert png_bytes[:8] == b"\x89PNG\r\n\x1a\n"  # real PNG signature, not a placeholder
-    assert isinstance(result["nearby_text"], str)
+    assert isinstance(result["text"], str)
+    assert result["page"] == widget["page"]
+    assert len(result["region"]) == 4
+
+    # A tool result reaches the model as plain text, so an image smuggled
+    # through a JSON string field is unreadable to it AND enormous - four such
+    # calls once burned a whole run's context and produced no answer at all.
+    # Nothing in this payload may carry image bytes again.
+    assert "image_base64_png" not in result
+    for value in result.values():
+        assert not (isinstance(value, str) and len(value) > 5000), "suspiciously large payload"

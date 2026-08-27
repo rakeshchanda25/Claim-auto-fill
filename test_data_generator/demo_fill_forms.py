@@ -4,7 +4,7 @@ PDFs, with no live LLM/Ollama needed.
 
 In production, skills/dynamic-form-fill/SKILL.md drives a WorkspaceAgent
 through this same tool sequence (inspect_pdf_form_structure ->
-inspect_region_image -> flow_text_into_widgets/fit_grid_row ->
+inspect_region -> flow_text_into_widgets/fit_grid_row ->
 fill_pdf_widgets -> verify_pdf_fill), with the AGENT deciding what each
 harvested label means and what value belongs there.
 
@@ -117,7 +117,7 @@ def fill_form(pdf_path: Path, out_path: Path) -> None:
 
     for grid in draft["grids"]:
         # Grids carry no single label (column_labels is agent-filled); a live
-        # agent would call inspect_region_image on the header row to see what
+        # agent would call inspect_region on the header row to see what
         # each column means. Standing in for that, alternate a short
         # description/amount pattern across columns by position.
         for row in grid["widget_matrix"]:
