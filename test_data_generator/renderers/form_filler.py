@@ -40,18 +40,29 @@ def fill_pdf_form(pdf_bytes: bytes, field_map: dict, flatten: bool = True) -> by
             "render_html_to_pdf's placeholder pipeline, check that pdf_forms=True was "
             "passed to WeasyPrint's write_pdf()."
         )
-    # /NeedAppearances only ever tells a VIEWER "please regenerate this
-    # field's appearance yourself" - honoring it is optional per the PDF
-    # spec, and plenty of real viewers (including whichever one was used to
-    # confirm this bug) don't. pypdf's own `auto_regenerate` parameter below
-    # does NOT control whether pypdf bakes a visible appearance itself
-    # despite the name - per its own docstring it ONLY sets/unsets this same
-    # NeedAppearances flag. Setting NeedAppearances is still worth doing as
-    # a belt-and-suspenders fallback, but it is not what actually makes text
-    # show up in most viewers - see the flatten=True call below for that.
+    # /NeedAppearances tells a VIEWER "please regenerate every widget's
+    # appearance yourself from /V and draw it over the page". html_renderer.py
+    # (this function's only caller) already bakes the value text into the
+    # page's own content stream before calling here (a real `value="..."`
+    # attribute on the <input>, rendered via WeasyPrint's normal
+    # content:attr(value) pseudo-element). If we ALSO set NeedAppearances,
+    # a conformant viewer draws a second copy of that same text as the
+    # widget's own appearance, directly on top of the first - two slightly
+    # offset renderings of the same string overlapping, which is exactly the
+    # smeared/doubled text a real viewer showed. So: only ask the viewer to
+    # regenerate appearances when we did NOT already paint the value
+    # ourselves, i.e. when flatten=True bakes an appearance INTO the page
+    # (removing the annotation's own draw) rather than leaving a widget
+    # sitting on top of already-visible text.
     acro = acro_ref.get_object() if hasattr(acro_ref, "get_object") else acro_ref
-    acro[NameObject("/NeedAppearances")] = BooleanObject(True)
-    logger.info(f"writer has {len(writer.pages)} page(s), /AcroForm present, /NeedAppearances set - filling...")
+    if flatten:
+        acro[NameObject("/NeedAppearances")] = BooleanObject(True)
+        logger.info(f"writer has {len(writer.pages)} page(s), /AcroForm present, /NeedAppearances set - filling...")
+    else:
+        acro[NameObject("/NeedAppearances")] = BooleanObject(False)
+        logger.info(f"writer has {len(writer.pages)} page(s), /AcroForm present, NeedAppearances left off "
+                    f"(value text is already painted as real page content - a viewer-drawn appearance on top "
+                    f"of it would double-render) - filling...")
 
     # Diagnostic: names actually present as real widgets in the PDF vs.
     # names field_map is trying to set. If these two sets barely overlap,
