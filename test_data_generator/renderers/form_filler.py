@@ -1,6 +1,6 @@
 import io
 from pypdf import PdfReader, PdfWriter
-from pypdf.generic import BooleanObject, NameObject, TextStringObject
+from pypdf.generic import BooleanObject, NameObject, NumberObject, TextStringObject
 
 
 def enumerate_pdf_fields(pdf_bytes: bytes) -> dict:
@@ -12,13 +12,16 @@ def enumerate_pdf_fields(pdf_bytes: bytes) -> dict:
 
 
 def fill_pdf_form(pdf_bytes: bytes, field_map: dict, flatten: bool = True) -> bytes:
-    reader = PdfReader(io.BytesIO(pdf_bytes))
-    writer = PdfWriter()
-
-    for page in reader.pages:
-        writer.add_page(page)
-
-    writer.clone_reader_document_root(reader)
+    # PdfWriter(clone_from=...) does one atomic clone of the whole document
+    # graph. The old add_page()-per-page + clone_reader_document_root()
+    # combo clones the pages once via add_page, then clones the WHOLE
+    # document root a second time - two inconsistent passes over the same
+    # source that can leave the object table out of sync with an indirect
+    # reference pypdf tries to resolve later, raising a bare
+    # "IndexError: list index out of range" deep in pypdf's own clone()
+    # with no indication of what actually went wrong. clone_from is the same
+    # pattern fill_widgets_precise (below) already uses reliably.
+    writer = PdfWriter(clone_from=io.BytesIO(pdf_bytes))
 
     for page_num in range(len(writer.pages)):
         writer.update_page_form_field_values(writer.pages[page_num], field_map)
@@ -29,7 +32,7 @@ def fill_pdf_form(pdf_bytes: bytes, field_map: dict, flatten: bool = True) -> by
                 for annot in page["/Annots"]:
                     annot_obj = annot.get_object()
                     if annot_obj.get("/Subtype") == "/Widget":
-                        annot_obj.update({"/F": 4})
+                        annot_obj.update({NameObject("/F"): NumberObject(4)})
 
     output = io.BytesIO()
     writer.write(output)
