@@ -76,7 +76,15 @@ def render_html_to_pdf(template_name: str, data: dict) -> bytes:
 
         html_str = re.sub(r"__FORM_FIELD_([a-zA-Z0-9_]+)__", repl, html_str)
 
-        pdf_bytes = HTML(string=html_str, base_url=str(_TEMPLATES_DIR)).write_pdf()
+        # pdf_forms=True is required for WeasyPrint to emit a /AcroForm at
+        # all - it's off by default (weasyprint/__init__.py's DEFAULT_OPTIONS
+        # has pdf_forms=None), so every <input> element above would
+        # otherwise be laid out as plain, non-interactive visual boxes with
+        # no PDF form fields behind them. Without this flag,
+        # fill_pdf_form()'s update_page_form_field_values() call below fails
+        # with "No /AcroForm dictionary in PDF of PdfWriter Object" - the
+        # rendered PDF literally has nothing for it to fill.
+        pdf_bytes = HTML(string=html_str, base_url=str(_TEMPLATES_DIR)).write_pdf(pdf_forms=True)
         flat_data = flatten_data(data)
         filled_pdf = fill_pdf_form(pdf_bytes, flat_data, flatten=True)
         return filled_pdf
