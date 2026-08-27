@@ -59,6 +59,12 @@
   .limit-row td { font-size: 6.6pt; }
   .type-check { font-size: 6.2pt; margin-top: 2px; line-height: 1.5; }
   .amt { float: right; }
+  /* Each coverage type (GL/Auto/Umbrella/WC) is one rowspan-joined group -
+     if a page break lands inside it, the rowspan'd TYPE/POLICY/DATE cells
+     don't repeat on the continuation page, so the limit rows that follow
+     look shifted/misaligned. break-inside: avoid keeps each group whole,
+     pushing it to the next page rather than splitting it. */
+  tbody.cov-group { break-inside: avoid; page-break-inside: avoid; }
 
   /* ---- description / cert holder / cancellation ---- */
   table.desc { width: 100%; border-collapse: collapse; }
@@ -146,6 +152,7 @@
   </div>
 
   <table class="cov">
+    <thead>
     <tr>
       <th class="col-ltr">INSR LTR</th>
       <th class="col-type">TYPE OF INSURANCE</th>
@@ -156,7 +163,9 @@
       <th class="col-date">POLICY EXP</th>
       <th class="col-limits">LIMITS</th>
     </tr>
+    </thead>
 
+    <tbody class="cov-group">
     <tr>
       <td class="col-ltr" rowspan="7">A</td>
       <td rowspan="7">
@@ -183,7 +192,9 @@
         <span style="font-size:6.2pt;">GEN'L AGGREGATE LIMIT APPLIES PER: &nbsp; {{ gl_agg_policy_mark }} POLICY &nbsp; {{ gl_agg_project_mark }} PROJECT &nbsp; {{ gl_agg_loc_mark }} LOC</span>
       </td>
     </tr>
+    </tbody>
 
+    <tbody class="cov-group">
     <tr>
       <td class="col-ltr" rowspan="4">A</td>
       <td rowspan="4">
@@ -204,7 +215,9 @@
     <tr class="limit-row"><td>BODILY INJURY (Per person) <span class="amt">$</span></td></tr>
     <tr class="limit-row"><td>BODILY INJURY (Per accident) <span class="amt">$</span></td></tr>
     <tr class="limit-row"><td>PROPERTY DAMAGE (Per accident) <span class="amt">$</span></td></tr>
+    </tbody>
 
+    <tbody class="cov-group">
     <tr>
       <td class="col-ltr" rowspan="2">A</td>
       <td rowspan="2">
@@ -222,7 +235,9 @@
       <td>EACH OCCURRENCE <span class="amt">$ {{ umb_each_occurrence }}</span></td>
     </tr>
     <tr class="limit-row"><td>AGGREGATE <span class="amt">$ {{ umb_aggregate }}</span></td></tr>
+    </tbody>
 
+    <tbody class="cov-group">
     <tr>
       <td class="col-ltr" rowspan="3">A</td>
       <td rowspan="3">
@@ -245,6 +260,7 @@
       <td>E.L. DISEASE - EA EMPLOYEE <span class="amt">$ {{ wc_el_disease_employee }}</span><br>
           E.L. DISEASE - POLICY LIMIT <span class="amt">$ {{ wc_el_disease_policy }}</span></td>
     </tr>
+    </tbody>
   </table>
 
   <table class="desc">
