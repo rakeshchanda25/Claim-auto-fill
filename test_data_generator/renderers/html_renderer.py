@@ -49,6 +49,53 @@ def flatten_data(d, parent_key=""):
     return flat
 
 
+_INPUT_STYLE = (
+    "border:none !important;"
+    "background:transparent !important;"
+    "font-family:inherit !important;"
+    "font-size:inherit !important;"
+    "font-weight:inherit !important;"
+    "color:#000 !important;"
+    "width:100% !important;"
+    "height:100% !important;"
+    "box-sizing:border-box !important;"
+    "padding:0 !important;"
+    "margin:0 !important;"
+)
+
+
+def substitute_form_inputs(html_str: str) -> tuple[str, dict[str, str]]:
+    """Replace every __FORM_FIELD_x__ token with an <input>, giving each
+    occurrence a UNIQUE widget name. Returns (html, {widget_name: data_key}).
+
+    A template legitimately renders the same data key more than once: ACORD-25
+    repeats effective_date/expiration_date across all four coverage rows,
+    CMS-1500 repeats dos_from and the NPIs per service line, UB-04 repeats
+    discharge_date on every revenue-code row. Emitting <input
+    name="discharge_date"> six times produces six widgets sharing one /T,
+    which AcroForm treats as ONE field with six appearances - pypdf then
+    collides on the per-field XObject it builds while flattening ("XObject
+    '/Fm effective_date' already added to page resources. This might be an
+    issue.") and only one of those locations can be drawn correctly.
+
+    Naming them discharge_date, discharge_date__2, ... makes each its own
+    field with its own appearance stream, while the returned mapping keeps
+    every one of them pointed at the original data key for the fill.
+    """
+    seen: dict[str, int] = {}
+    widget_source: dict[str, str] = {}
+
+    def repl(match):
+        base = match.group(1)
+        n = seen.get(base, 0)
+        seen[base] = n + 1
+        unique = base if n == 0 else f"{base}__{n + 1}"
+        widget_source[unique] = base
+        return f'<input type="text" name="{unique}" style="{_INPUT_STYLE}" />'
+
+    return re.sub(r"__FORM_FIELD_([a-zA-Z0-9_]+)__", repl, html_str), widget_source
+
+
 def render_html_to_pdf(template_name: str, data: dict) -> bytes:
     logger.info(f"render_html_to_pdf: template={template_name} data_fields={len(data)}")
     template_file = template_name.replace("-", "_") + ".html"
@@ -62,26 +109,11 @@ def render_html_to_pdf(template_name: str, data: dict) -> bytes:
         html_str = template.render(**placeholders)
         logger.info(f"placeholder pass rendered: {len(html_str)} chars")
 
-        input_style = (
-            "border:none !important;"
-            "background:transparent !important;"
-            "font-family:inherit !important;"
-            "font-size:inherit !important;"
-            "font-weight:inherit !important;"
-            "color:#000 !important;"
-            "width:100% !important;"
-            "height:100% !important;"
-            "box-sizing:border-box !important;"
-            "padding:0 !important;"
-            "margin:0 !important;"
-        )
-
-        def repl(match):
-            name = match.group(1)
-            return f'<input type="text" name="{name}" style="{input_style}" />'
-
-        html_str, n_subbed = re.subn(r"__FORM_FIELD_([a-zA-Z0-9_]+)__", repl, html_str)
-        logger.info(f"substituted {n_subbed} placeholder token(s) with <input> elements")
+        html_str, widget_source = substitute_form_inputs(html_str)
+        dupes = len(widget_source) - len(set(widget_source.values()))
+        logger.info(f"substituted {len(widget_source)} placeholder token(s) with <input> elements "
+                    f"({len(set(widget_source.values()))} distinct data key(s), "
+                    f"{dupes} repeated occurrence(s) given unique widget names)")
 
         # pdf_forms=True is required for WeasyPrint to emit a /AcroForm at
         # all - it's off by default (weasyprint/__init__.py's DEFAULT_OPTIONS
@@ -95,9 +127,15 @@ def render_html_to_pdf(template_name: str, data: dict) -> bytes:
         pdf_bytes = HTML(string=html_str, base_url=str(_TEMPLATES_DIR)).write_pdf(pdf_forms=True)
         logger.info(f"WeasyPrint produced {len(pdf_bytes)} bytes")
 
+        # Build the fill map from the widgets actually emitted, not from every
+        # key in `data`. The latter sent ~100 keys at a form with ~41 widgets,
+        # so most were silent no-ops (update_page_form_field_values ignores
+        # unknown names without warning) and a genuinely missing widget would
+        # have been invisible in that noise.
         flat_data = flatten_data(data)
-        logger.info(f"filling AcroForm with {len(flat_data)} flattened field(s)...")
-        filled_pdf = fill_pdf_form(pdf_bytes, flat_data, flatten=True)
+        field_map = {widget: flat_data.get(src, "") for widget, src in widget_source.items()}
+        logger.info(f"filling AcroForm with {len(field_map)} field(s) mapped from {len(flat_data)} data value(s)")
+        filled_pdf = fill_pdf_form(pdf_bytes, field_map, flatten=True)
         logger.info(f"render_html_to_pdf done: {len(filled_pdf)} bytes")
         return filled_pdf
 
