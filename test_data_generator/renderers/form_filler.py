@@ -1,7 +1,7 @@
 import io
 import logging
 from pypdf import PdfReader, PdfWriter
-from pypdf.generic import BooleanObject, NameObject, NumberObject, TextStringObject
+from pypdf.generic import BooleanObject, NameObject, TextStringObject
 
 logger = logging.getLogger(__name__)
 
@@ -40,12 +40,15 @@ def fill_pdf_form(pdf_bytes: bytes, field_map: dict, flatten: bool = True) -> by
             "render_html_to_pdf's placeholder pipeline, check that pdf_forms=True was "
             "passed to WeasyPrint's write_pdf()."
         )
-    # /NeedAppearances is required or most real PDF viewers render the page
-    # exactly as before the fill - blank - even though the value is saved
-    # correctly in the file (auto_regenerate=False so pypdf doesn't attempt
-    # its own appearance-stream generation, which is what produced blank
-    # fields against WeasyPrint's own field structure here). Same fix
-    # fill_widgets_precise below already relies on for the dynamic-fill path.
+    # /NeedAppearances only ever tells a VIEWER "please regenerate this
+    # field's appearance yourself" - honoring it is optional per the PDF
+    # spec, and plenty of real viewers (including whichever one was used to
+    # confirm this bug) don't. pypdf's own `auto_regenerate` parameter below
+    # does NOT control whether pypdf bakes a visible appearance itself
+    # despite the name - per its own docstring it ONLY sets/unsets this same
+    # NeedAppearances flag. Setting NeedAppearances is still worth doing as
+    # a belt-and-suspenders fallback, but it is not what actually makes text
+    # show up in most viewers - see the flatten=True call below for that.
     acro = acro_ref.get_object() if hasattr(acro_ref, "get_object") else acro_ref
     acro[NameObject("/NeedAppearances")] = BooleanObject(True)
     logger.info(f"writer has {len(writer.pages)} page(s), /AcroForm present, /NeedAppearances set - filling...")
@@ -72,19 +75,21 @@ def fill_pdf_form(pdf_bytes: bytes, field_map: dict, flatten: bool = True) -> by
         logger.warning(f"{len(field_map) - len(matched)} field_map key(s) don't match any real "
                         f"widget - sample: {sorted(set(field_map.keys()) - matched)[:10]}")
 
+    # flatten=True here is what actually makes filled text visible in every
+    # viewer: it generates a real appearance stream per field from the
+    # field's own /DA (font/size) and /V (the value just set), then merges
+    # that appearance directly into the page's static content stream - the
+    # text becomes ordinary drawn page content, not something a viewer has
+    # to reconstruct from form-field metadata at all. This is a genuinely
+    # different thing from the print-visibility flag (/F: 4) a prior version
+    # of this function set manually and mistakenly called "flattening" -
+    # that flag never drew anything, it only marked widgets printable.
     for page_num in range(len(writer.pages)):
-        writer.update_page_form_field_values(writer.pages[page_num], field_map, auto_regenerate=False)
-
+        writer.update_page_form_field_values(
+            writer.pages[page_num], field_map, auto_regenerate=False, flatten=flatten
+        )
     if flatten:
-        flattened = 0
-        for page in writer.pages:
-            if "/Annots" in page:
-                for annot in page["/Annots"]:
-                    annot_obj = annot.get_object()
-                    if annot_obj.get("/Subtype") == "/Widget":
-                        annot_obj.update({NameObject("/F"): NumberObject(4)})
-                        flattened += 1
-        logger.info(f"flattened {flattened} widget(s)")
+        logger.info("filled fields flattened into page content via pypdf's native flatten=True")
 
     output = io.BytesIO()
     writer.write(output)
