@@ -47,6 +47,17 @@ def _rand_date_recent(years_back=2) -> date:
     return start + timedelta(days=random.randint(0, years_back * 365))
 
 
+def _mark(is_checked: bool) -> str:
+    """Checkbox glyph for a data-driven form checkbox. Templates for the
+    standardized forms (acord-25, cms-1500, ub-04) may never branch on a
+    data value themselves (see the maintainer note atop cms_1500.html) - the
+    placeholder-then-substitute render pass would see a placeholder string,
+    not the real value, so any {% if %} there would always take the same
+    branch. Deciding which box is ticked has to happen here instead, then
+    the template just plain-substitutes the glyph like any other field."""
+    return "☑" if is_checked else "☐"
+
+
 def _mrn():
     return str(random.randint(1000000, 9999999))
 
@@ -217,7 +228,9 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
         })
 
     elif doc_type == "cms-1500":
-        insurance_type = random.choice(["Medicare", "Medicaid", "TRICARE", "CHAMPVA", "Group Health Plan", "Other"])
+        insurance_type = random.choice(
+            ["Medicare", "Medicaid", "TRICARE", "CHAMPVA", "Group Health Plan", "FECA Blk Lung", "Other"]
+        )
         illness_date = dos - timedelta(days=random.randint(0, 14))
         base.update({
             "insured_id": patient["insurance_id"],
@@ -228,6 +241,19 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
             "insured_phone": patient["phone"],
             "relationship_to_insured": "Self",
             "insurance_type": insurance_type,
+            # One-of-seven payer checkbox row (cms_1500.html) - previously
+            # hardcoded to always tick OTHER regardless of insurance_type,
+            # so e.g. "Medicare" printed next to a ticked OTHER box instead
+            # of a ticked MEDICARE box. Precomputed here, not with a
+            # template {% if %}, per the placeholder-pass constraint.
+            "payer_mark_medicare": _mark(insurance_type == "Medicare"),
+            "payer_mark_medicaid": _mark(insurance_type == "Medicaid"),
+            "payer_mark_tricare": _mark(insurance_type == "TRICARE"),
+            "payer_mark_champva": _mark(insurance_type == "CHAMPVA"),
+            "payer_mark_group_health": _mark(insurance_type == "Group Health Plan"),
+            "payer_mark_feca": _mark(insurance_type == "FECA Blk Lung"),
+            "payer_mark_other": _mark(insurance_type == "Other"),
+            "insurance_type_other_label": insurance_type if insurance_type == "Other" else "",
             "employment_related": "NO",
             "auto_accident_related": "YES" if scenario in ("rear_end_collision", "intersection_accident", "slip_and_fall") else "NO",
             "auto_accident_state": random.choice(_STATES) if scenario in ("rear_end_collision", "intersection_accident") else "",
@@ -299,6 +325,17 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
     elif doc_type == "acord-25":
         eff = dos
         exp = dos + timedelta(days=365)
+        # Which checkbox is ticked in each either/or group - decided here
+        # (never in the template, see _mark's docstring) so acord_25.html
+        # and acord_new.html can both plain-substitute the resulting glyphs.
+        gl_claims_basis = random.choice(["occurrence", "claims_made"])
+        gl_aggregate_applies_per = random.choices(["policy", "project", "loc"], weights=[70, 20, 10])[0]
+        auto_any_auto = random.random() < 0.6
+        umbrella_form = random.choice(["umbrella", "excess"])
+        umbrella_basis = random.choice(["occur", "claims_made"])
+        umb_ded_or_retention = random.choice(["ded", "retention"])
+        wc_officer_excluded = random.choices(["Y", "N"], weights=[25, 75])[0]
+        wc_limits_basis = random.choices(["statutory", "other"], weights=[85, 15])[0]
         base.update({
             "certificate_date": date.today().strftime("%m/%d/%Y"),
             "producer_name": _fake.company() + " Insurance Agency",
@@ -319,15 +356,35 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
             "gl_personal_injury": "1,000,000",
             "gl_general_aggregate": "2,000,000",
             "gl_products_agg": "2,000,000",
+            "gl_occurrence_mark": _mark(gl_claims_basis == "occurrence"),
+            "gl_claims_made_mark": _mark(gl_claims_basis == "claims_made"),
+            "gl_agg_policy_mark": _mark(gl_aggregate_applies_per == "policy"),
+            "gl_agg_project_mark": _mark(gl_aggregate_applies_per == "project"),
+            "gl_agg_loc_mark": _mark(gl_aggregate_applies_per == "loc"),
             # Automobile Liability
             "auto_policy_number": "CA" + "".join(random.choices(string.digits, k=8)),
             "auto_combined_single_limit": "1,000,000",
+            "auto_any_auto_mark": _mark(auto_any_auto),
+            "auto_all_owned_mark": _mark(not auto_any_auto),
+            "auto_scheduled_mark": _mark(not auto_any_auto),
+            "auto_hired_mark": _mark(not auto_any_auto),
+            "auto_non_owned_mark": _mark(not auto_any_auto),
             # Umbrella Liability
             "umb_policy_number": "UMB" + "".join(random.choices(string.digits, k=8)),
             "umb_each_occurrence": "2,000,000",
             "umb_aggregate": "2,000,000",
+            "umb_umbrella_mark": _mark(umbrella_form == "umbrella"),
+            "umb_excess_mark": _mark(umbrella_form == "excess"),
+            "umb_occur_mark": _mark(umbrella_basis == "occur"),
+            "umb_claims_made_mark": _mark(umbrella_basis == "claims_made"),
+            "umb_ded_mark": _mark(umb_ded_or_retention == "ded"),
+            "umb_retention_mark": _mark(umb_ded_or_retention == "retention"),
             # Workers Compensation & Employers' Liability
             "wc_policy_number": "WC" + "".join(random.choices(string.digits, k=8)),
+            "wc_officer_excluded_y_mark": _mark(wc_officer_excluded == "Y"),
+            "wc_officer_excluded_n_mark": _mark(wc_officer_excluded == "N"),
+            "wc_statutory_mark": _mark(wc_limits_basis == "statutory"),
+            "wc_other_mark": _mark(wc_limits_basis == "other"),
             "wc_el_each_accident": "500,000",
             "wc_el_disease_employee": "500,000",
             "wc_el_disease_policy": "500,000",

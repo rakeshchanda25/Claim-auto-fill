@@ -48,7 +48,7 @@
 
 <div class="payer-box">
   <span class="lbl checks">
-    ☐ MEDICARE &nbsp; ☐ MEDICAID &nbsp; ☐ TRICARE &nbsp; ☐ CHAMPVA &nbsp; ☐ GROUP HEALTH PLAN &nbsp; ☐ FECA BLK LUNG &nbsp; ☑ OTHER: {{ insurance_type }}
+    {{ payer_mark_medicare }} MEDICARE &nbsp; {{ payer_mark_medicaid }} MEDICAID &nbsp; {{ payer_mark_tricare }} TRICARE &nbsp; {{ payer_mark_champva }} CHAMPVA &nbsp; {{ payer_mark_group_health }} GROUP HEALTH PLAN &nbsp; {{ payer_mark_feca }} FECA BLK LUNG &nbsp; {{ payer_mark_other }} OTHER: {{ insurance_type_other_label }}
   </span>
   <span class="lbl">1a. INSURED'S I.D. NUMBER</span>
   <span class="val">{{ insured_id }}</span>
