@@ -181,7 +181,7 @@
 
 <div class="section-bar">24. SERVICE LINE ITEMS</div>
 <table class="lines">
-  <tr>
+  <thead><tr>
     <th style="width:14%;">A. DATE(S) OF SERVICE</th>
     <th style="width:6%;">B. POS</th>
     <th style="width:6%;">C. EMG</th>
@@ -191,7 +191,7 @@
     <th style="width:8%;">G. DAYS/UNITS</th>
     <th style="width:8%;">H. EPSDT</th>
     <th style="width:24%;">J. RENDERING PROVIDER NPI</th>
-  </tr>
+  </tr></thead>
   {% for item in line_items %}
   <tr>
     <td>{{ dos_from }}</td>

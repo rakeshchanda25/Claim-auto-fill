@@ -68,7 +68,7 @@
 
 <h2>Assessment &amp; Diagnoses</h2>
 <table>
-  <tr><th>ICD-10 Code</th><th>Description</th></tr>
+  <thead><tr><th>ICD-10 Code</th><th>Description</th></tr></thead>
   {% for code, desc in diagnosis_codes %}
   <tr><td>{{ code }}</td><td>{{ desc }}</td></tr>
   {% endfor %}
@@ -78,7 +78,7 @@
 <h2>Plan</h2>
 <p>{{ plan }}</p>
 <table style="margin-top:8px;">
-  <tr><th>CPT Code</th><th>Description</th></tr>
+  <thead><tr><th>CPT Code</th><th>Description</th></tr></thead>
   {% for code in procedure_codes %}
   <tr><td>{{ code }}</td><td>Procedure {{ code }}</td></tr>
   {% endfor %}

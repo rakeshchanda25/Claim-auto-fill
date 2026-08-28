@@ -45,7 +45,7 @@
 
 <h2>Claim Summary</h2>
 <table>
-  <tr>
+  <thead><tr>
     <th>Procedure Code</th>
     <th>Date</th>
     <th>Billed</th>
@@ -53,7 +53,7 @@
     <th>Plan Paid</th>
     <th>Your Responsibility</th>
     <th>Reason Code</th>
-  </tr>
+  </tr></thead>
   {% for line in eob_lines %}
   <tr>
     <td>{{ line.cpt }}</td>

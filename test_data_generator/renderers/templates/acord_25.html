@@ -28,6 +28,10 @@
   table.cov th { border: 1px solid #000; background: #d0d8e8; font-size: 5.8pt; padding: 2px; text-align: left; }
   table.cov td { border: 1px solid #000; padding: 2px 4px; font-size: 7.3pt; vertical-align: top; }
   .limit-row td { font-size: 6.6pt; }
+  /* Each coverage type is one rowspan-joined group; a page break inside it
+     leaves the continuation rows without their rowspan'd TYPE/POLICY/DATE
+     cells, so they render visibly shifted. Keep each group whole. */
+  tbody.cov-group { break-inside: avoid; page-break-inside: avoid; }
   .footer-note { font-size: 6px; color: #444; margin-top: 4px; }
 </style>
 </head>
@@ -71,6 +75,7 @@
 
 <div class="section-bar">COVERAGES &nbsp; CERTIFICATE NUMBER: {{ claim_number }} &nbsp; REVISION NUMBER: 0</div>
 <table class="cov">
+  <thead>
   <tr>
     <th style="width:8%;">INSR LTR</th>
     <th style="width:32%;">TYPE OF INSURANCE</th>
@@ -79,6 +84,8 @@
     <th style="width:12%;">POLICY EXP</th>
     <th style="width:16%;">LIMITS</th>
   </tr>
+  </thead>
+  <tbody class="cov-group">
   <tr>
     <td rowspan="6">A</td>
     <td rowspan="6">COMMERCIAL GENERAL LIABILITY<br><span style="font-size:6.3pt;">{{ gl_occurrence_mark }} Occurrence &nbsp; {{ gl_claims_made_mark }} Claims-Made</span></td>
@@ -92,6 +99,8 @@
   <tr class="limit-row"><td>Personal &amp; Adv Injury &nbsp; ${{ gl_personal_injury }}</td></tr>
   <tr class="limit-row"><td>General Aggregate &nbsp; ${{ gl_general_aggregate }}</td></tr>
   <tr class="limit-row"><td>Products - Comp/Op Agg &nbsp; ${{ gl_products_agg }}</td></tr>
+  </tbody>
+  <tbody class="cov-group">
   <tr>
     <td>A</td>
     <td>AUTOMOBILE LIABILITY<br><span style="font-size:6.3pt;">☑ Any Auto</span></td>
@@ -100,6 +109,8 @@
     <td>{{ expiration_date }}</td>
     <td>Combined Single Limit &nbsp; ${{ auto_combined_single_limit }}</td>
   </tr>
+  </tbody>
+  <tbody class="cov-group">
   <tr>
     <td rowspan="2">A</td>
     <td rowspan="2">UMBRELLA LIAB (Occurrence)</td>
@@ -109,6 +120,8 @@
     <td>Each Occurrence &nbsp; ${{ umb_each_occurrence }}</td>
   </tr>
   <tr class="limit-row"><td>Aggregate &nbsp; ${{ umb_aggregate }}</td></tr>
+  </tbody>
+  <tbody class="cov-group">
   <tr>
     <td rowspan="3">A</td>
     <td rowspan="3">WORKERS COMPENSATION &amp; EMPLOYERS' LIABILITY<br><span style="font-size:6.3pt;">☑ Statutory Limits</span></td>
@@ -119,6 +132,7 @@
   </tr>
   <tr class="limit-row"><td>E.L. Disease - Ea Employee &nbsp; ${{ wc_el_disease_employee }}</td></tr>
   <tr class="limit-row"><td>E.L. Disease - Policy Limit &nbsp; ${{ wc_el_disease_policy }}</td></tr>
+  </tbody>
 </table>
 
 <table class="grid" style="margin-top:0;">

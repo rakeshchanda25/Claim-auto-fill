@@ -48,7 +48,7 @@ def _log_exceptions(func):
         return result
     return wrapper
 
-from renderers.synthetic_data import build_synthetic_data
+from renderers.synthetic_data import build_synthetic_data, resolve_doc_type
 from renderers.html_renderer import render_html_to_pdf
 from renderers.form_filler import (
     enumerate_pdf_fields,
@@ -177,51 +177,134 @@ def clear_staged_packet() -> None:
     _staged_packet = None
 
 
-@tool
-@_log_exceptions
-def stage_packet_component(label: str) -> dict:
-    """Add the document render_document_to_pdf just produced to this
-    packet's component list, under `label`, then free the single-document
-    staging slot for the next component. Call this once, immediately after
-    each render_document_to_pdf call, when building a packet (never in
-    single-document generate/fill/recreate modes)."""
-    global _staged_packet
-    data, kind = get_staged_artifact()
-    if data is None:
+# =============================================================================
+# Document-DATA staging.
+#
+# Same principle as the artifact staging above, applied to the thing that
+# actually dominates wall-clock time. The tools used to return the full data
+# dict, which the model then had to re-emit verbatim as an argument to
+# render_document_to_pdf(data=...) - ~670 OUTPUT tokens per document (measured
+# across the six largest doc types; acord-25 is ~890). Output tokens are
+# generated sequentially and are by far the slowest part of local inference,
+# so that echo cost tens of seconds per document and risked corrupting a field
+# every time. It also bought nothing: the data came from a deterministic
+# generator the model had just called.
+#
+# Now the generator stages the dict here and returns only a compact summary
+# (field NAMES, no values). Field names are cheap - they arrive as input
+# tokens, which prefill in parallel - and are all the model needs to reason
+# about coverage or target a revision. render_document_to_pdf reads the
+# staged dict directly, so a document's data never crosses the model's text.
+# =============================================================================
+
+_staged_doc_data: dict | None = None
+
+
+def get_staged_doc_data() -> dict | None:
+    return _staged_doc_data
+
+
+def clear_staged_doc_data() -> None:
+    global _staged_doc_data
+    _staged_doc_data = None
+
+
+def _stage_doc_data(data: dict, doc_type: str, scenario: str) -> dict:
+    global _staged_doc_data
+    _staged_doc_data = data
+    return {
+        "status": "staged",
+        "doc_type": doc_type,
+        "scenario": scenario,
+        "field_count": len(data),
+        "fields": sorted(k for k in data if not k.startswith("_")),
+    }
+
+
+def _require_staged_doc_data() -> dict:
+    if _staged_doc_data is None:
         raise ValueError(
-            "No document has been staged yet - call render_document_to_pdf before "
-            "stage_packet_component."
+            "No document data has been staged yet - call generate_synthetic_data (or "
+            "recreate_document_data) before rendering."
         )
-    if _staged_packet is None:
-        _staged_packet = []
-    _staged_packet.append({"label": label, "kind": kind or "pdf", "bytes": data})
-    clear_staged_artifact()
-    return {"status": "added_to_packet", "label": label, "components_so_far": len(_staged_packet)}
+    return _staged_doc_data
+
+
+def _overlay_values(dst: dict, src: dict, path: str = "", unmapped: list | None = None) -> list:
+    """Overlays `src` onto `dst` in place, merging nested dicts key-by-key so a
+    partial address overrides only the keys supplied. Returns the dotted paths
+    that had no counterpart in `dst` - reported rather than silently dropped,
+    since a mistyped key would otherwise leave the document quietly carrying
+    generated data where a caller-supplied value belonged."""
+    if unmapped is None:
+        unmapped = []
+    for key, value in (src or {}).items():
+        full = f"{path}.{key}" if path else key
+        if key not in dst:
+            unmapped.append(full)
+        elif isinstance(value, dict) and isinstance(dst[key], dict):
+            _overlay_values(dst[key], value, full, unmapped)
+        else:
+            dst[key] = value
+    return unmapped
+
+
 
 
 @tool
 @_log_exceptions
 def generate_synthetic_data(doc_type: str, scenario: str = "general", seed: int = None) -> dict:
-    """Generate synthetic insurance claim data for the given document type and scenario."""
+    """Generate synthetic insurance claim data for the given document type and
+    scenario, and stage it for rendering.
+
+    Returns a SUMMARY (the field names), not the data itself - the data is
+    held server-side and render_document_to_pdf picks it up automatically, so
+    you never have to repeat it back. To change specific values before
+    rendering, call revise_document_data with just the fields you want to
+    change; do not try to restate the whole document."""
     if seed is not None:
         Faker.seed(seed)
         random.seed(seed)
-    return build_synthetic_data(doc_type, scenario)
+    data = build_synthetic_data(doc_type, scenario)
+    return _stage_doc_data(data, doc_type, scenario)
 
 
 @tool
 @_log_exceptions
-def render_document_to_pdf(template_name: str, data: dict) -> dict:
-    """Render a Jinja2 HTML template with the given data into the final PDF.
+def revise_document_data(changes: dict) -> dict:
+    """Change specific fields of the currently staged document data, leaving
+    everything else as generated. Pass ONLY the fields you are changing, e.g.
+    {"patient_name": "...", "address": {"city": "..."}} - nested dicts merge
+    key-by-key. Use this to apply user-supplied values or to fill a gap
+    validate_document_structure reported. Field names that do not exist for
+    this document come back under "unmapped_keys" so you can correct them."""
+    data = _require_staged_doc_data()
+    unmapped = _overlay_values(data, changes)
+    if unmapped:
+        logger.warning(f"revise_document_data: {len(unmapped)} unmapped key(s): {unmapped}")
+    return {
+        "status": "revised",
+        "changed": [k for k in (changes or {}) if k not in unmapped],
+        "unmapped_keys": unmapped,
+    }
+
+
+@tool
+@_log_exceptions
+def render_document_to_pdf(template_name: str, data: dict = None) -> dict:
+    """Render the staged document data into the final PDF using the named
+    Jinja2 HTML template.
+
+    Do NOT pass `data` - it defaults to whatever generate_synthetic_data or
+    recreate_document_data staged, so the document's fields never have to be
+    repeated back through your output. (It is accepted only for the rare case
+    of rendering a dict that was never staged.)
+
     Returns a small status object, NOT the PDF bytes - a tool-calling model
-    cannot carry a document's binary content through its own generated text.
-    The rendered PDF is staged automatically and attached to the response
-    once you finish; just confirm success in your final answer.
-    Building a packet (multiple documents in one request)? Call
-    stage_packet_component(label) immediately after EACH render_document_to_pdf
-    call, before rendering the next component - this slot only holds one
-    document at a time and the next render overwrites it."""
-    pdf_bytes = render_html_to_pdf(template_name, data)
+    cannot carry binary content through its own generated text. The rendered
+    PDF is staged automatically and attached to the response once you
+    finish; just confirm success in your final answer."""
+    pdf_bytes = render_html_to_pdf(template_name, data if data is not None else _require_staged_doc_data())
     return stage_artifact(pdf_bytes, "pdf")
 
 
@@ -491,7 +574,15 @@ def analyze_reference_document(file_bytes: bytes, file_type: str) -> dict:
                                     "bold": bool(span.get("flags", 0) & 2**4),
                                     "bbox": [round(v, 1) for v in span.get("bbox", [])],
                                 })
-            result["pages"].append({"page": page_num + 1, "text_blocks": text_blocks[:60]})
+            result["pages"].append({
+                "page": page_num + 1,
+                # Plain reading order, for actually READING the document's
+                # values (recreate mode needs the claimant/policy/provider
+                # values, not their coordinates). The positioned spans below
+                # describe layout; they are a poor way to read prose.
+                "text": page.get_text().strip(),
+                "text_blocks": text_blocks[:60],
+            })
         return result
 
     return {"file_type": file_type, "note": "image analysis requires vision-capable model"}
@@ -510,32 +601,162 @@ def analyze_uploaded_reference(file_type: str) -> dict:
 
 @tool
 @_log_exceptions
-def build_packet(packet_name: str, scenario: str = "general", seed: int = None) -> list:
-    """Generate all components of a named document packet and return list of {label, template, data} dicts."""
+def recreate_document_data(doc_type: str, scenario: str, carried_values: dict) -> dict:
+    """Build the data for a RECREATE-mode document and stage it for rendering.
+    Returns a SUMMARY (field names), not the data - render_document_to_pdf
+    picks the staged data up automatically, so never repeat it back.
+
+    Recreate means: keep the uploaded reference document's own identity, but
+    re-tell it as a DIFFERENT scenario. So this generates fresh synthetic data
+    for the new `scenario` (diagnoses, procedures, dates, amounts, narrative -
+    everything the scenario drives), then overlays `carried_values` on top:
+    the real values you read out of the reference document and want preserved.
+
+    `carried_values` is a plain dict of just the fields worth carrying over -
+    typically the people and identifiers, e.g. patient_name, dob, mrn,
+    insurance_id, policy_number, claim_number, physician_name, insurer_name,
+    and address dicts. Do NOT carry scenario-driven content (diagnosis_codes,
+    procedure_codes, line_items, narratives, totals) - letting those through
+    would defeat the point, since re-telling the document under the new
+    scenario is the whole job.
+
+    Nested dicts merge key-by-key, so {"address": {"city": "Pune"}} overrides
+    only the city and leaves street/state/zip intact. Keys that do not exist
+    for this doc type cannot be carried and come back under "unmapped_keys"
+    so you can retry them under their real names."""
+    resolved = resolve_doc_type(doc_type)
+    data = build_synthetic_data(resolved, scenario)
+    unmapped = _overlay_values(data, carried_values or {})
+
+    carried_ok = sum(1 for k in (carried_values or {}) if k not in unmapped)
+    logger.info(
+        f"recreate_document_data: doc_type={doc_type} scenario={scenario!r} - "
+        f"carried {carried_ok}/{len(carried_values or {})} value(s) onto fresh {scenario!r} data"
+    )
+    if unmapped:
+        logger.warning(f"recreate_document_data: {len(unmapped)} unmapped key(s): {unmapped}")
+
+    summary = _stage_doc_data(data, doc_type, scenario)
+    summary["carried_keys"] = carried_ok
+    summary["unmapped_keys"] = unmapped
+    return summary
+
+
+# The claim-level facts that must be IDENTICAL across every document in one
+# packet - the people, the identifiers, and the encounter it all describes.
+# build_synthetic_data draws these fresh per call, so without pinning them a
+# "Medical Claims Packet" came out as five documents about five different
+# patients: worthless as IDP test data, since cross-document entity matching
+# is the main thing such a packet exists to exercise.
+_PACKET_SHARED_FIELDS = (
+    # who the claim is about
+    "patient_name", "dob", "gender", "address", "phone", "mrn",
+    "insurance_id", "group_number",
+    # who treated them
+    "physician_name", "npi", "specialty", "dea", "hospital",
+    # the claim and the encounter
+    "insurer_name", "claim_number", "policy_number",
+    "dos", "dos_from", "dos_to", "service_date",
+)
+
+_staged_packet_plan: list[dict] | None = None
+
+
+def get_staged_packet_plan() -> list[dict] | None:
+    return _staged_packet_plan
+
+
+def clear_staged_packet_plan() -> None:
+    global _staged_packet_plan
+    _staged_packet_plan = None
+
+
+@tool
+@_log_exceptions
+def build_packet(packet_name: str, scenario: str = "general", seed: int = None) -> dict:
+    """Plan a named document packet: works out its components and generates
+    each one's data, all sharing ONE claimant, provider, claim number and
+    encounter date so the documents belong to the same claim.
+
+    Returns only the component list (labels and template names) - the data
+    itself is staged server-side. Follow this with render_packet() to produce
+    every component; you never handle any component's data or bytes."""
+    global _staged_packet_plan
     spec = PACKET_REGISTRY.get(packet_name)
     if not spec:
         raise ValueError(f"Unknown packet: {packet_name}. Available: {list(PACKET_REGISTRY.keys())}")
 
     components = sorted(spec["components"], key=lambda c: c["order"])
-    results = []
+    if seed is not None:
+        # One seed for the packet, NOT seed+order per component - varying it
+        # per component is what guaranteed a different identity in each.
+        Faker.seed(seed)
+        random.seed(seed)
+
+    # Establish the shared identity once, from the first component, then pin
+    # it onto every other component's freshly generated scenario content.
+    first = build_synthetic_data(components[0]["doc_type"], scenario)
+    shared = {k: first[k] for k in _PACKET_SHARED_FIELDS if k in first}
+
+    plan = []
     for comp in components:
-        if seed is not None:
-            Faker.seed(seed + comp["order"])
-            random.seed(seed + comp["order"])
-        data = build_synthetic_data(comp["doc_type"], scenario)
-        results.append({
+        data = first if comp is components[0] else build_synthetic_data(comp["doc_type"], scenario)
+        if data is not first:
+            _overlay_values(data, shared)
+        plan.append({
             "label": comp["label"],
             "doc_type": comp["doc_type"],
             "template_name": comp["doc_type"].replace("-", "_"),
             "data": data,
         })
-    return results
+
+    _staged_packet_plan = plan
+    logger.info(
+        f"build_packet: {packet_name} / {scenario!r} - {len(plan)} component(s) staged, "
+        f"sharing claimant={shared.get('patient_name')!r} claim={shared.get('claim_number')!r}"
+    )
+    return {
+        "packet": packet_name,
+        "scenario": scenario,
+        "component_count": len(plan),
+        "components": [{k: c[k] for k in ("label", "doc_type", "template_name")} for c in plan],
+        "shared_identity": {k: shared.get(k) for k in ("patient_name", "claim_number", "policy_number")},
+    }
 
 
 @tool
 @_log_exceptions
-def validate_document_structure(data: dict, doc_type: str) -> dict:
-    """Validate that all required fields for the given document type are present in data."""
+def render_packet() -> dict:
+    """Render every component build_packet staged, in order, and collect them
+    into the packet returned to the user. One call does the whole packet -
+    there is no per-component step, and no component's data or bytes ever
+    passes through your output."""
+    global _staged_packet
+    plan = _staged_packet_plan
+    if not plan:
+        raise ValueError("No packet has been planned yet - call build_packet first.")
+
+    _staged_packet = []
+    for comp in plan:
+        pdf_bytes = render_html_to_pdf(comp["template_name"], comp["data"])
+        _staged_packet.append({"label": comp["label"], "kind": "pdf", "bytes": pdf_bytes})
+        logger.info(f"render_packet: rendered {comp['label']!r} ({len(pdf_bytes)} bytes)")
+
+    return {
+        "status": "rendered",
+        "components": [{"label": c["label"], "size_bytes": len(c["bytes"])} for c in _staged_packet],
+    }
+
+
+@tool
+@_log_exceptions
+def validate_document_structure(doc_type: str, data: dict = None) -> dict:
+    """Check the staged document data has every field this document type
+    requires. Do NOT pass `data` - it defaults to the staged data, so there is
+    no need to repeat the document back. Fix anything reported missing with
+    revise_document_data."""
+    if data is None:
+        data = _require_staged_doc_data()
     required_fields = {
         "medical-record": ["patient_name", "dob", "mrn", "dos", "diagnosis_codes", "physician_name"],
         "medical-bill": ["patient_name", "account_number", "service_date", "line_items", "total_amount"],
@@ -552,6 +773,22 @@ def validate_document_structure(data: dict, doc_type: str) -> dict:
         "auto-accident-report": ["insured_name", "policy_number", "accident_date", "accident_location", "vehicle_info"],
     }
 
-    required = required_fields.get(doc_type, [])
-    missing = [f for f in required if f not in data or data[f] is None]
+    resolved = resolve_doc_type(doc_type)
+    if resolved not in required_fields:
+        # Previously an unknown doc_type fell through to `[]` required fields
+        # and was reported valid - so a typo'd or brand-new doc_type always
+        # "passed" validation and the emptiness only showed up in the PDF.
+        return {
+            "valid": False,
+            "missing_fields": [],
+            "doc_type": doc_type,
+            "error": (
+                f"Unknown doc_type {doc_type!r} - no required-field list is defined for it, so "
+                f"this document cannot be validated. Known types: {sorted(required_fields)}. If "
+                f"this is a new variant template, add it to _DOC_TYPE_ALIASES in "
+                f"renderers/synthetic_data.py."
+            ),
+        }
+
+    missing = [f for f in required_fields[resolved] if f not in data or data[f] is None]
     return {"valid": len(missing) == 0, "missing_fields": missing, "doc_type": doc_type}

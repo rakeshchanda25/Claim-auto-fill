@@ -48,7 +48,7 @@
 
 <h2>Discharge Diagnoses (ICD-10)</h2>
 <table>
-  <tr><th>Code</th><th>Description</th></tr>
+  <thead><tr><th>Code</th><th>Description</th></tr></thead>
   {% for code, desc in diagnosis_codes %}
   <tr><td>{{ code }}</td><td>{{ desc }}</td></tr>
   {% endfor %}
@@ -59,7 +59,7 @@
 
 <h2>Medications at Discharge</h2>
 <table>
-  <tr><th>Medication</th><th>Dose</th><th>Frequency</th></tr>
+  <thead><tr><th>Medication</th><th>Dose</th><th>Frequency</th></tr></thead>
   {% for med in medications_at_discharge %}
   <tr><td>{{ med.name }}</td><td>{{ med.dose }}</td><td>{{ med.frequency }}</td></tr>
   {% endfor %}

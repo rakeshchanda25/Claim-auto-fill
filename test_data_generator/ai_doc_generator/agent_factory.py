@@ -21,8 +21,10 @@ from .tools import (
     inspect_docx_form_structure,
     inspect_pdf_form_structure,
     inspect_region,
+    recreate_document_data,
     render_document_to_pdf,
-    stage_packet_component,
+    render_packet,
+    revise_document_data,
     validate_document_structure,
     verify_docx_fill,
     verify_pdf_fill,
@@ -68,11 +70,10 @@ class ScopedDirectorySeed:
 
 
 def create_doc_generator_agent():
-    logger.info("building doc-generator agent: seeding sandbox, compiling 5 LangGraph agents...")
+    logger.info("building doc-generator agent: seeding sandbox, compiling LangGraph agents...")
     _t0 = time.monotonic()
     try:
         from andromeda.config import (
-            AgentConfig,
             MiddlewareConfig,
             ModelConfig,
             WorkspaceAgentConfig,
@@ -83,7 +84,6 @@ def create_doc_generator_agent():
         from andromeda.workspace import (
             BubblewrapProcessSettings,
             FilePolicy,
-            ShellPolicy,
             WorkspacePolicy,
             WorkspaceSession,
         )
@@ -99,8 +99,10 @@ def create_doc_generator_agent():
         fill_pdf_form_tool,
         get_pdf_form_fields,
         analyze_uploaded_reference,
+        recreate_document_data,
         build_packet,
-        stage_packet_component,
+        render_packet,
+        revise_document_data,
         validate_document_structure,
         # dynamic-form-fill: works on any AcroForm template, no per-form config
         inspect_pdf_form_structure,
@@ -159,17 +161,17 @@ def create_doc_generator_agent():
     )
 
     backend = os.environ.get("WORKSPACE_BACKEND", "ephemeral_fs")
+    # Shell is off. It existed solely for the removed `renderer` specialist to
+    # run `python3 -m weasyprint` on the command line; every document is now
+    # rendered in-process by render_document_to_pdf / render_packet, so no
+    # code path here needs a shell at all. Withholding it is also the durable
+    # fix for a run wandering off to `ls` around the workspace instead of
+    # calling the skill's tools - a capability the agent does not have cannot
+    # be misspent, which beats asking it in the prompt not to.
     policy = WorkspacePolicy(
         read_only=False,
-        enable_shell=True,
+        enable_shell=False,
         file=FilePolicy(max_file_size_mb=20, allow_symlinks=False, protect_root=True),
-        shell=ShellPolicy(
-            allowed_commands=("python3", "weasyprint"),
-            network_enabled=False,
-            timeout_seconds=120,
-            max_output_chars=20_000,
-            enable_background_shell=False,
-        ),
     )
 
     settings = None
@@ -181,57 +183,36 @@ def create_doc_generator_agent():
 
     session = WorkspaceSession.create(
         backend=backend,
-        # Only skills/ (required - SkillsMiddleware reads it from the
-        # sandbox root) and renderers/templates (used by the packet-builder/
-        # renderer specialists) need to exist in the sandbox. Everything
-        # else in the project (test fixtures, generated output PDFs,
-        # __pycache__, frontend/, docs) is dead weight nothing here reads.
-        seed=ScopedDirectorySeed(source_dir=str(_PROJECT_ROOT), subpaths=("skills", "renderers/templates")),
+        # Only skills/ needs to exist in the sandbox - SkillsMiddleware reads
+        # it from the sandbox root rather than the host path. Everything else
+        # in the project (test fixtures, generated PDFs, frontend/, docs) is
+        # dead weight nothing in here reads.
+        # renderers/templates is deliberately NOT seeded any more: templates are
+        # read from the host path by renderers/html_renderer.py (_TEMPLATES_DIR),
+        # which runs in this process, never inside the sandbox. Copying them in
+        # only mattered for the removed shell-based renderer specialist.
+        seed=ScopedDirectorySeed(source_dir=str(_PROJECT_ROOT), subpaths=("skills",)),
         policy=policy,
         settings=settings,
     )
 
-    read_only_tools = list(session.tools(tool_profile="read_only").values())
-    write_tools = list(session.tools(tool_profile="minimal").values())
-    shell_tools = list(session.tools().values())
-
-
-    doc_analyst = AgentConfig(
-        name="doc-analyst",
-        model=model,
-        prompt=(
-            "You analyze reference insurance documents. Identify document type, section structure, "
-            "field labels, table layouts, and typography conventions. Report findings as structured JSON. "
-            "Do not write files."
-        ),
-        tools=read_only_tools,
-        middleware=middleware,
-    )
-
-    packet_builder = AgentConfig(
-        name="packet-builder",
-        model=model,
-        prompt=(
-            "You build document packet components. For each component, generate synthetic data, "
-            "populate the matching Jinja2 template, and write the HTML to /output/<name>.html."
-        ),
-        tools=write_tools,
-        middleware=middleware,
-    )
-
-    renderer = AgentConfig(
-        name="renderer",
-        model=model,
-        prompt=(
-            "You convert HTML files in /output/ to PDF using WeasyPrint. "
-            "Run: python3 -m weasyprint /output/<name>.html /output/<name>.pdf. "
-            "Return the list of generated PDF paths."
-        ),
-        tools=shell_tools,
-        middleware=middleware,
-    )
-
-    specialists = [doc_analyst, packet_builder, renderer]
+    # No specialist agents. The three that used to live here (doc-analyst,
+    # packet-builder, renderer) described a pipeline that no longer exists:
+    # packet-builder wrote component HTML to /output/ and renderer shelled out
+    # to `python3 -m weasyprint` to convert it, both long since replaced by the
+    # in-process render_document_to_pdf / render_packet tools, and doc-analyst
+    # by analyze_uploaded_reference. Nothing referenced them by name any more.
+    #
+    # They were not free. Every specialist is another LangGraph agent compiled
+    # at build time, and the supervisor carries a handoff tool for each one in
+    # its prompt on EVERY turn. Worse, `renderer` held the full shell toolset -
+    # which is how a run could wander off running shell commands to look
+    # around the workspace instead of calling the skill's own tools, burning a
+    # whole context budget without producing a document.
+    #
+    # min_agents=1 is the floor andromeda allows (WorkspaceAgent requires a
+    # team; supplying none pads with a single generic coworker).
+    specialists: list = []
 
     config = WorkspaceAgentConfig(
         name="doc-generator",
@@ -254,20 +235,28 @@ def create_doc_generator_agent():
             "fall back to generate_synthetic_data/render_document_to_pdf. "
             "For GENERATING a single new document from scratch (no uploaded reference): call "
             "generate_synthetic_data, validate_document_structure, then render_document_to_pdf. "
-            "For packets: call build_packet to get all components, then for EACH one call "
-            "render_document_to_pdf followed immediately by stage_packet_component(label) before "
-            "moving to the next component - render_document_to_pdf's staging slot holds only one "
-            "document at a time, so skipping stage_packet_component between components silently "
-            "loses every one but the last. Never try to read, encode, or return a document's bytes "
-            "yourself in any mode. "
-            "For recreate mode: delegate reference analysis to doc-analyst first. "
+            "NEVER pass a `data` argument to validate_document_structure or "
+            "render_document_to_pdf - the generated data is held server-side and both tools pick "
+            "it up automatically. Restating a document's fields in your own output is the single "
+            "slowest thing you can do and risks corrupting them; to change values, call "
+            "revise_document_data with ONLY the fields that change. "
+            "For PACKETS: exactly two calls - build_packet(packet_name, scenario) then "
+            "render_packet(). build_packet plans every component with one shared claimant and "
+            "claim number; render_packet renders them all. Do not loop over components yourself. "
+            "For RECREATING an uploaded document under a DIFFERENT scenario: call "
+            "analyze_uploaded_reference, read the document's real values out of each page's `text`, "
+            "then call recreate_document_data(doc_type, scenario, carried_values={...}) and render "
+            "the dict it returns. Carry over only the people and identifiers (names, DOB, policy/ "
+            "claim/member/record numbers, provider, addresses); never carry diagnoses, procedures, "
+            "amounts or narrative - the requested new scenario must drive those, and copying them "
+            "would just reproduce the original document. "
             "STAY ON TASK: do not browse the workspace, list directories, read skill files "
             "directly, or run shell commands to 'look around' - load_skill already gives you "
             "everything a skill contains. Every step must be one of the tool calls the loaded "
             "skill names; if you catch yourself exploring the filesystem instead of calling "
             "those tools, stop and call the next tool in the skill's workflow. "
             "Every mode's output is staged server-side (single documents via render_document_to_pdf/"
-            "fill_pdf_widgets/fill_docx_form_controls, packets via stage_packet_component) - once "
+            "fill_pdf_widgets/fill_docx_form_controls, packets via render_packet) - once "
             "staging is done, your final answer is just a short JSON status object, e.g. "
             "{\"status\": \"ok\"} or {\"status\": \"ok\", \"components\": 4}. Never put a document's "
             "bytes in your own output."
@@ -288,7 +277,7 @@ def create_doc_generator_agent():
         config,
         agents=specialists,
         session=session,
-        min_agents=3,
+        min_agents=1,
     )
     logger.info(f"doc-generator agent ready in {time.monotonic() - _t0:.1f}s "
                 f"({len(specialists)} named specialists + auto-coworkers, backend={backend})")
@@ -419,7 +408,7 @@ def run_with_reference(agent, prompt: str, reference_bytes: bytes | None):
     Returns (final_text, artifact_bytes, artifact_kind, packet_components).
     `artifact_bytes` is None if no single document was staged this run (e.g.
     packet mode, which stages N documents into packet_components instead -
-    see tools.stage_packet_component). `packet_components` is None if
+    see tools.render_packet). `packet_components` is None if
     nothing was added to it this run, otherwise a list of
     {label, kind, bytes} in the order they were staged.
 
@@ -453,6 +442,8 @@ def run_with_reference(agent, prompt: str, reference_bytes: bytes | None):
             logger.info(f"staged reference document: {len(reference_bytes)} bytes")
         tools.clear_staged_artifact()
         tools.clear_staged_packet()
+        tools.clear_staged_packet_plan()
+        tools.clear_staged_doc_data()
 
         try:
             _t0 = time.monotonic()

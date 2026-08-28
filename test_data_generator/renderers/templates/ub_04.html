@@ -134,14 +134,14 @@
 
 <div class="section-bar">42–49. REVENUE CODE / SERVICE LINE ITEMS</div>
 <table class="lines">
-  <tr>
+  <thead><tr>
     <th style="width:10%;">42. REV CODE</th>
     <th style="width:34%;">43. DESCRIPTION</th>
     <th style="width:12%;">44. HCPCS/RATE</th>
     <th style="width:12%;">45. SERV. DATE</th>
     <th style="width:10%;">46. UNITS</th>
     <th style="width:22%;">47. TOTAL CHARGES</th>
-  </tr>
+  </tr></thead>
   {% for rev in revenue_codes %}
   <tr>
     <td>{{ rev.code }}</td>

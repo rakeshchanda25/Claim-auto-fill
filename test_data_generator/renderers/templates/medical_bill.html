@@ -50,7 +50,7 @@
 
 <h2>Itemized Charges</h2>
 <table>
-  <tr><th>CPT Code</th><th>Description</th><th>Units</th><th style="text-align:right;">Charge</th></tr>
+  <thead><tr><th>CPT Code</th><th>Description</th><th>Units</th><th style="text-align:right;">Charge</th></tr></thead>
   {% for item in line_items %}
   <tr>
     <td>{{ item.cpt }}</td>

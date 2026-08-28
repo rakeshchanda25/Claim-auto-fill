@@ -44,7 +44,7 @@
 
 <h2>Parties Involved</h2>
 <table>
-  <tr><th>Role</th><th>Name</th><th>Date of Birth</th><th>License Number</th></tr>
+  <thead><tr><th>Role</th><th>Name</th><th>Date of Birth</th><th>License Number</th></tr></thead>
   {% for party in parties_involved %}
   <tr>
     <td>{{ party.role }}</td>
@@ -57,7 +57,7 @@
 
 <h2>Witnesses</h2>
 <table>
-  <tr><th>Name</th><th>Phone</th></tr>
+  <thead><tr><th>Name</th><th>Phone</th></tr></thead>
   {% for w in witnesses %}
   <tr><td>{{ w.name }}</td><td>{{ w.phone }}</td></tr>
   {% endfor %}

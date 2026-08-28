@@ -1,3 +1,5 @@
+from renderers.synthetic_data import resolve_doc_type
+
 from .config import GenerationRequest
 
 
@@ -26,23 +28,23 @@ def build_generation_prompt(req: GenerationRequest) -> str:
         return (
             f"Generate a '{req.doc_type}' document packet for scenario '{req.scenario}'.\n"
             f"1. Call build_packet(packet_name='{req.doc_type}', scenario='{req.scenario}'"
-            + (f", seed={req.seed}" if req.seed is not None else "") + ") to get every component's "
-            "label, template_name, and data.\n"
-            "2. For EACH component, in order: call render_document_to_pdf(template_name, data), then "
-            "IMMEDIATELY call stage_packet_component(label=<that component's label>) before moving to "
-            "the next component. render_document_to_pdf's staging slot holds only one document at a "
-            "time - skip stage_packet_component between components and every one but the last is "
-            "silently lost.\n"
-            "3. Always load the skill for each component's doc_type before rendering it.\n"
-            "4. You never see, handle, or encode any component's bytes - stage_packet_component moves "
-            "them into the packet for you. Once every component is staged, your final response is just "
-            "a short JSON status object: {\"status\": \"ok\", \"components\": <count>}."
+            + (f", seed={req.seed}" if req.seed is not None else "") + ").\n"
+            "2. Call render_packet(). That renders every component in one go.\n"
+            "That is the whole job - there is no per-component step to run, and you never see, "
+            "handle or encode any component's data or bytes. build_packet already gave every "
+            "document the same claimant, claim number and encounter date so they belong to one "
+            "claim; do not try to adjust them. Once render_packet returns, reply with a short "
+            "JSON status object: {\"status\": \"ok\", \"components\": <count>}."
             + _custom_fields_block(req)
             + json_footer
         )
 
     staged_footer = (
-        "\nThe rendered PDF is staged automatically the moment render_document_to_pdf runs - "
+        "\nNever pass a `data` argument to validate_document_structure or render_document_to_pdf, "
+        "and never restate the document's fields in your own output: the generated data is held "
+        "server-side and both tools read it automatically. Repeating it back is the slowest thing "
+        "you can do and risks corrupting a field - use revise_document_data for any change.\n"
+        "The rendered PDF is staged automatically the moment render_document_to_pdf runs - "
         "you never see or handle its bytes, and must NOT attempt to encode or embed them "
         "yourself (a document is far too large to transcribe as text). Once it's staged, just "
         "return a short JSON status object: {\"status\": \"ok\"}."
@@ -51,11 +53,17 @@ def build_generation_prompt(req: GenerationRequest) -> str:
     if req.mode == "generate":
         return (
             f"Generate a single '{req.doc_type}' document for scenario '{req.scenario}'.\n"
-            f"1. Load the skill: load_skill('{req.doc_type}').\n"
+            # A variant template (e.g. acord-new) has no skill of its own - it
+            # shares the parent form's field contract, so it loads the parent's
+            # skill. Without resolving, load_skill would look for a directory
+            # that does not exist.
+            f"1. Load the skill: load_skill('{resolve_doc_type(req.doc_type)}').\n"
             f"2. Call generate_synthetic_data(doc_type='{req.doc_type}', scenario='{req.scenario}'"
             + (f", seed={req.seed}" if req.seed is not None else "") + ").\n"
-            "3. Call validate_document_structure(data, doc_type) and fix any missing fields.\n"
-            f"4. Call render_document_to_pdf(template_name='{req.doc_type.replace('-', '_')}', data=data)."
+            f"3. Call validate_document_structure(doc_type='{req.doc_type}').\n"
+            "4. Fix anything it reports missing with revise_document_data({...}), passing ONLY the "
+            "fields that change.\n"
+            f"5. Call render_document_to_pdf(template_name='{req.doc_type.replace('-', '_')}')."
             + staged_footer
             + _custom_fields_block(req)
             + json_footer
@@ -63,14 +71,32 @@ def build_generation_prompt(req: GenerationRequest) -> str:
 
     if req.mode == "recreate":
         ext = req.reference_file_type or "pdf"
+        skill = resolve_doc_type(req.doc_type)
         return (
-            f"Recreate a '{req.doc_type}' document based on a reference {ext} file.\n"
-            f"1. Call analyze_uploaded_reference(file_type='{ext}') to understand the layout - "
-            "the uploaded file's bytes are supplied automatically, do not attempt to pass them.\n"
-            f"2. Load the skill: load_skill('{req.doc_type}').\n"
-            f"3. Call generate_synthetic_data(doc_type='{req.doc_type}', scenario='{req.scenario}').\n"
-            "4. Adapt the data to match the layout detected in step 1.\n"
-            f"5. Call render_document_to_pdf(template_name='{req.doc_type.replace('-', '_')}', data=data)."
+            f"Recreate the user's uploaded {ext} as a '{req.doc_type}' document, re-told for the "
+            f"scenario '{req.scenario}'.\n"
+            "WHAT RECREATE MEANS: the new document keeps the SAME PEOPLE AND IDENTIFIERS as the "
+            "uploaded one - same claimant/patient, same date of birth, same policy, claim, member "
+            "and record numbers, same provider, same addresses - but everything the scenario drives "
+            f"is re-generated to fit '{req.scenario}' instead: diagnoses, procedures, service dates, "
+            "line items, amounts, and any narrative. It is NOT a fresh unrelated document, and it is "
+            "NOT a copy of the original either.\n"
+            f"1. Call analyze_uploaded_reference(file_type='{ext}') - the uploaded file's bytes are "
+            "supplied automatically, do not attempt to pass them. Read each page's `text` to find "
+            "the document's actual values.\n"
+            f"2. Load the skill: load_skill('{skill}') - it lists the exact field names this "
+            "document type uses.\n"
+            "3. From the reference text, collect the values worth preserving into one dict, keyed by "
+            "those field names - the people and identifiers listed above. Leave OUT anything the "
+            "scenario should change; if the reference does not show a value, simply omit that key "
+            "rather than guessing one.\n"
+            f"4. Call recreate_document_data(doc_type='{req.doc_type}', scenario='{req.scenario}', "
+            "carried_values=<that dict>). It generates fresh data for the new scenario, overlays "
+            "your carried values on top, and stages the result for rendering. If the result's "
+            "'unmapped_keys' is non-empty, those names do not exist for this document type - "
+            "re-check them against the skill's field list and call it once more with the corrected "
+            "names.\n"
+            f"5. Call render_document_to_pdf(template_name='{req.doc_type.replace('-', '_')}')."
             + staged_footer
             + _custom_fields_block(req)
             + json_footer

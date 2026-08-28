@@ -164,7 +164,33 @@ def _build_physician():
     }
 
 
+# A template that is a visual redesign/variant of another form reads exactly
+# the same fields as its parent, so it must resolve to the parent's data
+# contract. Without this, build_synthetic_data falls through every branch
+# below and returns only `base` - every form-specific field then renders
+# blank, which is precisely how a brand-new template silently produces an
+# empty document. Add one line here when adding a variant template.
+_DOC_TYPE_ALIASES = {
+    "acord-new": "acord-25",
+    "acord_new": "acord-25",
+    "police-report-new": "police-report",
+    "police_report_new": "police-report",
+    "litigation-document-new": "litigation-document",
+    "litigation_document_new": "litigation-document",
+    "ub-04-new": "ub-04",
+    "ub_04_new": "ub-04",
+}
+
+
+def resolve_doc_type(doc_type: str) -> str:
+    """Maps a variant template's doc_type onto the parent form whose data
+    contract it shares. Every consumer that keys off doc_type must go
+    through this, or a variant silently gets the 'unknown doc type' path."""
+    return _DOC_TYPE_ALIASES.get(doc_type, doc_type)
+
+
 def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
+    doc_type = resolve_doc_type(doc_type)
     patient = _build_patient()
     physician = _build_physician()
     insurer = random.choice(_INSURERS)
@@ -437,24 +463,134 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
         })
 
     elif doc_type == "police-report":
+        report_city = _fake.city()
+        report_state = random.choice(_STATES)
+        dispatch_t = f"{random.randint(6,22):02d}:{random.randint(0,59):02d}"
+        arrival_t = f"{random.randint(6,22):02d}:{random.randint(0,59):02d}"
+        cleared_t = f"{random.randint(6,22):02d}:{random.randint(0,59):02d}"
+        hit_and_run_flag = random.random() < 0.08
+        cited = random.random() < 0.6
+
+        def _party(role: str, at_fault: bool) -> dict:
+            year = random.randint(2012, 2024)
+            make, model = random.choice([
+                ("Toyota", "Camry"), ("Honda", "Accord"), ("Ford", "F-150"),
+                ("Chevrolet", "Malibu"), ("Nissan", "Altima"), ("BMW", "3 Series"),
+            ])
+            severity = random.choice(["None", "Minor", "Moderate", "Major"]) if not at_fault else random.choice(["Moderate", "Major"])
+            injured = random.choice(["No", "Yes - Complaint of pain", "Yes - Visible injury"]) if at_fault else "No"
+            return {
+                "name": _fake.name(),
+                "role": role,
+                "dob": _fake.date_of_birth(minimum_age=18, maximum_age=75).strftime("%m/%d/%Y"),
+                "sex": random.choice(["M", "F"]),
+                "license_number": _fake.bothify("?#######").upper(),
+                "license_state": random.choice(_STATES),
+                "license_class": random.choice(["A", "B", "C"]),
+                "address": _fake.street_address() + ", " + _fake.city() + ", " + random.choice(_STATES),
+                "phone": _fake.phone_number(),
+                "injured": injured,
+                "vehicle_year": str(year),
+                "vehicle_make": make,
+                "vehicle_model": model,
+                "vehicle_plate": "".join(random.choices(string.ascii_uppercase, k=3)) + "".join(random.choices(string.digits, k=4)),
+                "vehicle_plate_state": random.choice(_STATES),
+                "vehicle_vin": "".join(random.choices(string.ascii_uppercase + string.digits, k=17)),
+                "registered_owner": _fake.name() if random.random() < 0.7 else _fake.company(),
+                "insurer": random.choice(_INSURERS),
+                "policy_number": _policy_number(),
+                "damage_severity": severity,
+                "damage_description": _fake.sentence(nb_words=10),
+                "towed": "Yes" if severity == "Major" else "No",
+                "citation_number": ("CIT" + "".join(random.choices(string.digits, k=8))) if (at_fault and cited) else "None",
+                "at_fault": at_fault,
+                "seat_position": "Driver",
+                "restraint": "Lap/Shoulder",
+                "transported_to": (_fake.company() + " Medical Center") if injured != "No" else "-",
+            }
+
+        party1 = _party("Driver 1", at_fault=False)
+        party2 = _party("Driver 2", at_fault=True)
+
         base.update({
             "incident_number": "RPT" + "".join(random.choices(string.digits, k=8)),
+            "local_report_number": "TC-" + str(dos.year) + "-" + "".join(random.choices(string.digits, k=5)),
+            "cad_incident_number": f"{random.randint(20,29)}-CH-{random.randint(100000,999999)}",
             "incident_date": dos.strftime("%m/%d/%Y"),
             "incident_time": f"{random.randint(0,23):02d}:{random.randint(0,59):02d}",
-            "location": _fake.street_address() + ", " + _fake.city() + ", " + random.choice(_STATES),
+            "report_date": dos.strftime("%m/%d/%Y"),
+            "dispatch_time": dispatch_t,
+            "arrival_time": arrival_t,
+            "cleared_time": cleared_t,
+            "location": _fake.street_address() + ", " + report_city + ", " + report_state,
+            "city": report_city,
+            "county": _fake.city() + " County",
             "officer_name": "Officer " + _fake.last_name(),
             "badge_number": str(random.randint(1000, 9999)),
-            "department": _fake.city() + " Police Department",
+            "department": report_city + " Police Department",
+            "department_address": _fake.street_address() + ", " + report_city + ", " + report_state + " " + _fake.zipcode(),
+            "department_phone": _fake.phone_number(),
+            "department_records_phone": _fake.phone_number(),
+            "department_records_email": "records@" + report_city.lower().replace(" ", "") + "pd.example",
+            "department_ori": report_state + str(random.randint(100000, 999999)),
+            "department_ncic": str(random.randint(100000, 999999)),
             "case_status": random.choice(["Open", "Closed", "Under Investigation"]),
-            "citation_issued": random.choice(["Yes", "No"]),
+            "citation_issued": "Yes" if cited else "No",
             "weather_conditions": random.choice(["Clear", "Rain", "Fog", "Snow", "Overcast"]),
+            "lighting_conditions": random.choice(["Daylight", "Dusk", "Dark - Street Lights", "Dark - No Street Lights"]),
             "road_conditions": random.choice(["Dry", "Wet", "Icy", "Under Construction"]),
+            "traffic_control": random.choice(["Signal - functioning", "Stop Sign", "None", "Officer/Flagger"]),
+            "speed_limit": str(random.choice([25, 35, 45, 55, 65])) + " MPH",
+            "collision_type": random.choice(["Rear-end", "Sideswipe", "Head-on", "Angle", "Single Vehicle"]),
+            "num_vehicles": "2",
+            "hit_and_run": "Yes" if hit_and_run_flag else "No",
+            "primary_factor": random.choice([
+                "Unsafe speed for conditions", "Following too closely", "Failure to yield right of way",
+                "Improper turn", "Driver inattention",
+            ]),
+            "other_factors": random.choice(["None noted", "Stop-and-go congestion", "Wet roadway", "Sun glare"]),
             "narrative": _fake.paragraph(nb_sentences=5),
-            "parties_involved": [
-                {"name": _fake.name(), "role": "Driver 1", "dob": _fake.date_of_birth(minimum_age=18, maximum_age=70).strftime("%m/%d/%Y"), "license_number": _fake.bothify("??#######").upper()},
-                {"name": _fake.name(), "role": "Driver 2", "dob": _fake.date_of_birth(minimum_age=18, maximum_age=70).strftime("%m/%d/%Y"), "license_number": _fake.bothify("??#######").upper()},
+            "narrative_paragraphs": [_fake.paragraph(nb_sentences=4) for _ in range(3)],
+            "parties_involved": [party1, party2],
+            "property_damage_items": [
+                {
+                    "item": random.choice(["Guardrail section", "Street sign", "Fence"]),
+                    "owner": random.choice(["City Public Works", "Private property owner", "State DOT"]),
+                    "est_value": round(random.uniform(500, 5000), 2),
+                    "reference": "PW-" + "".join(random.choices(string.digits, k=6)),
+                }
             ],
-            "witnesses": [{"name": _fake.name(), "phone": _fake.phone_number()}],
+            "cargo_involved": "No cargo involved.",
+            "hazmat": "No",
+            "witnesses": [
+                {
+                    "name": _fake.name(), "address": _fake.street_address() + ", " + report_city + ", " + report_state,
+                    "phone": _fake.phone_number(), "statement": _fake.sentence(nb_words=16),
+                }
+            ],
+            "enforcement_party_cited": "Party 2" if cited else "None",
+            "enforcement_citation_number": party2["citation_number"],
+            "enforcement_sections_charged": "Traffic code violation" if cited else "N/A",
+            "enforcement_court_date": (dos + timedelta(days=60)).strftime("%m/%d/%Y") if cited else "N/A",
+            "enforcement_court_name": f"{report_state} Superior Court, Traffic Division" if cited else "N/A",
+            "chemical_test": "Declined - no objective signs of impairment observed.",
+            "arrest_made": "No",
+            "evidence_items": [
+                {"item_no": "001", "description": "Digital photographs, scene and vehicle damage."},
+                {"item_no": "002", "description": "Field sketch and measurements."},
+            ],
+            "reporting_officer_badge": str(random.randint(1000, 9999)),
+            "reporting_officer_unit": f"TRF-{random.randint(1,20)}",
+            "reporting_officer_date": dos.strftime("%m/%d/%Y"),
+            "reporting_officer_time": f"{random.randint(15,23):02d}:{random.randint(0,59):02d}",
+            "report_status": "Approved",
+            "supervisor_name": "Sgt. " + _fake.last_name(),
+            "supervisor_badge": str(random.randint(1000, 9999)),
+            "supervisor_approval_date": (dos + timedelta(days=1)).strftime("%m/%d/%Y"),
+            "records_custodian": _fake.name(),
+            "records_release_date": (dos + timedelta(days=7)).strftime("%m/%d/%Y"),
+            "records_request_number": "R-" + str(dos.year) + "-" + "".join(random.choices(string.digits, k=4)),
+            "page_count": "3",
         })
 
     elif doc_type == "demand-letter":
@@ -553,35 +689,98 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
         })
 
     elif doc_type == "litigation-document":
+        plaintiff_state = _fake.state()
+        forum_state = _fake.state()
+        forum_county = _fake.city() + " County"
+        filing_date_val = date.today()
+        prayer_amount = round(random.uniform(50000, 1000000), 0)
+        causes = random.sample([
+            "Negligence", "Breach of Duty of Care", "Premises Liability",
+            "Negligent Infliction of Emotional Distress", "Strict Product Liability",
+        ], k=random.choice([2, 3]))
+
+        def _attorney(role: str = "") -> dict:
+            return {
+                "name": _fake.name(),
+                "bar_number": str(random.randint(100000, 299999)),
+                "role": role,
+            }
+
+        lead_attorney = _attorney("Managing Partner")
+        firm_attorneys = [lead_attorney] + [_attorney() for _ in range(random.randint(2, 4))]
+        firm_last_names = [a["name"].split()[-1] for a in firm_attorneys[:3]]
+
         base.update({
             "plaintiff_name": patient["patient_name"],
+            "plaintiff_state_of_incorporation": plaintiff_state,
             "defendant_name": _fake.company(),
+            "defendant_state": _fake.state(),
             "case_number": f"CV-{dos.year}-{random.randint(10000, 99999)}",
-            "court_name": f"Superior Court of {_fake.state()}",
-            "jurisdiction": _fake.state(),
+            "court_name": f"Superior Court of {forum_state}",
+            "court_county": forum_county,
+            "court_dept": f"Dept. {random.randint(1, 40)}",
+            "judge_name": "Hon. " + _fake.name(),
+            "jurisdiction": forum_state,
             "incident_date": dos.strftime("%m/%d/%Y"),
-            "filing_date": date.today().strftime("%m/%d/%Y"),
-            "causes_of_action": ["Negligence", "Breach of Duty"],
-            "prayer_for_relief": f"${round(random.uniform(50000, 1000000), 0):,.0f}",
-            "attorney_name": "Esq. " + _fake.name(),
+            "filing_date": filing_date_val.strftime("%m/%d/%Y"),
+            "filing_time": f"{random.randint(8,16):02d}:{random.randint(0,59):02d} {'a.m.' if random.random()<0.5 else 'p.m.'}",
+            "filing_clerk": _fake.name(),
+            "case_management_date": (filing_date_val + timedelta(days=90)).strftime("%m/%d/%Y"),
+            "causes_of_action": causes,
+            "prayer_for_relief": f"${prayer_amount:,.0f}",
+            "prayer_amount_numeric": prayer_amount,
+            "attorney_name": "Esq. " + lead_attorney["name"],
             "bar_number": "BAR" + "".join(random.choices(string.digits, k=6)),
             "facts": _fake.paragraph(nb_sentences=6),
+            "general_allegations": [_fake.paragraph(nb_sentences=3) for _ in range(3)],
+            # --- law firm letterhead / recreate-style visual template ---
+            "firm_name": ", ".join(firm_last_names) + " LLP",
+            "firm_tagline": "Attorneys at Law",
+            "firm_practice_areas": "Civil Litigation · Personal Injury · Appellate Practice",
+            "firm_attorneys": firm_attorneys,
+            "firm_address": _fake.street_address() + ", Suite " + str(random.randint(200, 2400)),
+            "firm_city_state_zip": _fake.city() + ", " + plaintiff_state + " " + _fake.zipcode(),
+            "firm_phone": _fake.phone_number(),
+            "firm_fax": _fake.phone_number(),
+            "firm_email": lead_attorney["name"].split()[-1].lower() + "@" + "".join(firm_last_names).lower()[:12] + "law.example",
+            "opposing_counsel_name": _fake.name() + ", Esq.",
+            "opposing_firm_name": _fake.last_name() + " & " + _fake.last_name() + " PC",
+            "opposing_firm_address": _fake.street_address() + ", " + _fake.city() + ", " + _fake.state() + " " + _fake.zipcode(),
+            "letter_recipient_note": "Via Certified Mail — Return Receipt Requested",
+            "letter_reference": _fake.paragraph(nb_sentences=2),
+            "prayer_items": [
+                f"For general and compensatory damages in the sum of {prayer_amount:,.0f} dollars, or according to proof at trial",
+                "For costs of suit incurred herein",
+                "For such other and further relief as the Court may deem just and proper",
+            ],
+            "verifier_name": _fake.name(),
+            "verifier_title": "Authorized Representative",
+            "verification_date": filing_date_val.strftime("%m/%d/%Y"),
+            "notary_name": _fake.name(),
+            "notary_commission_number": str(random.randint(1000000, 9999999)),
+            "notary_commission_expires": (filing_date_val + timedelta(days=365 * random.randint(1, 4))).strftime("%m/%d/%Y"),
         })
 
     elif doc_type == "ub-04":
         adm_date = dos - timedelta(days=random.randint(1, 5))
         rev_codes = [
-            {"code": "0110", "description": "Room & Board – Medical/Surgical", "hcpcs": "", "units": 3, "charge": round(random.uniform(1500, 4000), 2)},
-            {"code": "0250", "description": "Pharmacy", "hcpcs": "", "units": 1, "charge": round(random.uniform(100, 600), 2)},
-            {"code": "0300", "description": "Laboratory", "hcpcs": "80053", "units": 1, "charge": round(random.uniform(200, 800), 2)},
-            {"code": "0450", "description": "Emergency Room", "hcpcs": "99284", "units": 1, "charge": round(random.uniform(800, 2500), 2)},
-            {"code": "0710", "description": "Recovery Room", "hcpcs": "", "units": 1, "charge": round(random.uniform(300, 900), 2)},
+            {"code": "0110", "description": "Room & Board – Medical/Surgical", "hcpcs": "", "units": 3, "charge": round(random.uniform(1500, 4000), 2), "non_covered": 0.00},
+            {"code": "0250", "description": "Pharmacy", "hcpcs": "", "units": 1, "charge": round(random.uniform(100, 600), 2), "non_covered": 0.00},
+            {"code": "0300", "description": "Laboratory", "hcpcs": "80053", "units": 1, "charge": round(random.uniform(200, 800), 2), "non_covered": 0.00},
+            {"code": "0450", "description": "Emergency Room", "hcpcs": "99284", "units": 1, "charge": round(random.uniform(800, 2500), 2), "non_covered": 0.00},
+            {"code": "0710", "description": "Recovery Room", "hcpcs": "", "units": 1, "charge": round(random.uniform(300, 900), 2), "non_covered": 0.00},
         ]
         ub_total = round(sum(r["charge"] for r in rev_codes), 2)
+        attending_parts = physician["physician_name"].replace("Dr. ", "").split()
+        assigned_benefits = random.random() < 0.9
         base.update({
             "provider_name": physician["hospital"],
             "provider_address": _address(),
             "provider_npi": _npi(),
+            # FL1 prints provider name/address/TELEPHONE - the phone was never
+            # supplied for ub-04 (only cms-1500 had it), so that line rendered
+            # blank on every UB-04.
+            "billing_provider_phone": physician["phone"],
             "admission_date": adm_date.strftime("%m/%d/%Y"),
             "discharge_date": dos.strftime("%m/%d/%Y"),
             "statement_period_from": adm_date.strftime("%m/%d/%Y"),
@@ -609,8 +808,32 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
             "medical_record_number": _mrn(),
             "attending_physician_npi": _npi(),
             "attending_physician_name": physician["physician_name"],
+            "attending_physician_qualifier": "G2",
+            "attending_last_name": attending_parts[-1] if attending_parts else "",
+            "attending_first_name": attending_parts[0] if attending_parts else "",
             "operating_physician_name": physician["physician_name"],
             "treatment_authorization": "AUTH" + "".join(random.choices(string.digits, k=8)),
+            # Remaining CMS-1450 boxes (FL2, FL5, FL29, FL50-65, FL70-71, FL80-81) -
+            # a real UB-04 fills every one of these; leaving them out of the data
+            # is what made the earlier plain-grid template look sparse next to a
+            # genuine specimen.
+            "pay_to_name": physician["hospital"],
+            "pay_to_address": _address(),
+            "federal_tax_id": "".join(random.choices(string.digits, k=9)),
+            "acdt_state": random.choice(_STATES),
+            "health_plan_id": "".join(random.choices(string.digits, k=9)),
+            "assignment_of_benefits": "Y" if assigned_benefits else "N",
+            "est_amount_due": round(ub_total * (0.15 if assigned_benefits else 1.0), 2),
+            "insured_relationship_code": "18",
+            "group_name": physician["hospital"] + " Group Health Plan",
+            "insurance_group_no": "".join(random.choices(string.digits, k=4)),
+            "document_control_number": "".join(random.choices(string.digits, k=6)),
+            "employer_name": _fake.company(),
+            "patient_reason_dx": icd_codes[0][0] if icd_codes else "",
+            "pps_code": "",
+            "remarks": "",
+            "condition_code": random.choice(["", "", "A0"]),
+            "creation_date": date.today().strftime("%m/%d/%y"),
         })
 
     return base
