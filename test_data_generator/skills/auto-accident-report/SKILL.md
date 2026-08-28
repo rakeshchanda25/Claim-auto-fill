@@ -1,11 +1,12 @@
 ---
 name: auto-accident-report
 description: >
-  Generate auto accident claim reports for IDP testing. Covers collision, hit-and-run,
-  and intersection accidents with vehicle details, bodily injury, and damage descriptions.
+  Generate a state-agency "Employee Vehicle Accident Report" (Washington S.F. 97 style) for
+  IDP testing - a state employee driving a state vehicle, up to 2 other vehicles, an "other
+  property" section, injured-parties and witness tables, and a police-investigation section.
 metadata:
   owner: idp-test-team
-  version: "1"
+  version: "2"
   page-size: letter-portrait
   template: auto_accident_report
 allowed-tools: generate_synthetic_data render_document_to_pdf validate_document_structure
@@ -13,28 +14,39 @@ allowed-tools: generate_synthetic_data render_document_to_pdf validate_document_
 # Auto Accident Report Generation Skill
 
 ## Required Sections
-1. Insurer/Policy Header — Insurer, Claim #, Policy #
-2. Policyholder Information — Insured Name, DOB, Phone
-3. Accident Details — Date, time, location, police report #, bodily injury, at-fault, airbags
-   deployed, vehicle towed
-4. Insured's Vehicle — Year, Make, Model, VIN, License Plate, Driver Name, Driver License Number
-5. Other Vehicle — Year, Make, Model, License Plate, Other Driver Name, Other Driver's Insurer
-   and Policy Number (the other party is never the same insurer/policy as the insured)
-6. Damage Description — 1-2 sentences, plus Estimated Damage amount
-7. Witnesses Table — Name and phone
-8. Claimant Signature Block
+1. Header — state seal, form number/revision, reporting-offices instructions, date/time of
+   accident
+2. State Employee — business address/phone/email, operator's license, whether the vehicle was
+   being used on official state business
+3. Vehicle No. 1 (the state vehicle) — license/year/make/body type, where located, passengers,
+   estimated repair cost, prior-accident flag, owning agency, damage description, owner/
+   equipment number, insurer
+4. Other Vehicles (up to 2: `vehicle2`, `vehicle3`) — owner and driver name/address/phone/age,
+   license numbers, vehicle make/year/body type, passengers, repair cost, damage description,
+   insurance company, policy number
+5. Other Property — what was damaged, repair cost, owner name/address/city/zip/phone
+6. Injured Parties Table — name/address, extent of injury, age, which vehicle (1/2/3) or
+   pedestrian
+7. Witnesses Table — name, address, city, phone
+8. Other — was it police-investigated, which division, was a citation issued and to whom, was
+   a collision report (Form SF-97a) filed
 
-Note: `insured_name` is the policyholder filing the claim - keep it consistent with
-`driver_name` unless the scenario explicitly involves someone else driving the insured vehicle.
+Note: `employee` (the reporting state employee/driver) is the policyholder-equivalent identity;
+keep it consistent with `vehicle1`'s described driver.
 
 ## Vehicle Generation Rules
 - Year: 2010 to current year
-- Makes: Toyota, Honda, Ford, Chevrolet, BMW, Tesla, Nissan, Hyundai
-- VIN: 17 alphanumeric characters (uppercase A-Z, 0-9, no I/O/Q)
+- Makes: Toyota, Honda, Ford, Chevrolet, BMW, Tesla (vehicle 1) / Nissan, Hyundai, Jeep, Subaru,
+  Mazda (vehicle 2)
 - License Plate: 3 letters + 4 digits
 
-## Accident Location Format
-- Full street address + city + state abbreviation
+## Scenario coverage
+`vehicle3` and `other_property` are currently always left blank (a two-vehicle collision with
+no other property damage is the modeled default) - do not assume every scenario populates a
+third vehicle just because the section exists in the template.
 
-## At Fault Values
-- "Yes", "No", or "Disputed"
+## Legacy fields
+`insured_name`, `vehicle_info`, `driver_name`, `other_vehicle`, `other_driver_name`,
+`estimated_damage`, `at_fault`, `bodily_injury`, etc. are still generated (kept for
+backward-compat) but the current template does not render any of them - see
+`references/field-glossary.md` for what the template actually uses.

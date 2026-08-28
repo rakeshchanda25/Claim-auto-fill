@@ -1,4 +1,6 @@
 # Pharmacy Invoice IDP Test Scenarios
 
-- `general`: Monthly prescription drug fill statement for chronic maintenance medication (e.g. Lisinopril or Atorvastatin).
-- `emergency_visit`: Acute prescription drug fill statement (e.g. Amoxicillin or pain management drug) following an emergency visit.
+- `chronic_medication`, `specialty_drug`, `compounded_medication`: all three currently produce
+  the SAME GST tax invoice structure with independently randomized items/amounts - the
+  scenario name does not yet drive anything scenario-specific in this skill (item names are
+  drawn from a fixed drug pool regardless of scenario).

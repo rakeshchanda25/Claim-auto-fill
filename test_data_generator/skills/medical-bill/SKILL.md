@@ -1,11 +1,12 @@
 ---
 name: medical-bill
 description: >
-  Generate itemized medical billing statements for IDP testing. Covers CPT-coded line items,
-  adjustments, and balance-due summary for outpatient and inpatient services.
+  Generate a "superbill" for IDP testing - the itemized CPT-coded charges/adjustments/balance
+  statement combined with a clinical encounter note (chief complaint, HPI, vitals, physical
+  exam, assessment, plan), the common real-world document combining both on one form.
 metadata:
   owner: idp-test-team
-  version: "1"
+  version: "2"
   page-size: letter-portrait
   template: medical_bill
 allowed-tools: generate_synthetic_data render_document_to_pdf validate_document_structure
@@ -16,9 +17,12 @@ allowed-tools: generate_synthetic_data render_document_to_pdf validate_document_
 1. Provider Header — Hospital name, address, phone
 2. Patient Statement Header — Account number, statement date, due date
 3. Patient Information — Name, DOB, service date, insurance, claim number
-4. Itemized Charges Table — CPT code, description, units, charge per line
-5. Summary Box — Total charges, adjustments, amount paid, balance due
-6. Payment Instructions and Due Date
+4. Encounter Note — Chief Complaint, HPI, Vitals (BP/HR/Temp/RR/SpO2/Weight), Physical Exam,
+   Assessment, Plan (`_clinical_note_fields()` in synthetic_data.py - the exact same shape
+   medical-record uses)
+5. Itemized Charges Table — CPT code, description, units, charge per line
+6. Summary Box — Total charges, adjustments, amount paid, balance due
+7. Payment Instructions and Due Date
 
 ## Financial Rules
 - Line items: 1-5 CPT codes

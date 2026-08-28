@@ -1,4 +1,5 @@
 # Auto Accident Report IDP Test Scenarios
 
-- `rear_end_collision`: Front/rear bumper collision report details with policy and vehicle descriptors.
-- `intersection_accident`: Multi-vehicle intersection crash detailing driver statements and passenger bodily injury reports.
+- `rear_end_collision`, `intersection_accident`, `hit_and_run`: all three currently produce the
+  SAME report structure with independently randomized content - the scenario name does not yet
+  drive anything scenario-specific in this skill.

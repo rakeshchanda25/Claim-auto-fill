@@ -38,14 +38,10 @@ if "weasyprint" not in sys.modules:
 
 from ai_doc_generator import tools  # noqa: E402
 from ai_doc_generator.packets import SCENARIO_REGISTRY  # noqa: E402
-from renderers.html_renderer import _env, make_placeholder_data  # noqa: E402
+from renderers.html_renderer import _env  # noqa: E402
 from renderers.synthetic_data import build_synthetic_data  # noqa: E402
 
 TEMPLATE_NAMES = sorted(p.stem for p in (_ROOT / "renderers" / "templates").glob("*.html"))
-
-# These three render through the placeholder-then-substitute pass, so they get
-# rendered twice - once with every leaf value replaced by a token.
-_STANDARDIZED = ("acord-25", "cms-1500", "ub-04")
 
 
 def _doc_type_for(template_name: str) -> str:
@@ -78,16 +74,31 @@ def test_templates_render_for_every_scenario(template_name):
     for scenario in SCENARIO_REGISTRY:
         data = build_synthetic_data(doc_type, scenario)
         template.render(**data)
-        if doc_type in _STANDARDIZED:
-            template.render(**make_placeholder_data(data))
 
 
-def test_variant_template_resolves_to_its_parents_data():
-    """acord-new is a visual redesign of acord-25 and shares its field
-    contract - it must NOT fall through to the bare `base` dict."""
-    data = build_synthetic_data("acord-new", "general")
-    assert data["producer_name"] and data["gl_each_occurrence"]
-    assert data["certificate_holder"] and data["wc_policy_number"]
+@pytest.fixture
+def fake_variant_alias():
+    """A throwaway doc_type alias pointed at a real, stable doc_type
+    (medical-record), so the alias MECHANISM is tested without hardcoding a
+    specific variant template - those have already been renamed/merged/
+    deleted twice in this project's history, which is exactly the kind of
+    churn a mechanism test should be immune to."""
+    from renderers import synthetic_data
+
+    synthetic_data._DOC_TYPE_ALIASES["test-only-variant"] = "medical-record"
+    try:
+        yield "test-only-variant"
+    finally:
+        del synthetic_data._DOC_TYPE_ALIASES["test-only-variant"]
+
+
+def test_variant_alias_resolves_to_its_parents_data(fake_variant_alias):
+    """A variant doc_type must resolve to its parent's data contract, not
+    fall through every branch in build_synthetic_data and return the bare
+    `base` dict - the exact bug acord-new hit when this alias was missing:
+    every one of its fields rendered blank."""
+    data = build_synthetic_data(fake_variant_alias, "general")
+    assert data["chief_complaint"] and data["encounter_type"]
 
 
 def test_validate_document_structure_rejects_an_unknown_doc_type():
@@ -99,9 +110,9 @@ def test_validate_document_structure_rejects_an_unknown_doc_type():
     assert "Unknown doc_type" in result["error"]
 
 
-def test_validate_document_structure_accepts_a_variant_doc_type():
-    data = build_synthetic_data("acord-new", "general")
-    assert tools.validate_document_structure("acord-new", data=data)["valid"] is True
+def test_validate_document_structure_accepts_a_variant_doc_type(fake_variant_alias):
+    data = build_synthetic_data(fake_variant_alias, "general")
+    assert tools.validate_document_structure(fake_variant_alias, data=data)["valid"] is True
 
 
 # --- recreate mode -------------------------------------------------------
@@ -216,3 +227,33 @@ def test_rendering_before_generating_fails_loudly():
     tools.clear_staged_doc_data()
     with pytest.raises(ValueError, match="No document data has been staged"):
         tools.render_document_to_pdf(template_name="medical_record")
+
+
+def test_recreate_rejects_a_flat_value_for_a_nested_dict_field():
+    # The exact bug this guards: a caller extracting text off a reference
+    # document naturally carries an address as one flat string
+    # ("1500 Jefferson Street SE, Olympia, WA 98504"), but producer_address
+    # is a {street, city, state, zip} dict. Applying the string used to
+    # silently replace the whole dict, so every template line reading
+    # producer_address.street crashed with "'str object' has no attribute
+    # 'street'" - far from where the bad data was actually introduced.
+    summary = tools.recreate_document_data(
+        doc_type="acord-25", scenario="general",
+        carried_values={"producer_address": "1500 Jefferson Street SE, Olympia, WA 98504"},
+    )
+    data = tools.get_staged_doc_data()
+
+    assert summary["unmapped_keys"] == ["producer_address"]
+    assert isinstance(data["producer_address"], dict)
+    assert data["producer_address"]["street"]
+
+
+def test_recreate_still_merges_a_properly_shaped_nested_dict():
+    tools.recreate_document_data(
+        doc_type="acord-25", scenario="general",
+        carried_values={"producer_address": {"street": "1500 Jefferson Street SE"}},
+    )
+    data = tools.get_staged_doc_data()
+
+    assert data["producer_address"]["street"] == "1500 Jefferson Street SE"
+    assert data["producer_address"]["city"]  # untouched sub-keys survive

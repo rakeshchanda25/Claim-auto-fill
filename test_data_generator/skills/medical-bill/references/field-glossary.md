@@ -10,3 +10,5 @@
 - `adjustments`: Insurance Discount (`Currency`, 5% to 30% of total_amount, randomized)
 - `amount_paid`: Previous Payments (`Currency`)
 - `balance`: Net Balance Due (`Currency`)
+- `chief_complaint`, `hpi`, `physical_exam`, `assessment`, `plan`: encounter-note narrative text
+- `vitals`: dict - `bp`, `hr`, `temp`, `rr`, `spo2`, `weight`, `height`

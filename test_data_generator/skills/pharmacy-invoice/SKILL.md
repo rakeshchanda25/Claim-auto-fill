@@ -1,36 +1,55 @@
 ---
 name: pharmacy-invoice
 description: >
-  Generate pharmacy invoices for prescription drug claims for IDP testing. Covers retail,
-  mail-order, and specialty pharmacy transactions with NDC codes and billing details.
+  Generate an Indian GST tax invoice for a pharmacy sale, for IDP testing - GSTIN/HSN/IGST
+  throughout, a multi-item table with batch/MFG/expiry per item, an HSN/SAC tax summary, bank
+  and UPI payment details. A different domain from a US pharmacy dispensing receipt.
 metadata:
   owner: idp-test-team
-  version: "1"
-  page-size: letter-portrait
+  version: "2"
+  page-size: A4-portrait
   template: pharmacy_invoice
 allowed-tools: generate_synthetic_data render_document_to_pdf validate_document_structure
 ---
 # Pharmacy Invoice Generation Skill
 
 ## Required Sections
-1. Pharmacy Header — Name, address, NPI
-2. Invoice Header — Rx number, fill date
-3. Patient Information — Name, DOB, Insurance ID, Group Number, Insurer, Claim Number
-4. Prescription Details — Drug name, NDC code, form, quantity, days supply
-5. Prescriber — Name, NPI, DEA number
-6. Charges Table — Drug charge, dispensing fee, copay, insurance billed
-7. Totals Summary Box
+1. Header — pharmacy logo/name/address/phone, optional promo banner
+2. GSTIN / Title row — pharmacy's GSTIN, "TAX INVOICE" title, copy label (Original/Duplicate/
+   Triplicate)
+3. Customer Detail + Invoice Meta — customer name/contact/address/phone/GSTIN/place of supply;
+   invoice number and date
+4. Items Table — one row per item: batch no., MFG/expiry date, HSN/SAC code, qty+unit, MRP,
+   rate, discount %, taxable value; subtotal, IGST, and grand-total rows
+5. Total in Words
+6. HSN/SAC Summary Table — taxable value, IGST %/amount, total, grouped by HSN code
+7. Total Tax in Words
+8. Bank Details + UPI QR — for payment; Terms and Conditions; customer/authorised signatures
 
-## NDC Code Format
-- 11 digits: 5-4-2 labeler-product-package (e.g., 00093-7278-98)
+## Tax Model
+The template only ever prints IGST (no CGST/SGST split) - do not compute a CGST+SGST
+alternative even if `customer_gstin` implies an intra-state sale; every invoice this skill
+produces is modeled as inter-state supply.
+- One `igst_pct` (5%, 12%, or 18%) applies to the WHOLE invoice, not per item
+- Per item: `taxable_value` = `qty × rate × (1 − discount_pct/100)`
+- `subtotal_taxable_value` = sum of every item's `taxable_value`
+- `igst_amount` = `subtotal_taxable_value × igst_pct / 100`
+- `grand_total` = `subtotal_taxable_value + igst_amount`
+- `hsn_summary` groups items by `hsn_sac`, each group's own taxable value / IGST amount / total
+  summing to the invoice totals
+- `total_in_words` / `tax_in_words`: Indian digit grouping (Lakh/Crore, not Western
+  thousand/million) - see `synthetic_data.py`'s `_amount_in_words()` / `_int_to_words()`
 
-## Financial Rules
-- Unit price: $1.50 to $25.00
-- Dispensing fee: $2.00 to $5.00
-- Copay: $5.00 to $50.00
-- Insurance billed = (unit_price × qty + dispensing_fee) - copay
+## GSTIN Format
+- 15 characters: 2-digit state code + 10-char PAN-like + entity digit + `Z` + checksum char
+  (synthetic - not a real checksum-valid number). `customer_gstin` is blank ~70% of the time
+  (a B2C retail sale has no customer GSTIN to print).
 
-## Quantity Standards
-- Short course: 10-14 days
-- Monthly supply: 30 days
-- 90-day supply: 90 days (mail-order)
+## HSN Codes (pharmaceutical)
+- 3004 = medicaments (mixed/dosed) · 3003 = medicaments (not mixed/dosed) · 3005 = dressings/
+  bandages · 2106 = food preparations n.e.s.
+
+## Legacy fields
+`rx_number`, `fill_date`, `drug_name`, `ndc_code`, `form`, `prescriber_name`, `prescriber_dea`,
+`prescriber_npi` are still generated (kept for backward-compat, an earlier US-style dispensing
+receipt used them) but the current template does not render any of them.

@@ -1,5 +1,6 @@
 # ACORD 25 Field Glossary
 
+- `certificate_date`: DATE (MM/DD/YYYY) box, top right - today's date
 - `producer_name` / `producer_address` / `producer_phone` / `producer_email`: Agency identity
 - `insured_name` / `insured_address`: Business entity being certified
 - `insurer_a` / `insurer_a_naic`: Carrier name and NAIC number
@@ -19,3 +20,16 @@
 - `certificate_holder` / `certificate_holder_address`: Holder name and mailing address
 - `authorized_representative`: signature line name
 - `description_of_operations`: free text, ACORD 101 boilerplate is fine
+
+## Checkbox mark fields (`☑`/`☐` glyphs - see "Checkbox fields" in SKILL.md)
+- `gl_occurrence_mark` / `gl_claims_made_mark`: GL claims basis (mutually exclusive pair)
+- `gl_agg_policy_mark` / `gl_agg_project_mark` / `gl_agg_loc_mark`: GL aggregate basis (3-way,
+  exactly one ticked)
+- `auto_any_auto_mark`: ticked when the auto coverage is "Any Auto"; when NOT ticked, all four
+  of `auto_all_owned_mark` / `auto_scheduled_mark` / `auto_hired_mark` / `auto_non_owned_mark`
+  are ticked instead (never a mix)
+- `umb_umbrella_mark` / `umb_excess_mark`: umbrella-vs-excess form (mutually exclusive)
+- `umb_occur_mark` / `umb_claims_made_mark`: umbrella claims basis (mutually exclusive)
+- `umb_ded_mark` / `umb_retention_mark`: deductible-vs-retention (mutually exclusive)
+- `wc_officer_excluded_y_mark` / `wc_officer_excluded_n_mark`: WC officer-excluded Y/N
+- `wc_statutory_mark` / `wc_other_mark`: WC limits basis (mutually exclusive)

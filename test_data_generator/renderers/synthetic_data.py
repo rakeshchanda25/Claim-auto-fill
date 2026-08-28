@@ -63,6 +63,63 @@ _HOSPITALS = ["St. Mary's Medical Center", "General Hospital", "Regional Medical
 _SPECIALTIES = ["Internal Medicine", "Emergency Medicine", "Orthopedics", "Cardiology", "Family Medicine", "Neurology"]
 
 
+_ONES = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten",
+         "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen",
+         "Eighteen", "Nineteen"]
+_TENS = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"]
+
+
+def _int_to_words(n: int) -> str:
+    """Plain English integer-to-words, Indian digit grouping (Lakh/Crore) - GST invoices
+    print amounts in this grouping, not the Western thousand/million one."""
+    if n == 0:
+        return "Zero"
+
+    def three_digit(x: int) -> str:
+        parts = []
+        if x >= 100:
+            parts.append(_ONES[x // 100] + " Hundred")
+            x %= 100
+        if x >= 20:
+            parts.append(_TENS[x // 10] + (f" {_ONES[x % 10]}" if x % 10 else ""))
+        elif x > 0:
+            parts.append(_ONES[x])
+        return " ".join(parts)
+
+    crore, rem = divmod(n, 10_000_000)
+    lakh, rem = divmod(rem, 100_000)
+    thousand, rem = divmod(rem, 1_000)
+    hundreds = rem
+
+    parts = []
+    if crore:
+        parts.append(three_digit(crore) + " Crore")
+    if lakh:
+        parts.append(three_digit(lakh) + " Lakh")
+    if thousand:
+        parts.append(three_digit(thousand) + " Thousand")
+    if hundreds:
+        parts.append(three_digit(hundreds))
+    return " ".join(parts)
+
+
+def _amount_in_words(amount: float, unit: str = "Rupees") -> str:
+    rupees = int(amount)
+    paise = round((amount - rupees) * 100)
+    words = f"{unit} {_int_to_words(rupees)} Only"
+    if paise:
+        words = f"{unit} {_int_to_words(rupees)} and {_int_to_words(paise)} Paise Only"
+    return words
+
+
+def _gstin() -> str:
+    """Synthetic 15-char GSTIN shape (2-digit state code + 10-char PAN-like + entity + Z +
+    checksum) - plausible-looking, not a real checksum-valid number."""
+    state_code = f"{random.randint(1, 37):02d}"
+    pan = "".join(random.choices(string.ascii_uppercase, k=5)) + "".join(random.choices(string.digits, k=4)) + random.choice(string.ascii_uppercase)
+    return f"{state_code}{pan}1Z{random.choice(string.digits + string.ascii_uppercase)}"
+
+
 def _rand_date_recent(years_back=2) -> date:
     start = date.today() - timedelta(days=years_back * 365)
     return start + timedelta(days=random.randint(0, years_back * 365))
@@ -130,6 +187,28 @@ def _line_items(scenario: str):
     return items
 
 
+def _clinical_note_fields() -> dict:
+    """Chief complaint / HPI / vitals / exam / assessment / plan - the encounter-note fields
+    shared by medical-record and medical-bill (the latter is a "superbill", the common
+    real-world combined clinical-note-plus-itemized-charges document)."""
+    return {
+        "chief_complaint": _fake.sentence(nb_words=8),
+        "hpi": _fake.paragraph(nb_sentences=4),
+        "vitals": {
+            "bp": f"{random.randint(100,140)}/{random.randint(60,90)}",
+            "hr": str(random.randint(60, 100)),
+            "temp": f"{round(random.uniform(97.5, 99.5), 1)}°F",
+            "rr": str(random.randint(14, 20)),
+            "spo2": f"{random.randint(95, 100)}%",
+            "weight": f"{random.randint(120, 280)} lbs",
+            "height": f"{random.randint(60, 74)} in",
+        },
+        "physical_exam": _fake.paragraph(nb_sentences=3),
+        "assessment": _fake.sentence(nb_words=6),
+        "plan": _fake.paragraph(nb_sentences=3),
+    }
+
+
 def _address():
     return {
         "street": _fake.street_address(),
@@ -169,17 +248,16 @@ def _build_physician():
 # contract. Without this, build_synthetic_data falls through every branch
 # below and returns only `base` - every form-specific field then renders
 # blank, which is precisely how a brand-new template silently produces an
-# empty document. Add one line here when adding a variant template.
-_DOC_TYPE_ALIASES = {
-    "acord-new": "acord-25",
-    "acord_new": "acord-25",
-    "police-report-new": "police-report",
-    "police_report_new": "police-report",
-    "litigation-document-new": "litigation-document",
-    "litigation_document_new": "litigation-document",
-    "ub-04-new": "ub-04",
-    "ub_04_new": "ub-04",
-}
+# empty document. Add one line here when adding a variant template file
+# (renderers/templates/<name>.html) that is NOT also registered in
+# app.py's /api/ai-doc-types - an alias with no matching .html file makes
+# generate_synthetic_data succeed while render_document_to_pdf 404s, which
+# is exactly what happened to acord-new/police-report-new/litigation-
+# document-new/ub-04-new once those variant files were merged into their
+# base templates and deleted; the (now empty) aliases below are that
+# lesson, not speculative infrastructure - keep this dict, but only ever
+# populate it alongside a real template file on disk.
+_DOC_TYPE_ALIASES: dict[str, str] = {}
 
 
 def resolve_doc_type(doc_type: str) -> str:
@@ -220,40 +298,50 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
     }
 
     if doc_type == "medical-record":
+        base.update(_clinical_note_fields())
         base.update({
             "encounter_type": random.choice(["Office Visit", "Emergency Visit", "Follow-Up", "Consultation"]),
-            "chief_complaint": _fake.sentence(nb_words=8),
-            "hpi": _fake.paragraph(nb_sentences=4),
             "allergies": random.choice(["NKDA (No Known Drug Allergies)", "Penicillin", "Sulfa drugs", "Latex"]),
             "current_medications": [d[0] for d in random.sample(_NDC_DRUGS, 2)],
-            "vitals": {
-                "bp": f"{random.randint(100,140)}/{random.randint(60,90)}",
-                "hr": str(random.randint(60, 100)),
-                "temp": f"{round(random.uniform(97.5, 99.5), 1)}°F",
-                "rr": str(random.randint(14, 20)),
-                "spo2": f"{random.randint(95, 100)}%",
-                "weight": f"{random.randint(120, 280)} lbs",
-                "height": f"{random.randint(60, 74)} in",
-            },
-            "physical_exam": _fake.paragraph(nb_sentences=3),
-            "assessment": _fake.sentence(nb_words=6),
-            "plan": _fake.paragraph(nb_sentences=3),
             "signed_by": physician["physician_name"],
             "signed_date": dos.strftime("%m/%d/%Y"),
         })
 
     elif doc_type == "discharge-summary":
+        # Template is a home-health/skilled-nursing discharge summary (Reason for Discharge
+        # checkboxes: goals achieved / admitted to acute care / ECF-SNF / transferred /
+        # refused care / expired / other; visit counts; plan for transition) - a different
+        # document from an inpatient hospital discharge, so this branch generates that shape
+        # rather than reusing the old admission/DRG/length-of-stay fields (kept below for
+        # anything that still reads them, but nothing in the template does any more).
         admission_date = dos - timedelta(days=random.randint(1, 7))
         discharge_date = dos
+        first_visit_date = admission_date + timedelta(days=random.randint(0, 1))
+        last_visit_date = discharge_date - timedelta(days=random.randint(0, 2))
+        num_visits = random.randint(3, 14)
+
+        reason_key = random.choices(
+            ["goals_achieved", "admitted_acute_care", "admitted_ecf_snf",
+             "transferred_other_service", "refused_further_care", "expired", "other"],
+            weights=[55, 15, 10, 8, 5, 2, 5],
+        )[0]
+        reason = {k: False for k in (
+            "goals_achieved", "admitted_acute_care", "admitted_ecf_snf",
+            "transferred_other_service", "refused_further_care", "expired", "other",
+        )}
+        reason[reason_key] = True
+        reason["expired_date"] = discharge_date.strftime("%m/%d/%Y") if reason_key == "expired" else ""
+        reason["other_detail"] = "Patient relocated out of service area" if reason_key == "other" else ""
+
         base.update({
+            # legacy inpatient-hospital fields - unused by the current template, kept for
+            # callers that might still reference them (validate_document_structure no longer
+            # requires these)
             "attending_physician": physician["physician_name"],
-            "admission_date": admission_date.strftime("%m/%d/%Y"),
-            "discharge_date": discharge_date.strftime("%m/%d/%Y"),
             "admission_diagnosis": icd_codes[0][1] if icd_codes else "Acute illness",
             "discharge_diagnosis": icd_codes[0][1] if icd_codes else "Resolved",
             "hospital_course": _fake.paragraph(nb_sentences=5),
             "discharge_condition": random.choice(["Stable", "Improved", "Good"]),
-            "discharge_instructions": _fake.paragraph(nb_sentences=3),
             "follow_up": f"Follow up with {physician['physician_name']} in {random.randint(7, 21)} days",
             "medications_at_discharge": [
                 {"name": d[0], "dose": "As directed", "frequency": "Daily"}
@@ -261,6 +349,29 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
             ],
             "drg_code": str(random.randint(100, 999)),
             "length_of_stay": str((discharge_date - admission_date).days),
+            # home-health discharge summary fields
+            "org_name": _fake.company() + " Home Health Care",
+            "document_title": "Discharge Summary",
+            "patient_address": patient["address"]["street"],
+            "patient_address_line2": "",
+            "city_state": f"{patient['address']['city']}, {patient['address']['state']}",
+            "zip_code": patient["address"]["zip"],
+            "date_of_admission": admission_date.strftime("%m/%d/%Y"),
+            "date_of_discharge": discharge_date.strftime("%m/%d/%Y"),
+            "date_of_first_visit": first_visit_date.strftime("%m/%d/%Y"),
+            "last_visit_made": last_visit_date.strftime("%m/%d/%Y"),
+            "number_of_visits": str(num_visits),
+            "diagnosis": icd_codes[0][1] if icd_codes else "Resolved",
+            "reason": reason,
+            "reason_comments": [] if reason_key == "goals_achieved" else [_fake.sentence(nb_words=10)],
+            "care_plan_notes": [_fake.sentence(nb_words=8)],
+            "assessment_notes": [_fake.sentence(nb_words=8)],
+            "assessment_of_patient_condition": random.choice(["Stable", "Improved", "Guarded"]),
+            "transition_plan": [_fake.sentence(nb_words=10)] if reason_key not in ("goals_achieved", "expired") else [],
+            "discharge_instructions": _fake.paragraph(nb_sentences=3),
+            "discharge_instruction_notes": [],
+            "clinician_signature": physician["physician_name"],
+            "signature_date": discharge_date.strftime("%m/%d/%Y"),
         })
 
     elif doc_type == "medical-bill":
@@ -268,6 +379,7 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
         # rate in reality - was pinned to 15% on every bill, so "balance" was
         # always exactly 85% of the charge no matter what.
         adjustments = round(total * random.uniform(0.05, 0.30), 2)
+        base.update(_clinical_note_fields())
         base.update({
             "account_number": "ACC" + "".join(random.choices(string.digits, k=8)),
             "statement_date": date.today().strftime("%m/%d/%Y"),
@@ -360,6 +472,78 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
                 "paid": line_paid, "patient_owes": round(line_allowed - line_paid, 2),
                 "reason_code": random.choice(["", "", "CO-45"]),
             })
+        # The template is a full multi-column claims-table EOB (Charges / Provider
+        # Responsibility / Allowed / Patient Non-covered / Paid by Other Ins / Deductible /
+        # Co-pay / Co-Insurance / Paid / Amount You Owe per line, with a totals row and a
+        # Patient Benefit Summary tracking deductible/OOP) - a different, more detailed
+        # document than the old single-ratio eob_lines model (kept below, unused by the
+        # template now, for anything that still reads it). Every column is built so the
+        # totals row is a literal column-wise sum of the claim lines, and each line's own
+        # Charges/Allowed/Paid/Amount-You-Owe reconcile internally (see the running deductible
+        # below - the standard "deductible first, then coinsurance" adjudication order).
+        deductible_limit = random.choice([250.0, 500.0, 1000.0, 1500.0])
+        coinsurance_rate = round(random.uniform(0.10, 0.30), 2)
+        copay_amt = round(random.uniform(20, 50), 2)
+        remaining_deductible = deductible_limit
+        claims = []
+        for i, item in enumerate(line_items):
+            charges = item["charge"]
+            allowed_amount = round(charges * random.uniform(0.60, 0.90), 2)
+            provider_responsibility = round(charges - allowed_amount, 2)
+            patient_noncovered = round(allowed_amount * 0.05, 2) if random.random() < 0.15 else 0.0
+            covered_amount = round(allowed_amount - patient_noncovered, 2)
+
+            deductible_amt = round(min(remaining_deductible, covered_amount), 2)
+            remaining_deductible = round(remaining_deductible - deductible_amt, 2)
+            after_deductible = round(covered_amount - deductible_amt, 2)
+            copay_this_line = copay_amt if i == 0 else 0.0
+            coinsurance_amt = round(max(after_deductible - copay_this_line, 0) * coinsurance_rate, 2)
+            paid_amount = round(after_deductible - copay_this_line - coinsurance_amt, 2)
+            amount_you_owe = round(patient_noncovered + deductible_amt + copay_this_line + coinsurance_amt, 2)
+
+            claims.append({
+                "dates_of_service": dos.strftime("%m/%d/%Y"),
+                "description": f"{item['description']} (CPT {item['cpt']})",
+                "charges": charges,
+                "provider_responsibility": provider_responsibility,
+                "allowed_amount": allowed_amount,
+                "patient_noncovered": patient_noncovered,
+                "paid_by_other_ins": 0.0,
+                "deductible": deductible_amt,
+                "copay": copay_this_line,
+                "coinsurance": coinsurance_amt,
+                "paid_amount": paid_amount,
+                "amount_you_owe": amount_you_owe,
+                "notes_id": "1" if patient_noncovered else "",
+            })
+
+        totals = {
+            key: round(sum(c[key] for c in claims), 2)
+            for key in ("charges", "provider_responsibility", "allowed_amount", "patient_noncovered",
+                        "paid_by_other_ins", "deductible", "copay", "coinsurance", "paid_amount", "amount_you_owe")
+        }
+        deductible_satisfied = deductible_limit - remaining_deductible
+
+        # Legacy single-ratio fields - unused by the current template, kept for callers that
+        # might still reference them (validate_document_structure no longer requires these).
+        allowed_rate = round(random.uniform(0.60, 0.90), 2)
+        paid_rate = round(random.uniform(0.70, 0.95), 2)
+        allowed = round(total * allowed_rate, 2)
+        paid = round(allowed * paid_rate, 2)
+        eob_lines = []
+        remaining_allowed, remaining_paid = allowed, paid
+        for i, item in enumerate(line_items):
+            is_last = i == len(line_items) - 1
+            line_allowed = remaining_allowed if is_last else round(item["charge"] * allowed_rate, 2)
+            line_paid = remaining_paid if is_last else round(line_allowed * paid_rate, 2)
+            remaining_allowed -= line_allowed
+            remaining_paid -= line_paid
+            eob_lines.append({
+                "cpt": item["cpt"], "billed": item["charge"], "allowed": line_allowed,
+                "paid": line_paid, "patient_owes": round(line_allowed - line_paid, 2),
+                "reason_code": random.choice(["", "", "CO-45"]),
+            })
+
         base.update({
             "member_id": patient["insurance_id"],
             "group_number": patient["group_number"],
@@ -378,6 +562,33 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
             "processed_date": date.today().strftime("%m/%d/%Y"),
             "check_number": "CHK" + "".join(random.choices(string.digits, k=8)),
             "reason_code_legend": "CO-45: Charge exceeds fee schedule/maximum allowable amount",
+            # full claims-table EOB fields
+            "document_title": "Explanation of Health Care Benefits",
+            "subscriber_name": patient["patient_name"],
+            "claim_ref_number": claim_num,
+            "claim_ref_date": date.today().strftime("%m/%d/%Y"),
+            "disclaimer_text": (
+                "This is an explanation of the claim processed based on your plan benefits in "
+                "effect when the service was performed. Please keep this form for your tax records."
+            ),
+            "patient_id": patient["insurance_id"],
+            "patient_control_number": _mrn(),
+            "group_name": physician["hospital"] + " Group Health Plan",
+            "claims": claims,
+            "totals": totals,
+            "notes": [{"code": "1", "description": "Non-covered charge - see plan benefit booklet for exclusions."}],
+            "benefit_patient_name": patient["patient_name"],
+            "benefit_period_start": date(date.today().year, 1, 1).strftime("%m/%d/%Y"),
+            "benefit_period_end": date(date.today().year, 12, 31).strftime("%m/%d/%Y"),
+            "deductible_satisfied": deductible_satisfied,
+            "deductible_limit": deductible_limit,
+            "oop_applied": totals["amount_you_owe"],
+            "oop_limit": random.choice([3000.0, 5000.0, 8000.0]),
+            "benefit_summary_note": (
+                "Please refer to your benefit booklet or agreement for further information. "
+                "Amount(s) shown may include totals from claims which are still being processed "
+                "and for which you have not been notified."
+            ),
         })
 
     elif doc_type == "acord-25":
@@ -615,27 +826,116 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
         })
 
     elif doc_type == "pharmacy-invoice":
+        # Template is an Indian GST tax invoice (GSTIN/HSN/IGST/UPI throughout) - a different
+        # domain from a US pharmacy dispensing receipt, so this branch computes a real GST
+        # invoice rather than reusing the old rx-fill fields (kept below for anything that
+        # still reads them, but nothing in the template does any more).
         drug = random.choice(_NDC_DRUGS)
-        qty = random.choice([30, 60, 90])
-        unit_price = round(random.uniform(1.5, 25.0), 2)
+        pharmacy_legal_name = _fake.company() + " PHARMA PRIVATE LIMITED"
+        pharmacy_short_name = pharmacy_legal_name.split()[0].upper() + " PHARMA"
+        company_gstin = _gstin()
+        # The template only ever prints IGST (no CGST/SGST split), so intra- vs inter-state
+        # supply is not modeled here - customer_gstin varies only whether the sale is B2B.
+        customer_gstin = _gstin() if random.random() < 0.3 else ""
+
+        _HSN_POOL = ["3004", "3003", "3005", "2106"]
+        num_items = random.randint(2, 4)
+        items = []
+        for _ in range(num_items):
+            drug_i = random.choice(_NDC_DRUGS)
+            qty = random.choice([1, 2, 5, 10])
+            mrp = round(random.uniform(50, 800), 2)
+            rate = round(mrp * random.uniform(0.7, 0.95), 2)
+            discount_pct = round(random.choice([0, 0, 5, 10]), 2)
+            taxable_value = round(qty * rate * (1 - discount_pct / 100), 2)
+            mfg = _rand_date_recent(years_back=1)
+            items.append({
+                "name": drug_i[0],
+                "batch_no": "B" + "".join(random.choices(string.digits, k=6)),
+                "mfg_date": mfg.strftime("%m/%Y"),
+                "expiry_date": (mfg.replace(year=mfg.year + 2)).strftime("%m/%Y"),
+                "hsn_sac": random.choice(_HSN_POOL),
+                "qty": qty,
+                "unit": random.choice(["Strip", "Bottle", "Box"]),
+                "mrp": mrp,
+                "rate": rate,
+                "discount_pct": discount_pct,
+                "taxable_value": taxable_value,
+            })
+
+        subtotal_taxable_value = round(sum(i["taxable_value"] for i in items), 2)
+        igst_pct = random.choice([5.0, 12.0, 18.0])
+        igst_amount = round(subtotal_taxable_value * igst_pct / 100, 2)
+        grand_total = round(subtotal_taxable_value + igst_amount, 2)
+
+        hsn_groups: dict[str, dict] = {}
+        for i in items:
+            g = hsn_groups.setdefault(i["hsn_sac"], {"hsn_sac": i["hsn_sac"], "taxable_value": 0.0})
+            g["taxable_value"] = round(g["taxable_value"] + i["taxable_value"], 2)
+        hsn_summary = []
+        for g in hsn_groups.values():
+            g_igst = round(g["taxable_value"] * igst_pct / 100, 2)
+            hsn_summary.append({
+                "hsn_sac": g["hsn_sac"], "taxable_value": g["taxable_value"],
+                "igst_pct": igst_pct, "igst_amount": g_igst, "total": round(g["taxable_value"] + g_igst, 2),
+            })
+
         base.update({
+            # legacy rx-fill fields - unused by the current template, kept for callers that
+            # might still reference them (validate_document_structure no longer requires these)
             "rx_number": _rx_number(),
             "fill_date": dos.strftime("%m/%d/%Y"),
             "drug_name": drug[0],
             "ndc_code": drug[1],
             "form": drug[2],
-            "quantity": qty,
-            "days_supply": qty,
-            "unit_price": unit_price,
-            "total_charge": round(unit_price * qty, 2),
-            "dispensing_fee": round(random.uniform(2.0, 5.0), 2),
-            "copay": round(random.uniform(5.0, 50.0), 2),
-            "pharmacy_name": _fake.company() + " Pharmacy",
-            "pharmacy_npi": _npi(),
-            "pharmacy_address": _address(),
             "prescriber_name": physician["physician_name"],
             "prescriber_dea": physician["dea"],
             "prescriber_npi": physician["npi"],
+            # GST tax invoice fields
+            "company_name": pharmacy_short_name,
+            "company_name_line1": pharmacy_short_name,
+            "company_name_line2": "MEDICALS & GENERAL STORE",
+            "company_legal_name": pharmacy_legal_name,
+            "company_address": _fake.street_address() + ", " + _fake.city() + " - " + _fake.postcode(),
+            "company_phone": _fake.phone_number(),
+            "company_gstin": company_gstin,
+            "tagline": "Your Trusted Neighbourhood Pharmacy",
+            "show_promo": False,
+            "promo_text": "",
+            "document_title": "TAX INVOICE",
+            "copy_label": random.choice(["ORIGINAL FOR RECIPIENT", "DUPLICATE FOR TRANSPORTER", "TRIPLICATE FOR SUPPLIER"]),
+            "customer_name": patient["patient_name"],
+            "contact_person": patient["patient_name"],
+            "customer_address": _fake.street_address() + ", " + _fake.city() + " - " + _fake.postcode(),
+            "customer_phone": patient["phone"],
+            "customer_gstin": customer_gstin,
+            "place_of_supply": _fake.state() + f" ({random.randint(1, 37):02d})",
+            "invoice_number": "INV" + "".join(random.choices(string.digits, k=8)),
+            "invoice_date": dos.strftime("%d/%m/%Y"),
+            "items": items,
+            "subtotal_taxable_value": subtotal_taxable_value,
+            "igst_pct": igst_pct,
+            "igst_amount": igst_amount,
+            "total_qty": sum(i["qty"] for i in items),
+            "total_rate": round(sum(i["rate"] for i in items), 2),
+            "grand_total": grand_total,
+            "total_in_words": _amount_in_words(grand_total),
+            "hsn_summary": hsn_summary,
+            "hsn_total_taxable_value": subtotal_taxable_value,
+            "hsn_total_igst_amount": igst_amount,
+            "hsn_total": grand_total,
+            "tax_in_words": _amount_in_words(igst_amount),
+            "bank_name": random.choice(["State Bank of India", "HDFC Bank", "ICICI Bank", "Axis Bank"]),
+            "bank_branch": _fake.city() + " Branch",
+            "bank_account_number": "".join(random.choices(string.digits, k=12)),
+            "bank_ifsc": "".join(random.choices(string.ascii_uppercase, k=4)) + "0" + "".join(random.choices(string.digits, k=6)),
+            "upi_id": pharmacy_short_name.lower().replace(" ", "") + "@upi",
+            "terms": [
+                "Goods once sold will not be taken back or exchanged.",
+                "All disputes are subject to local jurisdiction only.",
+                "Interest @18% p.a. will be charged if the bill is not paid within the due date.",
+            ],
+            "footer_note": "Thanks for your order! We look forward to working with you again soon.",
         })
 
     elif doc_type == "property-loss-notice":
@@ -655,37 +955,124 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
         })
 
     elif doc_type == "auto-accident-report":
+        # Template is a real state-agency "Employee Vehicle Accident Report" (Washington
+        # S.F. 97 style): the reporting party is a STATE EMPLOYEE driving a state vehicle,
+        # with up to 2 other vehicles, an "other property" section, and injured-parties/
+        # witness tables. This branch builds that full shape; the old flat fields below are
+        # kept (nothing else reads them any more, but they're harmless) and vehicle1/employee
+        # are built FROM them so both stay consistent with each other.
+        make1, model1 = random.choice([("Toyota", "Camry"), ("Honda", "Accord"), ("Ford", "F-150"),
+                                        ("Chevrolet", "Malibu"), ("BMW", "3 Series"), ("Tesla", "Model 3")])
+        make2, model2 = random.choice([("Nissan", "Altima"), ("Hyundai", "Elantra"), ("Jeep", "Wrangler"),
+                                        ("Subaru", "Outback"), ("Mazda", "CX-5")])
+        vehicle1_year = str(random.randint(2010, 2024))
+        vehicle1_plate = "".join(random.choices(string.ascii_uppercase, k=3)) + "".join(random.choices(string.digits, k=4))
+        vehicle1_vin = "".join(random.choices(string.ascii_uppercase + string.digits, k=17))
+        other_vehicle_year = str(random.randint(2010, 2024))
+        other_vehicle_plate = "".join(random.choices(string.ascii_uppercase, k=3)) + "".join(random.choices(string.digits, k=4))
+        other_driver_name_val = _fake.name()
+        other_driver_insurer_val = random.choice(_INSURERS)
+        other_driver_policy_val = _policy_number()
+        damage_desc = _fake.sentence(nb_words=12)
+        est_damage = round(random.uniform(1500, 25000), 2)
+        towed = random.choice(["Yes", "No"])
+        has_injury = random.random() < 0.3
+        cited = random.random() < 0.4
+
         base.update({
+            # legacy flat fields - unused by the current template, kept for callers that
+            # might still reference them (validate_document_structure no longer requires these)
             "insured_name": patient["patient_name"],
-            "accident_date": dos.strftime("%m/%d/%Y"),
-            "accident_time": f"{random.randint(0,23):02d}:{random.randint(0,59):02d}",
             "accident_location": _fake.street_address() + ", " + _fake.city() + ", " + random.choice(_STATES),
-            "vehicle_info": {
-                "year": str(random.randint(2010, 2024)),
-                "make": random.choice(["Toyota", "Honda", "Ford", "Chevrolet", "BMW", "Tesla"]),
-                "model": random.choice(["Camry", "Accord", "F-150", "Malibu", "3 Series", "Model 3"]),
-                "vin": "".join(random.choices(string.ascii_uppercase + string.digits, k=17)),
-                "license_plate": "".join(random.choices(string.ascii_uppercase, k=3)) + "".join(random.choices(string.digits, k=4)),
-            },
+            "vehicle_info": {"year": vehicle1_year, "make": make1, "model": model1, "vin": vehicle1_vin, "license_plate": vehicle1_plate},
             "driver_name": patient["patient_name"],
             "driver_license_number": _fake.bothify("??#######").upper(),
-            "other_vehicle": {
-                "year": str(random.randint(2010, 2024)),
-                "make": random.choice(["Nissan", "Hyundai", "Jeep", "Subaru", "Mazda"]),
-                "model": random.choice(["Altima", "Elantra", "Wrangler", "Outback", "CX-5"]),
-                "license_plate": "".join(random.choices(string.ascii_uppercase, k=3)) + "".join(random.choices(string.digits, k=4)),
-            },
-            "other_driver_name": _fake.name(),
-            "other_driver_insurer": random.choice(_INSURERS),
-            "other_driver_policy_number": _policy_number(),
-            "damage_description": _fake.sentence(nb_words=12),
-            "estimated_damage": round(random.uniform(1500, 25000), 2),
+            "other_vehicle": {"year": other_vehicle_year, "make": make2, "model": model2, "license_plate": other_vehicle_plate},
+            "other_driver_name": other_driver_name_val,
+            "other_driver_insurer": other_driver_insurer_val,
+            "other_driver_policy_number": other_driver_policy_val,
+            "damage_description": damage_desc,
+            "estimated_damage": est_damage,
             "airbags_deployed": random.choice(["Yes", "No"]),
-            "vehicle_towed": random.choice(["Yes", "No"]),
+            "vehicle_towed": towed,
             "police_report_number": "RPT" + "".join(random.choices(string.digits, k=8)),
             "at_fault": random.choice(["Yes", "No", "Disputed"]),
-            "bodily_injury": random.choice(["Yes", "No"]),
-            "witnesses": [{"name": _fake.name(), "phone": _fake.phone_number()}],
+            "bodily_injury": "Yes" if has_injury else "No",
+            "witnesses": [{"name": _fake.name(), "phone": _fake.phone_number(),
+                           "address": _fake.street_address(), "city": _fake.city()}],
+            # state accident-report form fields
+            "accident_date": dos.strftime("%m/%d/%Y"),
+            "accident_time": f"{random.randint(0,23):02d}:{random.randint(0,59):02d}",
+            "accident_time_ampm": random.choice(["AM", "PM"]),
+            "employee": {
+                "business_address": _fake.street_address(),
+                "zip": _fake.zipcode(),
+                "business_phone": _fake.phone_number(),
+                "email": patient["patient_name"].lower().replace(" ", ".") + "@agency.wa.gov",
+                "license_no": _fake.bothify("??#######").upper(),
+                "license_restrictions": random.choice(["None", "Corrective Lenses"]),
+                "if_yes_indicate": "",
+                "official_business": True,
+            },
+            "vehicle1": {
+                "license_no": vehicle1_plate,
+                "year": vehicle1_year,
+                "make": make1,
+                "body_type": random.choice(["Sedan", "SUV", "Pickup", "Van"]),
+                "where_located": "State motor pool",
+                "no_of_passengers": str(random.randint(0, 2)),
+                "est_repair_cost": f"{est_damage:,.2f}",
+                "prior_accident": False,
+                "owning_agency": physician["hospital"],
+                "damage_description": damage_desc,
+                "private_owner_or_equipment_no": "EQ" + "".join(random.choices(string.digits, k=6)),
+                "insurer": "Self-Insured (State Risk Management)",
+            },
+            "vehicle2": {
+                "owner_name": other_driver_name_val,
+                "owner_phone": _fake.phone_number(),
+                "owner_address": _fake.street_address(),
+                "owner_city": _fake.city(),
+                "owner_zip": _fake.zipcode(),
+                "driver_name": other_driver_name_val,
+                "driver_age": str(random.randint(19, 70)),
+                "driver_phone": _fake.phone_number(),
+                "driver_address": _fake.street_address(),
+                "driver_city": _fake.city(),
+                "driver_zip": _fake.zipcode(),
+                "driver_license_no": _fake.bothify("??#######").upper(),
+                "vehicle_license_no": other_vehicle_plate,
+                "vehicle_make": make2,
+                "vehicle_year": other_vehicle_year,
+                "body_type": random.choice(["Sedan", "SUV", "Pickup", "Van"]),
+                "passengers": "",
+                "repair_cost": f"{round(est_damage * random.uniform(0.4, 0.9), 2):,.2f}",
+                "damage_description": _fake.sentence(nb_words=10),
+                "insurance_company": other_driver_insurer_val,
+                "policy_no": other_driver_policy_val,
+            },
+            # single-other-vehicle scenario is the norm - vehicle3 stays empty rather than
+            # inventing a third party that was never in the collision.
+            "vehicle3": {k: "" for k in (
+                "owner_name", "owner_phone", "owner_address", "owner_city", "owner_zip",
+                "driver_name", "driver_age", "driver_phone", "driver_address", "driver_city",
+                "driver_zip", "driver_license_no", "vehicle_license_no", "vehicle_make",
+                "vehicle_year", "body_type", "passengers", "repair_cost", "damage_description",
+                "insurance_company", "policy_no",
+            )},
+            "other_property": {k: "" for k in ("what_was_damaged", "repair_cost", "owner_name_address", "city", "zip", "phone")},
+            "injured_parties": [
+                {"name_address": f"{other_driver_name_val}, {_fake.street_address()}",
+                 "extent_of_injury": random.choice(["Minor - complaint of pain", "Moderate - treated and released"]),
+                 "age": str(random.randint(19, 70)), "vehicle": 2, "pedestrian": False}
+            ] if has_injury else [],
+            "other": {
+                "police_investigated": cited,
+                "police_division": random.choice(["City Police", "County Sheriff", "State Patrol"]) if cited else "",
+                "citation_issued": cited,
+                "citation_issued_to": "Veh. 2" if cited else "",
+                "collision_report_filed": cited,
+            },
         })
 
     elif doc_type == "litigation-document":

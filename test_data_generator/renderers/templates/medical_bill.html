@@ -2,75 +2,226 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Medical Bill – {{ account_number }}</title>
+<title>Health History – {{ patient_name }}</title>
 <style>
-  @page { size: letter portrait; margin: 0.85in; @bottom-center { content: "Account: {{ account_number }} | Page " counter(page) " of " counter(pages); font-size: 8pt; color: #666; } }
-  body { font-family: Arial, Helvetica, sans-serif; font-size: 10pt; color: #111; line-height: 1.5; }
-  .header { display: flex; justify-content: space-between; border-bottom: 3px solid #1a3a6b; padding-bottom: 10px; margin-bottom: 16px; }
-  .hospital { font-size: 18pt; font-weight: bold; color: #1a3a6b; }
-  .bill-title { font-size: 14pt; font-weight: bold; text-align: right; color: #1a3a6b; }
-  .bill-date { font-size: 9pt; color: #555; text-align: right; }
-  h2 { font-size: 11pt; background: #1a3a6b; color: #fff; padding: 3px 8px; margin: 14px 0 6px; }
-  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 24px; margin-bottom: 10px; }
-  .label { font-weight: bold; font-size: 9pt; color: #444; }
-  table { width: 100%; border-collapse: collapse; font-size: 9pt; margin-top: 6px; }
-  th { background: #1a3a6b; color: #fff; padding: 5px 8px; border: 1px solid #1a3a6b; text-align: left; }
-  td { padding: 5px 8px; border: 1px solid #ccc; }
-  tr:nth-child(even) td { background: #f5f8ff; }
-  .summary-box { background: #f0f4fa; border: 1px solid #c0d0e8; border-radius: 4px; padding: 12px 16px; margin-top: 16px; width: 280px; float: right; }
-  .summary-row { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 10pt; }
-  .summary-total { font-weight: bold; font-size: 12pt; color: #1a3a6b; border-top: 2px solid #1a3a6b; padding-top: 6px; margin-top: 6px; }
-  .notice { font-size: 8pt; color: #777; margin-top: 32px; border-top: 1px solid #ddd; padding-top: 8px; clear: both; }
+  @page { size: letter portrait; margin: 0; }
+  *{ box-sizing:border-box; }
+  body{
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 9.6pt;
+    color:#1a1a1a;
+    margin:0;
+    background:#dff2c8;
+  }
+  .top-bar{ height:14px; background:#3fae1e; }
+  .page{ padding: 18px 34px 24px; }
+
+  /* ---------- Masthead ---------- */
+  .masthead{ display:flex; justify-content:space-between; align-items:flex-start; }
+  .doc-title{ font-family: Georgia, 'Times New Roman', serif; font-size:32pt; color:#1a1a1a; font-weight:400; }
+  .org-block{ text-align:right; }
+  .org-mark{ font-family: Georgia, serif; font-size:19pt; font-weight:800; color:#1a1a1a; letter-spacing:.02em; }
+  .org-mark .reg{ font-size:10pt; vertical-align: super; }
+  .org-name{ font-size:9.5pt; font-weight:700; margin-top:4px; }
+  .org-url{ font-size:9pt; }
+
+  .email-box{
+    border:1.5px solid #3fae1e;
+    border-radius:4px;
+    display:flex;
+    margin-top:10px;
+    overflow:hidden;
+  }
+  .email-box .cell{ flex:1; padding:6px 12px; font-size:9.3pt; }
+  .email-box .cell:first-child{ border-right:1.5px solid #3fae1e; }
+
+  .disclaimer{ font-size:9.1pt; line-height:1.5; margin: 12px 0 14px; }
+
+  /* ---------- Card / box ---------- */
+  .card{ border:1.5px solid #3fae1e; border-radius:4px; margin-bottom:14px; background:#f4faee; }
+  .card .row{ display:flex; border-bottom:1px solid #3fae1e; padding:5px 12px; }
+  .card .row:last-child{ border-bottom:none; }
+  .card .col{ flex:1; padding-right:14px; }
+  .card .col:last-child{ padding-right:0; }
+  .flabel{ font-size:8.5pt; color:#333; }
+  .fval{ font-weight:700; border-bottom:1px dotted #666; display:inline-block; min-width:70%; }
+  .sub{ font-size:7.6pt; color:#555; font-style:italic; }
+
+  /* ---------- Section titles ---------- */
+  .section-title{ font-family: Georgia, 'Times New Roman', serif; font-size:22pt; margin: 18px 0 2px; }
+  .section-title .instr{ font-family:Arial; font-size:9.3pt; font-style:italic; font-weight:400; margin-left:10px; }
+
+  /* ---------- Question rows ---------- */
+  .qhead{ display:flex; font-weight:700; font-size:8.8pt; padding: 2px 0; }
+  .qhead .sp{ flex:1; }
+  .qhead .chkhdr{ width:26px; text-align:center; }
+  .qrow{ display:flex; align-items:baseline; padding:2px 0; font-size:8.8pt; }
+  .qrow .qtext{ flex:1; }
+  .qrow .dots{ flex:0 0 auto; width:14px; }
+  .qtext .leader{ border-bottom:1px dotted #555; margin: 0 4px; }
+  .qrow .chk{ width:26px; text-align:center; }
+  .checkbox{
+    width:9px; height:9px; border:1px solid #000; display:inline-block; vertical-align:middle;
+  }
+  .two-col{ display:flex; gap:22px; }
+  .two-col > div{ flex:1; }
+  .note-bold{ font-weight:700; font-size:8.8pt; margin-top:6px; }
+
+  .fill-row{ display:flex; padding:5px 12px; border-bottom:1px solid #3fae1e; font-size:8.8pt; }
+  .fill-row:last-child{ border-bottom:none; }
+  .fill-row .flabel{ margin-right:6px; }
+  .fill-row .fval-line{ flex:1; border-bottom:1px dotted #666; font-weight:700; min-height:12px; }
+
+  /* ---------- Vitals grid ---------- */
+  .vitals-grid{ display:flex; flex-wrap:wrap; padding:8px 12px; }
+  .vitals-grid .v{ width:33%; margin-bottom:6px; font-size:9pt; }
+  .vitals-grid .v .flabel{ margin-right:4px; }
+
+  /* ---------- Tables ---------- */
+  table.datatable{ width:100%; border-collapse:collapse; }
+  table.datatable th{ background:#3fae1e; color:#fff; font-size:8.6pt; padding:4px 8px; text-align:left; }
+  table.datatable td{ padding:4px 8px; font-size:8.8pt; border-bottom:1px solid #cfe8bd; }
+
+  /* ---------- Signature ---------- */
+  .sig-wrap{ display:flex; gap:24px; margin-top:10px; }
+  .sig-col{ flex:1; }
+  .sig-line{ border-bottom:1px solid #333; height:26px; margin-bottom:4px; }
+
+  .footer{ font-size:7.8pt; color:#333; margin-top:16px; }
 </style>
 </head>
 <body>
-<div class="header">
-  <div>
-    <div class="hospital">{{ hospital }}</div>
-    <div style="font-size:9pt;color:#555;">{{ address.street }}, {{ address.city }}, {{ address.state }} {{ address.zip }}</div>
-    <div style="font-size:9pt;color:#555;">Tel: {{ phone }}</div>
+<div class="top-bar"></div>
+<div class="page">
+
+  <!-- ============ MASTHEAD ============ -->
+  <div class="masthead">
+    <div class="doc-title">Health History Form</div>
+    <div class="org-block">
+      <div class="org-mark">{{ hospital }}</div>
+      <div class="org-name">Medical Record Department</div>
+      <div class="org-url">Tel: {{ phone }}</div>
+    </div>
   </div>
-  <div>
-    <div class="bill-title">PATIENT STATEMENT</div>
-    <div class="bill-date">Statement Date: {{ statement_date }}</div>
-    <div class="bill-date">Due Date: {{ due_date }}</div>
-    <div class="bill-date">Account #: {{ account_number }}</div>
+
+  <div class="email-box">
+    <div class="cell"><span class="flabel">Date of Service:</span> <span class="fval">{{ dos }}</span></div>
+    <div class="cell"><span class="flabel">MRN:</span> <span class="fval">{{ mrn }}</span></div>
   </div>
-</div>
 
-<h2>Patient Information</h2>
-<div class="grid2">
-  <div><span class="label">Patient Name:</span> {{ patient_name }}</div>
-  <div><span class="label">Date of Birth:</span> {{ dob }}</div>
-  <div><span class="label">Service Date:</span> {{ service_date }}</div>
-  <div><span class="label">Insurance ID:</span> {{ insurance_id }}</div>
-  <div><span class="label">Insurer:</span> {{ insurer_name }}</div>
-  <div><span class="label">Claim Number:</span> {{ claim_number }}</div>
-</div>
+  <div class="disclaimer">
+    As required by law, our office adheres to written policies and procedures to protect the privacy of information
+    about you that we create, receive or maintain. Your answers are for our records only and will be kept
+    confidential subject to applicable laws. This information is vital to allow us to provide appropriate care for you.
+    This office does not use this information to discriminate.
+  </div>
 
-<h2>Itemized Charges</h2>
-<table>
-  <thead><tr><th>CPT Code</th><th>Description</th><th>Units</th><th style="text-align:right;">Charge</th></tr></thead>
-  {% for item in line_items %}
-  <tr>
-    <td>{{ item.cpt }}</td>
-    <td>{{ item.description }}</td>
-    <td style="text-align:center;">{{ item.units }}</td>
-    <td style="text-align:right;">${{ "%.2f"|format(item.charge) }}</td>
-  </tr>
-  {% endfor %}
-</table>
+  <!-- ============ PATIENT DEMOGRAPHICS ============ -->
+  <div class="card">
+    <div class="row">
+      <div class="col" style="flex:2;"><span class="flabel">Name:</span> <span class="fval">{{ patient_name }}</span><br><span class="sub">Last, First, Middle</span></div>
+      <div class="col"><span class="flabel">Phone:</span> <span class="fval">{{ phone }}</span><br><span class="sub">Include area code</span></div>
+      <div class="col"><span class="flabel">Gender:</span> <span class="fval">{{ gender }}</span></div>
+    </div>
+    <div class="row">
+      <div class="col" style="flex:2;"><span class="flabel">Address:</span> <span class="fval">{{ address.street }}</span><br><span class="sub">Mailing address</span></div>
+      <div class="col"><span class="flabel">City:</span> <span class="fval">{{ address.city }}</span></div>
+      <div class="col"><span class="flabel">State:</span> <span class="fval">{{ address.state }}</span> &nbsp; <span class="flabel">Zip:</span> <span class="fval">{{ address.zip }}</span></div>
+    </div>
+    <div class="row">
+      <div class="col"><span class="flabel">Date of Birth:</span> <span class="fval">{{ dob }}</span></div>
+      <div class="col"><span class="flabel">SS# / Patient ID:</span> <span class="fval">{{ mrn }}</span></div>
+      <div class="col"><span class="flabel">Insurer:</span> <span class="fval">{{ insurer_name }}</span></div>
+    </div>
+    <div class="row">
+      <div class="col"><span class="flabel">Insurance ID:</span> <span class="fval">{{ insurance_id }}</span></div>
+      <div class="col"><span class="flabel">Group Number:</span> <span class="fval">{{ group_number }}</span></div>
+      <div class="col"><span class="flabel">Date of Service:</span> <span class="fval">{{ dos }}</span></div>
+    </div>
+  </div>
 
-<div class="summary-box">
-  <div class="summary-row"><span>Total Charges:</span><span>${{ "%.2f"|format(total_amount) }}</span></div>
-  <div class="summary-row"><span>Insurance Adjustments:</span><span>-${{ "%.2f"|format(adjustments) }}</span></div>
-  <div class="summary-row"><span>Amount Paid:</span><span>-${{ "%.2f"|format(amount_paid) }}</span></div>
-  <div class="summary-row summary-total"><span>Balance Due:</span><span>${{ "%.2f"|format(balance) }}</span></div>
-</div>
+  <!-- ============ CHIEF COMPLAINT (styled like the TB-question alert box) ============ -->
+  <div class="card">
+    <div class="fill-row" style="border-bottom:1px solid #3fae1e;">
+      <span class="flabel" style="font-weight:700;">Chief Complaint — reason for today's visit:</span>
+    </div>
+    <div class="fill-row"><span class="fval-line">{{ chief_complaint }}</span></div>
+  </div>
 
-<div class="notice">
-  This is a statement of your account. Payment is due by {{ due_date }}. If you have questions, please contact our billing office.
-  This document is generated for testing purposes and contains synthetic data only.
+  <!-- ============ HISTORY OF PRESENT ILLNESS ============ -->
+  <div class="section-title">History of Present Illness <span class="instr">In the patient's own words and clinical observation</span></div>
+  <div class="card">
+    <div class="fill-row"><span class="fval-line">{{ hpi }}</span></div>
+  </div>
+
+  <!-- ============ VITAL SIGNS ============ -->
+  <div class="section-title">Vital Signs <span class="instr">Recorded at the start of this visit</span></div>
+  <div class="card">
+    <div class="vitals-grid">
+      <div class="v"><span class="flabel">BP:</span> {{ vitals.bp }} mmHg</div>
+      <div class="v"><span class="flabel">HR:</span> {{ vitals.hr }} bpm</div>
+      <div class="v"><span class="flabel">Temp:</span> {{ vitals.temp }}</div>
+      <div class="v"><span class="flabel">RR:</span> {{ vitals.rr }} /min</div>
+      <div class="v"><span class="flabel">SpO2:</span> {{ vitals.spo2 }}</div>
+      <div class="v"><span class="flabel">Weight:</span> {{ vitals.weight }}</div>
+    </div>
+  </div>
+
+  <!-- ============ PHYSICAL EXAMINATION ============ -->
+  <div class="section-title">Physical Examination <span class="instr">Findings from today's exam</span></div>
+  <div class="card">
+    <div class="fill-row"><span class="fval-line">{{ physical_exam }}</span></div>
+  </div>
+
+  <!-- ============ ASSESSMENT & DIAGNOSES ============ -->
+  <div class="section-title">Assessment &amp; Diagnoses <span class="instr">Please mark (X) — codes recorded by the attending clinician</span></div>
+  <div class="card">
+    <table class="datatable">
+      <thead><tr><th style="width:22%;">ICD-10 Code</th><th>Description</th></tr></thead>
+      <tbody>
+        {% for code, desc in diagnosis_codes %}
+        <tr><td>{{ code }}</td><td>{{ desc }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div class="fill-row" style="border-top:1px solid #3fae1e;"><span class="fval-line">{{ assessment }}</span></div>
+  </div>
+
+  <!-- ============ PLAN & PROCEDURES ============ -->
+  <div class="section-title">Plan <span class="instr">Treatment plan and next steps</span></div>
+  <div class="card">
+    <div class="fill-row"><span class="fval-line">{{ plan }}</span></div>
+    <table class="datatable">
+      <thead><tr><th style="width:22%;">CPT Code</th><th>Description</th></tr></thead>
+      <tbody>
+        {% for code in procedure_codes %}
+        <tr><td>{{ code }}</td><td>Procedure {{ code }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ============ SIGNATURE ============ -->
+  <div class="card" style="padding:12px 14px;">
+    <div class="sig-wrap">
+      <div class="sig-col">
+        <div class="flabel" style="font-weight:700;">Attending Physician</div>
+        <div class="sig-line"></div>
+        <div style="font-weight:700;">{{ physician_name }}</div>
+        <div class="sub">NPI: {{ npi }} &nbsp;|&nbsp; Specialty: {{ specialty }}</div>
+      </div>
+      <div class="sig-col">
+        <div class="flabel" style="font-weight:700;">Date Signed</div>
+        <div class="sig-line"></div>
+        <div style="font-weight:700;">{{ dos }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    &copy; {{ hospital }} &nbsp;|&nbsp; MRN: {{ mrn }} &nbsp;|&nbsp; Confidential Medical Record
+  </div>
+
 </div>
 </body>
 </html>

@@ -1,11 +1,13 @@
 ---
 name: discharge-summary
 description: >
-  Generate hospital discharge summary documents for IDP testing. Covers admission/discharge dates,
-  attending physician, DRG codes, medication reconciliation, and discharge instructions.
+  Generate a home-health/skilled-nursing discharge summary for IDP testing - Reason for
+  Discharge checkboxes (goals achieved / admitted to acute care / ECF-SNF / transferred /
+  refused care / expired / other), Summary of Care, Status of Discharge with visit counts,
+  Plan for Transition, and discharge instructions.
 metadata:
   owner: idp-test-team
-  version: "1"
+  version: "2"
   page-size: letter-portrait
   template: discharge_summary
 allowed-tools: generate_synthetic_data render_document_to_pdf validate_document_structure
@@ -13,20 +15,28 @@ allowed-tools: generate_synthetic_data render_document_to_pdf validate_document_
 # Discharge Summary Generation Skill
 
 ## Required Sections
-1. Patient Header — Name, DOB, MRN, Insurance ID
-2. Admission and Discharge Dates — both required
-3. Length of Stay and DRG Code
-4. Attending Physician — Name, Specialty, NPI
-5. Diagnosis on Admission — narrative + ICD-10
-6. Hospital Course — clinical narrative (4-6 sentences)
-7. Discharge Diagnoses — ICD-10 codes
-8. Condition at Discharge — Stable/Improved/Good
-9. Medications at Discharge — name, dose, frequency
-10. Discharge Instructions and Follow-Up
-11. Physician Signature
+1. Patient/Physician Header — Name, DOB, address, admission/discharge dates
+2. Reason for Discharge — exactly ONE of 7 checkboxes ticked (see `reason` below), with
+   comments only shown when the reason is not "goals achieved"
+3. Summary of Care — diagnosis, date of first visit, summary of care plan, goals achieved/not
+   achieved narrative, care-plan notes (ruled fill-in lines)
+4. Status of Discharge — assessment of patient condition, last visit made, number of visits
+5. Plan for Transition — ruled fill-in lines (blank when discharge was for goals-achieved or
+   expired, since there is nothing to transition)
+6. Summary of Patient Discharge Instructions
+7. Clinician Signature and Date
+
+## `reason` field
+A dict with exactly one of these keys `True` (rest `False`): `goals_achieved`,
+`admitted_acute_care`, `admitted_ecf_snf`, `transferred_other_service`, `refused_further_care`,
+`expired`, `other`. Plus `expired_date` (only meaningful when `expired` is true) and
+`other_detail` (only meaningful when `other` is true) - leave both `""` otherwise.
+`goals_achieved` should be the most common outcome by far (~55%); `expired` should be rare (~2%).
 
 ## Synthetic Data Rules
-- DRG code: 3-digit numeric (100-999)
-- Length of stay: 1-7 days
-- Medications: 2-4 at discharge
-- Discharge condition: one of Stable, Improved, Good
+- `date_of_first_visit` falls within a day of `date_of_admission`; `last_visit_made` falls
+  within ~2 days before `date_of_discharge`
+- `number_of_visits`: 3-14
+- Ruled-line list fields (`reason_comments`, `care_plan_notes`, `assessment_notes`,
+  `transition_plan`, `discharge_instruction_notes`) may be empty lists - the template pads
+  blank ruled lines itself, do not pad them yourself

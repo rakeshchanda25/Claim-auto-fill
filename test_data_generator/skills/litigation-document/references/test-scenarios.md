@@ -1,5 +1,9 @@
 # Litigation Document IDP Test Scenarios
 
-- `medical_malpractice`: Injury complaint filed in civil state court alleging provider negligence and liability, requesting special and general damages.
-- `slip_and_fall`: Premises liability complaint detailing slip and fall accident facts, injuries, and requested prayer for relief damages.
-- `rear_end_collision`: Auto accident negligence complaint filed against defendant driver detailing crash liability and prayer for relief damages.
+- `medical_malpractice`: Injury complaint alleging provider negligence and liability.
+- `slip_and_fall`: Premises liability complaint detailing a slip-and-fall accident.
+- `product_liability`: Complaint alleging a defective product caused injury.
+
+`causes_of_action` is drawn from a fixed pool independent of the chosen scenario (see SKILL.md) -
+do not assume `medical_malpractice` produces a "Medical Malpractice" cause of action; the pool
+does not contain that label.

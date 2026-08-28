@@ -1,6 +1,6 @@
 # Discharge Summary IDP Test Scenarios
 
-## Benchmark Test Cases
-- `hospital_admission`: Acute pneumonia or myocardial infarction episode with 4-day length of stay, DRG 194.
-- `surgery`: Laparoscopic cholecystectomy, 2-day length of stay, DRG 418.
-- `slip_and_fall`: Femur fracture repair surgical discharge, 5-day length of stay, DRG 470.
+- `hospital_admission`, `surgery`, `emergency_visit`, `outpatient_procedure`: all four currently
+  produce the SAME report structure with independently randomized content - the scenario name
+  affects only which ICD-10 code is drawn for `diagnosis`, not the document's structure. DRG
+  code and length-of-stay are computed (legacy fields) but not printed by the current template.

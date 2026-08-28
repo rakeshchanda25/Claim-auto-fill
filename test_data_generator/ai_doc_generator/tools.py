@@ -233,17 +233,33 @@ def _require_staged_doc_data() -> dict:
 def _overlay_values(dst: dict, src: dict, path: str = "", unmapped: list | None = None) -> list:
     """Overlays `src` onto `dst` in place, merging nested dicts key-by-key so a
     partial address overrides only the keys supplied. Returns the dotted paths
-    that had no counterpart in `dst` - reported rather than silently dropped,
-    since a mistyped key would otherwise leave the document quietly carrying
-    generated data where a caller-supplied value belonged."""
+    that had NO counterpart applied in `dst` - reported rather than silently
+    dropped/corrupted, since either a mistyped key or a shape mismatch would
+    otherwise leave the document quietly wrong.
+
+    Two rejection cases, both reported the same way:
+      - the key does not exist in `dst` at all (mistyped field name);
+      - `dst[key]` is a dict (a structured field like an address) but the
+        supplied value is a plain scalar. A caller reading unstructured text
+        off a reference document (recreate mode) naturally extracts an
+        address as one flat string - applying that would silently replace
+        the whole {street, city, state, zip} structure with a string, and
+        every template line reading a sub-key (producer_address.street, ...)
+        would then crash far from here with a confusing 'str has no
+        attribute' error. Rejecting it up front means the field just falls
+        back to its generated value instead - worse fidelity, not a crash.
+    """
     if unmapped is None:
         unmapped = []
     for key, value in (src or {}).items():
         full = f"{path}.{key}" if path else key
         if key not in dst:
             unmapped.append(full)
-        elif isinstance(value, dict) and isinstance(dst[key], dict):
-            _overlay_values(dst[key], value, full, unmapped)
+        elif isinstance(dst[key], dict):
+            if isinstance(value, dict):
+                _overlay_values(dst[key], value, full, unmapped)
+            else:
+                unmapped.append(full)
         else:
             dst[key] = value
     return unmapped
@@ -760,17 +776,17 @@ def validate_document_structure(doc_type: str, data: dict = None) -> dict:
     required_fields = {
         "medical-record": ["patient_name", "dob", "mrn", "dos", "diagnosis_codes", "physician_name"],
         "medical-bill": ["patient_name", "account_number", "service_date", "line_items", "total_amount"],
-        "discharge-summary": ["patient_name", "admission_date", "discharge_date", "attending_physician", "discharge_diagnosis"],
+        "discharge-summary": ["patient_name", "date_of_admission", "date_of_discharge", "diagnosis", "reason", "clinician_signature"],
         "acord-25": ["insured_name", "policy_number", "effective_date", "expiration_date", "insurer_name"],
         "cms-1500": ["patient_name", "insured_id", "dos_from", "diagnosis_codes", "procedure_codes", "provider_npi"],
         "ub-04": ["patient_name", "admission_date", "discharge_date", "revenue_codes", "total_charges"],
-        "eob-explanation": ["member_id", "claim_number", "service_date", "provider_name", "billed_amount", "allowed_amount", "paid_amount"],
+        "eob-explanation": ["subscriber_name", "claim_number", "provider_name", "claims", "totals"],
         "litigation-document": ["plaintiff_name", "defendant_name", "case_number", "court_name", "incident_date"],
         "demand-letter": ["claimant_name", "insurer_name", "claim_number", "incident_date", "demand_amount"],
         "police-report": ["incident_number", "incident_date", "location", "officer_name", "badge_number"],
-        "pharmacy-invoice": ["patient_name", "rx_number", "drug_name", "ndc_code", "quantity", "days_supply", "total_charge"],
+        "pharmacy-invoice": ["invoice_number", "invoice_date", "company_gstin", "customer_name", "items", "grand_total"],
         "property-loss-notice": ["insured_name", "policy_number", "loss_date", "loss_location", "cause_of_loss"],
-        "auto-accident-report": ["insured_name", "policy_number", "accident_date", "accident_location", "vehicle_info"],
+        "auto-accident-report": ["accident_date", "employee", "vehicle1", "vehicle2"],
     }
 
     resolved = resolve_doc_type(doc_type)
