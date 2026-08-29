@@ -1,0 +1,53 @@
+kind: agent
+name: doc-generator
+model:
+  name: "openai/qwen3.6:27b"
+  provider: litellm
+
+  other_args:
+    temperature: 0.3
+    timeout: 120
+
+workspace_backend: bubblewrap_process
+skill_sources:
+  - /skills
+skills_backend: filesystem
+
+policy:
+  enable_shell: true
+  tool_profile: shell_enabled
+  file:
+    max_file_size_mb: 20
+    allow_symlinks: false
+    protect_root: true
+  shell:
+    allowed_commands:
+      - python3
+      - weasyprint
+    network_enabled: false
+    timeout_seconds: 120
+    max_output_chars: 20000
+    enable_background_shell: false
+
+settings:
+  network_mode: none
+  inherit_host_env: false
+
+middleware:
+  tool_error_handler: true
+  guardrails:
+    input: true
+    output: true
+    tool: false
+    blocked_message: "Request blocked by IDP document generation policy."
+    prompt_injection_patterns:
+      patterns:
+        - "ignore\\s+(all\\s+)?previous\\s+instructions"
+        - "disregard\\s+(the\\s+)?system\\s+prompt"
+        - "bypass\\s+(safety|guardrails|policy)"
+    compliance_patterns:
+      patterns:
+        - "\\bfalsif(?:y|ied|ication)\\b"
+        - "\\bmisrepresent(?:ation)?\\b"
+        - "guaranteed\\s+(approval|coverage|payout)"
+        - "cannot\\s+be\\s+denied"

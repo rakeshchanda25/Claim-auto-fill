@@ -1,0 +1,16 @@
+fastapi
+uvicorn
+python-multipart
+PyMuPDF
+reportlab
+opencv-python-headless
+numpy
+andromeda>=1.1.14
+langchain-litellm
+weasyprint
+jinja2
+pypdf
+pdfplumber
+python-docx
+faker
+pillow

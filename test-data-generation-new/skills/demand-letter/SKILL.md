@@ -1,0 +1,43 @@
+---
+name: demand-letter
+description: >
+  Generate legal demand letters for insurance claims settlement. Covers personal injury,
+  auto accident, slip-and-fall, and medical malpractice pre-litigation demands.
+metadata:
+  owner: idp-test-team
+  version: "1"
+  page-size: letter-portrait
+  template: demand_letter
+allowed-tools: generate_synthetic_data render_document_to_pdf validate_document_structure
+---
+# Demand Letter Generation Skill
+
+## Required Sections
+1. Attorney/Firm Letterhead — Firm name, address, state bar number
+2. Date of Letter
+3. Recipient — Insurer name and Claims Department
+4. RE Line — "DEMAND FOR SETTLEMENT" with claimant vs. respondent, incident date
+5. Salutation and Opening Paragraph
+6. Facts Summary — 4-6 sentences describing the incident and injuries
+6a. Scenario Details Section — present for slip_and_fall/medical_malpractice/product_liability,
+   omitted for any other scenario — see "Scenario coverage" below
+7. Damages Breakdown — Special damages (medical/economic) and General damages (pain/suffering)
+8. Total Demand Amount — Prominently boxed
+9. Settlement Deadline — 30 days from letter date
+10. Closing and Attorney Signature
+
+## Financial Rules
+- Demand amount: $25,000 to $500,000
+- Special damages: 25% to 55% of demand (randomized per letter, not a fixed split)
+- General damages: remainder of demand after special damages
+- Settlement deadline: letter date + 30 days
+
+## Scenario coverage
+Only ever called with slip_and_fall/medical_malpractice/product_liability (the litigation
+packet's scenarios) - each gets its own facts section between the liability paragraph and the
+damages figures; see `references/test-scenarios.md`.
+
+## Tone and Format
+- Formal legal prose, Times New Roman 11pt
+- Double-spaced body paragraphs
+- State "reserves all rights" to litigate if demand rejected
