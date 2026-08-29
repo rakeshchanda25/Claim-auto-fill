@@ -59,3 +59,13 @@ the other vehicle front-end damage, not two independent random sentences.
 `estimated_damage`, `at_fault`, `bodily_injury`, etc. are still generated (kept for
 backward-compat) but the current template does not render any of them - see
 `references/field-glossary.md` for what the template actually uses.
+
+## Document composition
+Like every doc type, this template is decomposed into named Jinja macros ("components") in
+`renderers/templates/auto_accident_report.html`, assembled by `renderers/components.py`'s
+`COMPONENT_COMPOSITION["auto-accident-report"]`. Unlike police-report (which has two structurally
+different shapes depending on scenario), every registered scenario for this doc type resolves
+to the SAME component list - a real state accident-report form doesn't restructure by scenario in the real
+world, only its content does (see the scenario-specific data-generation notes above). The
+mechanism exists uniformly across every doc type for architectural consistency, even where
+it isn't exercised to produce different shapes.

@@ -55,7 +55,7 @@ def test_property_loss_notice_gets_a_distinct_section_per_scenario():
         assert data["scenario_facts_title"] == title
         assert len(data["scenario_facts"]) > 0
         seen_titles.add(title)
-        html = _env.get_template("property_loss_notice.html").render(**data)
+        html = _env.get_template("property_loss_notice.html").render(data=data, **data)
         assert title in html, f"{scenario}'s section heading never made it into the rendered HTML"
 
     assert len(seen_titles) == 4, "all four property scenarios must produce DIFFERENT sections"
@@ -66,7 +66,7 @@ def test_property_loss_notice_omits_the_section_for_an_unmapped_scenario():
     # must not render an empty heading with nothing under it.
     data = build_synthetic_data("property-loss-notice", "general")
     assert data["scenario_facts"] == []
-    html = _env.get_template("property_loss_notice.html").render(**data)
+    html = _env.get_template("property_loss_notice.html").render(data=data, **data)
     assert "Fire Details" not in html and "Water Details" not in html
 
 
@@ -218,7 +218,7 @@ def test_discharge_summary_summary_of_care_plan_is_scenario_specific():
     assert "antepartum" not in hospital["summary_of_care_plan"].lower()
     assert surgery["summary_of_care_plan"] != hospital["summary_of_care_plan"]
 
-    html = _env.get_template("discharge_summary.html").render(**surgery)
+    html = _env.get_template("discharge_summary.html").render(data=surgery, **surgery)
     assert "Antepartum assessment" not in html
 
 
@@ -259,7 +259,7 @@ def test_pharmacy_invoice_items_differ_by_scenario():
 def test_pharmacy_invoice_still_reconciles_for_every_scenario():
     for scenario in ("chronic_medication", "specialty_drug", "compounded_medication"):
         data = build_synthetic_data("pharmacy-invoice", scenario)
-        _env.get_template("pharmacy_invoice.html").render(**data)
+        _env.get_template("pharmacy_invoice.html").render(data=data, **data)
         subtotal = round(sum(i["taxable_value"] for i in data["items"]), 2)
         assert subtotal == data["subtotal_taxable_value"]
 
@@ -284,7 +284,7 @@ def test_auto_accident_report_gets_a_distinct_section_per_scenario():
         assert data["scenario_facts_title"] == title
         assert len(data["scenario_facts"]) > 0
         seen_titles.add(title)
-        html = _env.get_template("auto_accident_report.html").render(**data)
+        html = _env.get_template("auto_accident_report.html").render(data=data, **data)
         assert title.upper() in html, "auto_accident_report.html renders the tab heading via |upper"
     assert len(seen_titles) == 3
 
@@ -294,7 +294,7 @@ def test_demand_letter_gets_a_distinct_section_per_scenario():
         data = build_synthetic_data("demand-letter", scenario)
         assert data["scenario_facts_title"]
         assert len(data["scenario_facts"]) > 0
-        html = _env.get_template("demand_letter.html").render(**data)
+        html = _env.get_template("demand_letter.html").render(data=data, **data)
         assert data["scenario_facts_title"] in html
 
 
@@ -305,7 +305,7 @@ def test_eob_explanation_covers_both_litigation_and_pharmacy_scenario_names():
     ):
         data = build_synthetic_data("eob-explanation", scenario)
         assert data["scenario_facts_title"], f"{scenario} produced no facts section"
-        html = _env.get_template("eob_explanation.html").render(**data)
+        html = _env.get_template("eob_explanation.html").render(data=data, **data)
         assert data["scenario_facts_title"] in html
 
 
@@ -315,7 +315,7 @@ def test_police_report_also_covers_property_scenarios_it_serves_as_incident_repo
     # auto-accident packet - it must pick up _property_scenario_facts too.
     data = build_synthetic_data("police-report", "fire_damage")
     assert data["scenario_facts_title"] == "Fire Details"
-    html = _env.get_template("police_report.html").render(**data)
+    html = _env.get_template("police_report.html").render(data=data, **data)
     assert "Fire Details" in html
 
     # An auto scenario already has its own dedicated fields (collision_type
@@ -343,7 +343,7 @@ def test_medical_record_covers_every_cross_family_scenario_it_can_be_called_with
         assert data["scenario_facts_title"], f"{scenario} produced no facts section"
         facts_key = tuple(f["label"] for f in data["scenario_facts"])
         seen_facts.add((data["scenario_facts_title"], facts_key))
-        html = _env.get_template("medical_record.html").render(**data)
+        html = _env.get_template("medical_record.html").render(data=data, **data)
         assert data["scenario_facts_title"] in html
     assert len(seen_facts) == len(all_scenarios), "every scenario must produce distinct facts content"
 
@@ -355,7 +355,7 @@ def test_medical_bill_and_discharge_summary_and_ub04_all_wire_the_same_facts():
     ):
         data = build_synthetic_data(doc_type, "surgery")
         assert data["scenario_facts_title"] == "Surgical Details"
-        html = _env.get_template(template_file).render(**data)
+        html = _env.get_template(template_file).render(data=data, **data)
         assert "Surgical Details" in html or "SURGICAL DETAILS" in html
 
     # cms-1500 and ub-04 are fixed-layout federal forms (real box numbering) -

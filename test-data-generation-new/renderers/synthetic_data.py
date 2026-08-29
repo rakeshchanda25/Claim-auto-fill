@@ -3,6 +3,8 @@ import string
 from datetime import date, timedelta
 from faker import Faker
 
+from renderers.components import get_components
+
 _fake = Faker()
 
 _ICD10 = {
@@ -884,6 +886,12 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
         "policy_number": policy_num,
         "provider_npi": _npi(),
         "scenario": scenario,
+        # which named Jinja component macros this document assembles, and in what order -
+        # see renderers/components.py. Set once here for every doc type; a doc-type branch
+        # below may still add scenario-specific DATA a component needs (e.g. police-report's
+        # property_incident component), but the composition list itself always comes from
+        # the registry, not ad-hoc per-branch logic.
+        "components": get_components(doc_type, scenario),
     }
 
     if doc_type == "medical-record":

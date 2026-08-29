@@ -23,57 +23,83 @@
 </style>
 </head>
 <body>
-<div class="letterhead">
-  <div class="firm-name">{{ claimant_attorney }}</div>
-  <div class="firm-sub">{{ attorney_address.street }} | {{ attorney_address.city }}, {{ attorney_address.state }} {{ attorney_address.zip }}</div>
-  <div class="firm-sub">State Bar No.: {{ bar_number }}</div>
-</div>
 
-<div class="date-block">{{ letter_date }}</div>
+{% macro letterhead(data) %}
+<div class="letterhead">
+  <div class="firm-name">{{ data.claimant_attorney }}</div>
+  <div class="firm-sub">{{ data.attorney_address.street }} | {{ data.attorney_address.city }}, {{ data.attorney_address.state }} {{ data.attorney_address.zip }}</div>
+  <div class="firm-sub">State Bar No.: {{ data.bar_number }}</div>
+</div>
+{% endmacro %}
+
+{% macro date_recipient(data) %}
+<div class="date-block">{{ data.letter_date }}</div>
 
 <div class="recipient-block">
-  <strong>{{ insurer_name }}</strong><br>
+  <strong>{{ data.insurer_name }}</strong><br>
   Claims Department<br>
-  Re: Claim No. {{ claim_number }}
+  Re: Claim No. {{ data.claim_number }}
 </div>
+{% endmacro %}
 
+{% macro re_line(data) %}
 <div class="re-line">
-  RE: DEMAND FOR SETTLEMENT — {{ claimant_name }} v. [Respondent]<br>
-  Incident Date: {{ incident_date }}
+  RE: DEMAND FOR SETTLEMENT — {{ data.claimant_name }} v. [Respondent]<br>
+  Incident Date: {{ data.incident_date }}
 </div>
+{% endmacro %}
 
+{% macro representation_para(data) %}
 <p>Dear Claims Representative:</p>
 
-<p>This office represents {{ claimant_name }} (hereinafter "Claimant") in connection with the above-referenced matter. This letter constitutes a formal demand for settlement of all claims arising from the incident that occurred on {{ incident_date }}.</p>
+<p>This office represents {{ data.claimant_name }} (hereinafter "Claimant") in connection with the above-referenced matter. This letter constitutes a formal demand for settlement of all claims arising from the incident that occurred on {{ data.incident_date }}.</p>
+{% endmacro %}
 
-<p>{{ facts_summary }}</p>
+{% macro facts_summary_para(data) %}
+<p>{{ data.facts_summary }}</p>
 
 <p>As a direct and proximate result of the incident, our client has suffered significant damages including, but not limited to, medical expenses, lost wages, pain and suffering, and other economic and non-economic losses.</p>
+{% endmacro %}
 
-{% if scenario_facts %}
+{% macro scenario_details(data) %}
+{% if data.scenario_facts %}
 <div class="facts-block">
-  <div class="facts-title">{{ scenario_facts_title }}</div>
-  {% for fact in scenario_facts %}
+  <div class="facts-title">{{ data.scenario_facts_title }}</div>
+  {% for fact in data.scenario_facts %}
   <div class="fact-row"><span class="fact-label">{{ fact.label }}:</span> {{ fact.value }}</div>
   {% endfor %}
 </div>
 {% endif %}
+{% endmacro %}
 
-<p><strong>Special Damages (Medical Expenses &amp; Economic Loss):</strong> ${{ "%.2f"|format(special_damages) }}<br>
-<strong>General Damages (Pain &amp; Suffering):</strong> ${{ "%.2f"|format(general_damages) }}</p>
+{% macro damages_and_demand(data) %}
+<p><strong>Special Damages (Medical Expenses &amp; Economic Loss):</strong> ${{ "%.2f"|format(data.special_damages) }}<br>
+<strong>General Damages (Pain &amp; Suffering):</strong> ${{ "%.2f"|format(data.general_damages) }}</p>
 
-<div class="demand-amount">TOTAL SETTLEMENT DEMAND: ${{ "%.2f"|format(demand_amount) }}</div>
+<div class="demand-amount">TOTAL SETTLEMENT DEMAND: ${{ "%.2f"|format(data.demand_amount) }}</div>
 
-<p>This demand will remain open until <strong>{{ settlement_deadline }}</strong>. Failure to respond within this period will result in the commencement of litigation without further notice. We reserve all rights to seek additional damages, attorneys' fees, and costs at trial.</p>
+<p>This demand will remain open until <strong>{{ data.settlement_deadline }}</strong>. Failure to respond within this period will result in the commencement of litigation without further notice. We reserve all rights to seek additional damages, attorneys' fees, and costs at trial.</p>
+{% endmacro %}
 
+{% macro closing_signature(data) %}
 <p>Please direct all correspondence and settlement authority to this office at the address above.</p>
 
 <p>Sincerely,</p>
 
 <div class="sig-block">
   <div class="sig-line"></div>
-  <div>{{ claimant_attorney }}</div>
-  <div style="font-size:9pt;color:#555;">Bar No.: {{ bar_number }}</div>
+  <div>{{ data.claimant_attorney }}</div>
+  <div style="font-size:9pt;color:#555;">Bar No.: {{ data.bar_number }}</div>
 </div>
+{% endmacro %}
+
+{% set component_map = {
+  "letterhead": letterhead, "date_recipient": date_recipient, "re_line": re_line,
+  "representation_para": representation_para, "facts_summary_para": facts_summary_para,
+  "scenario_details": scenario_details, "damages_and_demand": damages_and_demand,
+  "closing_signature": closing_signature,
+} %}
+{% for c in components %}{{ component_map[c](data) }}{% endfor %}
+
 </body>
 </html>

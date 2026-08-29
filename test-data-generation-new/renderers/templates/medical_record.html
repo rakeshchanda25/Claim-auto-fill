@@ -25,88 +25,117 @@
 </style>
 </head>
 <body>
+
+{% macro header_bar(data) %}
 <div class="header-bar">
-  <div class="hospital">{{ hospital }}</div>
-  <div style="font-size: 9pt; color:#555;">Medical Record Department | Tel: {{ phone }}</div>
+  <div class="hospital">{{ data.hospital }}</div>
+  <div style="font-size: 9pt; color:#555;">Medical Record Department | Tel: {{ data.phone }}</div>
 </div>
 <h1>PATIENT MEDICAL RECORD</h1>
+{% endmacro %}
 
+{% macro patient_info(data) %}
 <h2>Patient Information</h2>
 <div class="grid2">
-  <div class="field"><span class="label">Patient Name:</span> <span class="value">{{ patient_name }}</span></div>
-  <div class="field"><span class="label">MRN:</span> <span class="value">{{ mrn }}</span></div>
-  <div class="field"><span class="label">Date of Birth:</span> <span class="value">{{ dob }}</span></div>
-  <div class="field"><span class="label">Gender:</span> <span class="value">{{ gender }}</span></div>
-  <div class="field"><span class="label">Insurance ID:</span> <span class="value">{{ insurance_id }}</span></div>
-  <div class="field"><span class="label">Group Number:</span> <span class="value">{{ group_number }}</span></div>
-  <div class="field"><span class="label">Date of Service:</span> <span class="value">{{ dos }}</span></div>
-  <div class="field"><span class="label">Insurer:</span> <span class="value">{{ insurer_name }}</span></div>
-  <div class="field"><span class="label">Address:</span> <span class="value">{{ address.street }}, {{ address.city }}, {{ address.state }} {{ address.zip }}</span></div>
-  <div class="field"><span class="label">Phone:</span> <span class="value">{{ phone }}</span></div>
+  <div class="field"><span class="label">Patient Name:</span> <span class="value">{{ data.patient_name }}</span></div>
+  <div class="field"><span class="label">MRN:</span> <span class="value">{{ data.mrn }}</span></div>
+  <div class="field"><span class="label">Date of Birth:</span> <span class="value">{{ data.dob }}</span></div>
+  <div class="field"><span class="label">Gender:</span> <span class="value">{{ data.gender }}</span></div>
+  <div class="field"><span class="label">Insurance ID:</span> <span class="value">{{ data.insurance_id }}</span></div>
+  <div class="field"><span class="label">Group Number:</span> <span class="value">{{ data.group_number }}</span></div>
+  <div class="field"><span class="label">Date of Service:</span> <span class="value">{{ data.dos }}</span></div>
+  <div class="field"><span class="label">Insurer:</span> <span class="value">{{ data.insurer_name }}</span></div>
+  <div class="field"><span class="label">Address:</span> <span class="value">{{ data.address.street }}, {{ data.address.city }}, {{ data.address.state }} {{ data.address.zip }}</span></div>
+  <div class="field"><span class="label">Phone:</span> <span class="value">{{ data.phone }}</span></div>
 </div>
+{% endmacro %}
 
+{% macro chief_complaint(data) %}
 <h2>Chief Complaint</h2>
-<p>{{ chief_complaint }}</p>
+<p>{{ data.chief_complaint }}</p>
+{% endmacro %}
 
+{% macro hpi(data) %}
 <h2>History of Present Illness</h2>
-<p>{{ hpi }}</p>
+<p>{{ data.hpi }}</p>
+{% endmacro %}
 
+{% macro vitals(data) %}
 <h2>Vital Signs</h2>
 <div class="vitals-box">
   <div class="grid3">
-    <div class="field"><span class="label">BP:</span> {{ vitals.bp }} mmHg</div>
-    <div class="field"><span class="label">HR:</span> {{ vitals.hr }} bpm</div>
-    <div class="field"><span class="label">Temp:</span> {{ vitals.temp }}</div>
-    <div class="field"><span class="label">RR:</span> {{ vitals.rr }} /min</div>
-    <div class="field"><span class="label">SpO2:</span> {{ vitals.spo2 }}</div>
-    <div class="field"><span class="label">Weight:</span> {{ vitals.weight }}</div>
+    <div class="field"><span class="label">BP:</span> {{ data.vitals.bp }} mmHg</div>
+    <div class="field"><span class="label">HR:</span> {{ data.vitals.hr }} bpm</div>
+    <div class="field"><span class="label">Temp:</span> {{ data.vitals.temp }}</div>
+    <div class="field"><span class="label">RR:</span> {{ data.vitals.rr }} /min</div>
+    <div class="field"><span class="label">SpO2:</span> {{ data.vitals.spo2 }}</div>
+    <div class="field"><span class="label">Weight:</span> {{ data.vitals.weight }}</div>
   </div>
 </div>
+{% endmacro %}
 
+{% macro physical_exam(data) %}
 <h2>Physical Examination</h2>
-<p>{{ physical_exam }}</p>
+<p>{{ data.physical_exam }}</p>
+{% endmacro %}
 
+{% macro assessment(data) %}
 <h2>Assessment &amp; Diagnoses</h2>
 <table>
   <thead><tr><th>ICD-10 Code</th><th>Description</th></tr></thead>
-  {% for code, desc in diagnosis_codes %}
+  {% for code, desc in data.diagnosis_codes %}
   <tr><td>{{ code }}</td><td>{{ desc }}</td></tr>
   {% endfor %}
 </table>
-<p style="margin-top:8px;">{{ assessment }}</p>
+<p style="margin-top:8px;">{{ data.assessment }}</p>
+{% endmacro %}
 
+{% macro plan(data) %}
 <h2>Plan</h2>
-<p>{{ plan }}</p>
+<p>{{ data.plan }}</p>
 <table style="margin-top:8px;">
   <thead><tr><th>CPT Code</th><th>Description</th></tr></thead>
-  {% for code in procedure_codes %}
+  {% for code in data.procedure_codes %}
   <tr><td>{{ code }}</td><td>Procedure {{ code }}</td></tr>
   {% endfor %}
 </table>
+{% endmacro %}
 
-{% if scenario_facts %}
-<h2>{{ scenario_facts_title }}</h2>
+{% macro scenario_details(data) %}
+{% if data.scenario_facts %}
+<h2>{{ data.scenario_facts_title }}</h2>
 <div class="grid2">
-  {% for fact in scenario_facts %}
+  {% for fact in data.scenario_facts %}
   <div class="field"><span class="label">{{ fact.label }}:</span> <span class="value">{{ fact.value }}</span></div>
   {% endfor %}
 </div>
 {% endif %}
+{% endmacro %}
 
+{% macro signature(data) %}
 <div class="sig-block">
   <div class="grid2">
     <div>
       <div class="label">Attending Physician</div>
       <div class="sig-line"></div>
-      <div>{{ physician_name }}</div>
-      <div style="font-size:9pt; color:#555;">NPI: {{ npi }} | Specialty: {{ specialty }}</div>
+      <div>{{ data.physician_name }}</div>
+      <div style="font-size:9pt; color:#555;">NPI: {{ data.npi }} | Specialty: {{ data.specialty }}</div>
     </div>
     <div>
       <div class="label">Date Signed</div>
       <div class="sig-line"></div>
-      <div>{{ dos }}</div>
+      <div>{{ data.dos }}</div>
     </div>
   </div>
 </div>
+{% endmacro %}
+
+{% set component_map = {
+  "header_bar": header_bar, "patient_info": patient_info, "chief_complaint": chief_complaint,
+  "hpi": hpi, "vitals": vitals, "physical_exam": physical_exam, "assessment": assessment,
+  "plan": plan, "scenario_details": scenario_details, "signature": signature,
+} %}
+{% for c in components %}{{ component_map[c](data) }}{% endfor %}
+
 </body>
 </html>

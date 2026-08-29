@@ -58,3 +58,13 @@ vs-retention, WC officer-excluded Y/N, WC statutory-vs-other.
 - Insured and certificate holder should be different company names (Faker.company)
 - Policy numbers are prefixed by coverage type: GL/CA/UMB/WC + 8 digits
 - All four coverage lines share the same effective/expiration dates on a given certificate
+
+## Document composition
+Like every doc type, this template is decomposed into named Jinja macros ("components") in
+`renderers/templates/acord_25.html`, assembled by `renderers/components.py`'s
+`COMPONENT_COMPOSITION["acord-25"]`. Unlike police-report (which has two structurally
+different shapes depending on scenario), every registered scenario for this doc type resolves
+to the SAME component list - a real certificate of insurance doesn't restructure by scenario in the real
+world, only its content does (see the scenario-specific data-generation notes above). The
+mechanism exists uniformly across every doc type for architectural consistency, even where
+it isn't exercised to produce different shapes.

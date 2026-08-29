@@ -43,3 +43,13 @@ A dict with exactly one of these keys `True` (rest `False`): `goals_achieved`,
 - Ruled-line list fields (`reason_comments`, `care_plan_notes`, `assessment_notes`,
   `transition_plan`, `discharge_instruction_notes`) may be empty lists - the template pads
   blank ruled lines itself, do not pad them yourself
+
+## Document composition
+Like every doc type, this template is decomposed into named Jinja macros ("components") in
+`renderers/templates/discharge_summary.html`, assembled by `renderers/components.py`'s
+`COMPONENT_COMPOSITION["discharge-summary"]`. Unlike police-report (which has two structurally
+different shapes depending on scenario), every registered scenario for this doc type resolves
+to the SAME component list - a real home-health discharge summary doesn't restructure by scenario in the real
+world, only its content does (see the scenario-specific data-generation notes above). The
+mechanism exists uniformly across every doc type for architectural consistency, even where
+it isn't exercised to produce different shapes.

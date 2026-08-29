@@ -35,3 +35,13 @@ allowed-tools: generate_synthetic_data render_document_to_pdf validate_document_
 ## Synthetic Data Rules
 - Account number: ACC + 8 digits
 - Charges per CPT: $150 to $2,500
+
+## Document composition
+Like every doc type, this template is decomposed into named Jinja macros ("components") in
+`renderers/templates/medical_bill.html`, assembled by `renderers/components.py`'s
+`COMPONENT_COMPOSITION["medical-bill"]`. Unlike police-report (which has two structurally
+different shapes depending on scenario), every registered scenario for this doc type resolves
+to the SAME component list - a real superbill doesn't restructure by scenario in the real
+world, only its content does (see the scenario-specific data-generation notes above). The
+mechanism exists uniformly across every doc type for architectural consistency, even where
+it isn't exercised to produce different shapes.

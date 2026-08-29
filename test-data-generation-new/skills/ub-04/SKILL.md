@@ -54,3 +54,13 @@ allowed-tools: generate_synthetic_data render_document_to_pdf validate_document_
 - `federal_tax_id` is a real 9-digit number, separate from `provider_npi` - do not conflate them.
 - FL80 (Remarks) is populated with a one-line scenario-facts summary, since UB-04's fixed box
   layout can't grow a new section - see references/test-scenarios.md.
+
+## Document composition
+Like every doc type, this template is decomposed into named Jinja macros ("components") in
+`renderers/templates/ub_04.html`, assembled by `renderers/components.py`'s
+`COMPONENT_COMPOSITION["ub-04"]`. Unlike police-report (which has two structurally
+different shapes depending on scenario), every registered scenario for this doc type resolves
+to the SAME component list - a real federal institutional claim form doesn't restructure by scenario in the real
+world, only its content does (see the scenario-specific data-generation notes above). The
+mechanism exists uniformly across every doc type for architectural consistency, even where
+it isn't exercised to produce different shapes.

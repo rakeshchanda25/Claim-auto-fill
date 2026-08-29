@@ -43,3 +43,13 @@ scenario-specific mechanism rather than generic Faker prose.
 - Formal legal prose, Times New Roman 11pt
 - Double-spaced body paragraphs
 - State "reserves all rights" to litigate if demand rejected
+
+## Document composition
+Like every doc type, this template is decomposed into named Jinja macros ("components") in
+`renderers/templates/demand_letter.html`, assembled by `renderers/components.py`'s
+`COMPONENT_COMPOSITION["demand-letter"]`. Unlike police-report (which has two structurally
+different shapes depending on scenario), every registered scenario for this doc type resolves
+to the SAME component list - a real attorney demand letter doesn't restructure by scenario in the real
+world, only its content does (see the scenario-specific data-generation notes above). The
+mechanism exists uniformly across every doc type for architectural consistency, even where
+it isn't exercised to produce different shapes.

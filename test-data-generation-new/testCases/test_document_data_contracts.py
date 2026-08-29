@@ -61,7 +61,7 @@ def test_synthetic_data_supplies_every_field_the_template_uses(template_name):
     silently leaving a blank in the PDF."""
     doc_type = _doc_type_for(template_name)
     data = build_synthetic_data(doc_type, "general")
-    _env.get_template(f"{template_name}.html").render(**data)
+    _env.get_template(f"{template_name}.html").render(data=data, **data)
 
 
 @pytest.mark.parametrize("template_name", TEMPLATE_NAMES)
@@ -73,7 +73,7 @@ def test_templates_render_for_every_scenario(template_name):
     template = _env.get_template(f"{template_name}.html")
     for scenario in SCENARIO_REGISTRY:
         data = build_synthetic_data(doc_type, scenario)
-        template.render(**data)
+        template.render(data=data, **data)
 
 
 @pytest.fixture

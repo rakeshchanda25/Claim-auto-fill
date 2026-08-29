@@ -62,3 +62,13 @@ scenario-driven.
 `patient_responsibility`, `deductible_applied`, `copay`, `coinsurance`, `denial_reason` are
 still generated (kept for backward-compat, an earlier single-ratio version of this document
 used them) but the current template does not render any of them.
+
+## Document composition
+Like every doc type, this template is decomposed into named Jinja macros ("components") in
+`renderers/templates/eob_explanation.html`, assembled by `renderers/components.py`'s
+`COMPONENT_COMPOSITION["eob-explanation"]`. Unlike police-report (which has two structurally
+different shapes depending on scenario), every registered scenario for this doc type resolves
+to the SAME component list - a real explanation of benefits doesn't restructure by scenario in the real
+world, only its content does (see the scenario-specific data-generation notes above). The
+mechanism exists uniformly across every doc type for architectural consistency, even where
+it isn't exercised to produce different shapes.

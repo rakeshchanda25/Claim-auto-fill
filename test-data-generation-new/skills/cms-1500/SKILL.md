@@ -41,3 +41,13 @@ allowed-tools: generate_synthetic_data render_document_to_pdf validate_document_
 - Keep dates in a sensible order: date of illness ≤ date of service ≤ signature date.
 - Box 19 (Additional Claim Info) is populated with a one-line scenario-facts summary, since
   CMS-1500's fixed box layout can't grow a new section - see references/test-scenarios.md.
+
+## Document composition
+Like every doc type, this template is decomposed into named Jinja macros ("components") in
+`renderers/templates/cms_1500.html`, assembled by `renderers/components.py`'s
+`COMPONENT_COMPOSITION["cms-1500"]`. Unlike police-report (which has two structurally
+different shapes depending on scenario), every registered scenario for this doc type resolves
+to the SAME component list - a real federal claim form doesn't restructure by scenario in the real
+world, only its content does (see the scenario-specific data-generation notes above). The
+mechanism exists uniformly across every doc type for architectural consistency, even where
+it isn't exercised to produce different shapes.
