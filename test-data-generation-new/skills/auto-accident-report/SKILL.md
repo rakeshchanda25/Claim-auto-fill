@@ -50,6 +50,10 @@ only ones this doc type is ever called with) additionally renders a dedicated "D
 before the footer note (`scenario_facts_title` + `scenario_facts`, from `_auto_scenario_facts()`
 in synthetic_data.py); see `references/test-scenarios.md`.
 
+`vehicle1.damage_description`/`vehicle2.damage_description` (`_vehicle_damage_descriptions()`)
+match the collision type - e.g. rear_end_collision gives the state vehicle rear-end damage and
+the other vehicle front-end damage, not two independent random sentences.
+
 ## Legacy fields
 `insured_name`, `vehicle_info`, `driver_name`, `other_vehicle`, `other_driver_name`,
 `estimated_damage`, `at_fault`, `bodily_injury`, etc. are still generated (kept for

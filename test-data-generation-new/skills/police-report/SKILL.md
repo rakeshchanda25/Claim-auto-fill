@@ -49,3 +49,10 @@ allowed-tools: generate_synthetic_data render_document_to_pdf validate_document_
 see `references/test-scenarios.md` for exactly what each of the 3 registered scenarios sets.
 `hit_and_run` is still randomized even for the `hit_and_run` scenario (~85% likely, not
 forced) - check the field itself rather than assuming.
+
+`narrative`/`narrative_paragraphs`/witness `statement` are also scenario-driven
+(`_police_narrative()`/`_witness_statement()` in synthetic_data.py) - they recount the actual
+mechanism (e.g. "struck the rear of..." for rear_end_collision, "fled the scene" for
+hit_and_run) using the report's own parties/collision_type/primary_factor, not generic
+Faker prose. When serving as the property-claim packet's Incident Report (fire_damage/
+water_damage/theft/wind_damage), the narrative instead recounts the property_facts section.

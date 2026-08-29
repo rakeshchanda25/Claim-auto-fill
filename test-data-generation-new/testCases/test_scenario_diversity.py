@@ -91,6 +91,101 @@ def test_police_report_collision_type_matches_its_scenario():
         assert data["collision_type"] == "Rear-end"
 
 
+def test_police_report_hit_and_run_collision_type_is_never_single_vehicle():
+    # A hit-and-run necessarily involves a second vehicle that fled - a
+    # "Single Vehicle" collision_type contradicts hit_and_run="Yes" and made
+    # the narrative literally read "Two-vehicle single vehicle collision".
+    for _ in range(_TRIALS):
+        data = build_synthetic_data("police-report", "hit_and_run")
+        assert data["collision_type"] != "Single Vehicle"
+        assert "single vehicle" not in data["narrative"].lower()
+
+
+def test_police_report_narrative_is_scenario_specific_not_generic_filler():
+    # narrative/narrative_paragraphs used to be pure Faker Lorem-Ipsum-style
+    # text regardless of scenario - assert the narrative actually names the
+    # parties and mechanism already generated for this report, and that two
+    # different scenarios produce genuinely different prose.
+    rear_end = build_synthetic_data("police-report", "rear_end_collision")
+    assert any(rear_end["parties_involved"][1]["name"] in p for p in rear_end["narrative_paragraphs"])
+    assert "struck the rear" in rear_end["narrative_paragraphs"][0]
+
+    hit_and_run = build_synthetic_data("police-report", "hit_and_run")
+    assert "fled the scene" in hit_and_run["narrative_paragraphs"][0]
+
+    intersection = build_synthetic_data("police-report", "intersection_accident")
+    assert "intersection" in intersection["narrative_paragraphs"][0].lower()
+
+    assert rear_end["narrative"] != hit_and_run["narrative"] != intersection["narrative"]
+
+
+def test_litigation_document_facts_narrative_matches_the_anchored_cause():
+    # facts/general_allegations used to be generic Faker paragraphs unrelated
+    # to causes_of_action even though causes_of_action was already anchored.
+    slip = build_synthetic_data("litigation-document", "slip_and_fall")
+    assert "slipped and fell" in slip["facts"]
+    assert "premises" in slip["general_allegations"][0].lower()
+
+    malpractice = build_synthetic_data("litigation-document", "medical_malpractice")
+    assert "standard of care" in malpractice["facts"]
+
+    product = build_synthetic_data("litigation-document", "product_liability")
+    assert "defect" in product["facts"]
+
+    assert slip["facts"] != malpractice["facts"] != product["facts"]
+
+
+def test_demand_letter_facts_summary_matches_its_scenario():
+    slip = build_synthetic_data("demand-letter", "slip_and_fall")
+    assert "slipped and fell" in slip["facts_summary"]
+    product = build_synthetic_data("demand-letter", "product_liability")
+    assert "defect" in product["facts_summary"]
+    assert slip["facts_summary"] != product["facts_summary"]
+
+
+def test_auto_accident_report_damage_descriptions_match_collision_type():
+    rear_end = build_synthetic_data("auto-accident-report", "rear_end_collision")
+    assert "rear" in rear_end["vehicle1"]["damage_description"].lower()
+    assert "front" in rear_end["vehicle2"]["damage_description"].lower()
+
+
+def test_medical_record_clinical_note_text_is_scenario_specific_not_generic_filler():
+    # chief_complaint/hpi/physical_exam/plan used to be pure Faker Lorem-Ipsum-style text
+    # regardless of scenario, unlike scenario_facts (a separate section) which already
+    # varied. Assert the actual clinical narrative differs and names the scenario mechanism.
+    surgery = build_synthetic_data("medical-record", "surgery")
+    assert "surgical" in surgery["hpi"].lower()
+    assert surgery["diagnosis_codes"][0][1] in surgery["hpi"]
+
+    slip = build_synthetic_data("medical-record", "slip_and_fall")
+    assert "fall" in slip["hpi"].lower()
+
+    chronic = build_synthetic_data("medical-record", "chronic_medication")
+    assert "chronic" in chronic["hpi"].lower()
+
+    assert surgery["hpi"] != slip["hpi"] != chronic["hpi"]
+    # general/unmatched scenario still gets real prose, not blank or crashing
+    general = build_synthetic_data("medical-record", "general")
+    assert general["hpi"] and "Patient reports" in general["hpi"]
+
+
+def test_discharge_summary_summary_of_care_plan_is_scenario_specific():
+    # Before this fix, synthetic_data.py never set summary_of_care_plan/
+    # goals_achieved_summary at all - discharge_summary.html's own Jinja
+    # `| default(...)` fallback then printed the SAME hardcoded pregnancy/
+    # antepartum boilerplate on every discharge summary regardless of scenario.
+    surgery = build_synthetic_data("discharge-summary", "surgery")
+    assert "surgical" in surgery["summary_of_care_plan"].lower()
+    assert "antepartum" not in surgery["summary_of_care_plan"].lower()
+
+    hospital = build_synthetic_data("discharge-summary", "hospital_admission")
+    assert "antepartum" not in hospital["summary_of_care_plan"].lower()
+    assert surgery["summary_of_care_plan"] != hospital["summary_of_care_plan"]
+
+    html = _env.get_template("discharge_summary.html").render(**surgery)
+    assert "Antepartum assessment" not in html
+
+
 def test_litigation_document_cause_of_action_always_matches_its_scenario():
     anchors = {
         "slip_and_fall": "Premises Liability",

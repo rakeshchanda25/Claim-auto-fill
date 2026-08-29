@@ -51,3 +51,11 @@ samples 2-3 causes with no anchor.
 
 ## Prayer Amount
 - $50,000 to $1,000,000
+
+## Facts / General Allegations narrative
+`facts` and `general_allegations` (`_litigation_narrative()` in synthetic_data.py) recount the
+actual anchored cause of action - e.g. slip_and_fall describes a hazardous walking surface,
+medical_malpractice describes a deviation from the standard of care, product_liability
+describes a design/manufacturing defect - rather than generic Faker prose unrelated to
+`causes_of_action`. `letter_reference` on the cover letter also names the scenario and
+incident date.

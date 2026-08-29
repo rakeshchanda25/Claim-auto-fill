@@ -35,7 +35,9 @@ allowed-tools: generate_synthetic_data render_document_to_pdf validate_document_
 ## Scenario coverage
 Only ever called with slip_and_fall/medical_malpractice/product_liability (the litigation
 packet's scenarios) - each gets its own facts section between the liability paragraph and the
-damages figures; see `references/test-scenarios.md`.
+damages figures; see `references/test-scenarios.md`. `facts_summary` (the opening narrative
+paragraph) reuses litigation-document's `_litigation_narrative()`, so it recounts the same
+scenario-specific mechanism rather than generic Faker prose.
 
 ## Tone and Format
 - Formal legal prose, Times New Roman 11pt

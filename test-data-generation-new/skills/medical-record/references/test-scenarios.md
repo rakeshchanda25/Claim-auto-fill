@@ -35,3 +35,12 @@ with different fields underneath, since a chart note groups them under the same 
 heading. This same function/section is also wired into medical-bill, discharge-summary, and
 (via the fixed-form free-text boxes instead of a new section) cms-1500 and ub-04 - see those
 skills' own test-scenarios.md.
+
+`chief_complaint`/`hpi`/`physical_exam`/`plan` (the actual clinical-note prose, distinct from
+the scenario_facts section above) are likewise scenario-driven, from `_CLINICAL_NOTE_TEXT` in
+`synthetic_data.py`'s `_clinical_note_fields(scenario, icd_codes)` - all 13 scenario names get
+real prose naming the mechanism/reason for the visit and referencing the actual diagnosis code
+description generated for this document (not the same text for every scenario, and not Faker
+Lorem-Ipsum filler). The benchmark examples above are illustrative targets for what a scenario's
+content should evoke, not a literal string match against the generated text. `assessment` is
+always the diagnosis code's description directly.
