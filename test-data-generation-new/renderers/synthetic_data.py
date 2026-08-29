@@ -713,7 +713,29 @@ def _police_narrative(scenario, incident_date, location, weather, road_cond, spe
         f"On {incident_date}, officers were dispatched to {location} in reference to a motor vehicle collision.",
         f"Officers responded to a reported traffic collision at {location} on {incident_date}.",
     ])
-    if scenario == "rear_end_collision":
+    # hit_and_run_flag is checked FIRST, before the scenario branches - it is only
+    # ~85% likely even for scenario == "hit_and_run" (see the police-report branch
+    # above), so branching on the scenario string alone would have this paragraph
+    # claim a fleeing vehicle even on the ~15% of "hit_and_run"-scenario reports
+    # where the flag actually landed False (and vice versa: any other scenario's
+    # 5% base rate can still produce a real hit-and-run that needs this account,
+    # not the generic fallback). Matches the same fix applied to collision_type/
+    # primary_factor above - both are keyed off the actual outcome, not the
+    # requested scenario name.
+    if hit_and_run_flag:
+        p1 = p1_open + (
+            f" The {party1['vehicle_year']} {party1['vehicle_make']} {party1['vehicle_model']} (Driver 1, "
+            f"{party1['name']}) was struck by a second vehicle, subsequently identified as the "
+            f"{party2['vehicle_year']} {party2['vehicle_make']} {party2['vehicle_model']} registered to "
+            f"{party2['registered_owner']}, whose operator fled the scene prior to officer arrival without "
+            f"exchanging information."
+        )
+        p2 = (
+            f"A witness canvass and vehicle registration check subsequently identified the fleeing vehicle "
+            f"and its registered owner, {party2['name']}, who was later located and identified as Driver 2 "
+            f"for purposes of this report. Primary contributing factor: {primary_factor.lower()}."
+        )
+    elif scenario == "rear_end_collision":
         p1 = p1_open + (
             f" Preliminary investigation determined that {party2['vehicle_year']} {party2['vehicle_make']} "
             f"{party2['vehicle_model']} (Driver 2, {party2['name']}) struck the rear of the "
@@ -740,19 +762,6 @@ def _police_narrative(scenario, incident_date, location, weather, road_cond, spe
             f"Investigation determined the primary contributing factor to be {primary_factor.lower()} on "
             f"the part of Driver 2. Both vehicles sustained damage consistent with an intersection impact; "
             f"see Section 4/5 for vehicle-specific damage detail."
-        )
-    elif scenario == "hit_and_run":
-        p1 = p1_open + (
-            f" The {party1['vehicle_year']} {party1['vehicle_make']} {party1['vehicle_model']} (Driver 1, "
-            f"{party1['name']}) was struck by a second vehicle, subsequently identified as the "
-            f"{party2['vehicle_year']} {party2['vehicle_make']} {party2['vehicle_model']} registered to "
-            f"{party2['registered_owner']}, whose operator fled the scene prior to officer arrival without "
-            f"exchanging information."
-        )
-        p2 = (
-            f"A witness canvass and vehicle registration check subsequently identified the fleeing vehicle "
-            f"and its registered owner, {party2['name']}, who was later located and identified as Driver 2 "
-            f"for purposes of this report. Primary contributing factor: {primary_factor.lower()}."
         )
     elif property_facts:
         fact_str = "; ".join(f"{f['label'].lower()}: {f['value']}" for f in property_facts if f["value"])
@@ -1293,9 +1302,16 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
     elif doc_type == "police-report":
         report_city = _fake.city()
         report_state = random.choice(_STATES)
-        dispatch_t = f"{random.randint(6,22):02d}:{random.randint(0,59):02d}"
-        arrival_t = f"{random.randint(6,22):02d}:{random.randint(0,59):02d}"
-        cleared_t = f"{random.randint(6,22):02d}:{random.randint(0,59):02d}"
+        # dispatch/arrival/cleared used to be 3 independently random times with no
+        # ordering guarantee, so a report could show arrival before dispatch, or a
+        # multi-hour dispatch-to-arrival gap for a routine traffic stop. Chained as
+        # dispatch -> +minutes -> arrival -> +minutes -> cleared instead.
+        dispatch_minutes = random.randint(6 * 60, 22 * 60)
+        arrival_minutes = dispatch_minutes + random.randint(4, 25)
+        cleared_minutes = arrival_minutes + random.randint(20, 90)
+        dispatch_t = f"{dispatch_minutes // 60:02d}:{dispatch_minutes % 60:02d}"
+        arrival_t = f"{arrival_minutes // 60:02d}:{arrival_minutes % 60:02d}"
+        cleared_t = f"{cleared_minutes // 60:02d}:{cleared_minutes % 60:02d}"
         # collision_type/hit_and_run/primary_factor used to be independently
         # random regardless of which scenario was requested - a
         # "hit_and_run"-scenario report was no more likely to actually BE a
@@ -1304,22 +1320,30 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
         # above for the same principle applied to a doc type that had no
         # scenario-varying field to correlate at all.
         hit_and_run_flag = random.random() < (0.85 if scenario == "hit_and_run" else 0.05)
-        collision_type = {
-            "rear_end_collision": "Rear-end",
-            "intersection_accident": random.choice(["Angle", "Head-on"]),
-            # a hit-and-run necessarily involves a second vehicle that fled -
-            # "Single Vehicle" is a contradiction in terms for this scenario,
-            # so it's excluded from the pool here (unlike the unscoped fallback).
-            "hit_and_run": random.choice(["Rear-end", "Sideswipe", "Angle"]),
-        }.get(scenario, random.choice(["Rear-end", "Sideswipe", "Head-on", "Angle", "Single Vehicle"]))
-        primary_factor = {
-            "rear_end_collision": "Following too closely",
-            "intersection_accident": "Failure to yield right of way",
-            "hit_and_run": random.choice(["Unsafe speed for conditions", "Driver inattention"]),
-        }.get(scenario, random.choice([
-            "Unsafe speed for conditions", "Following too closely", "Failure to yield right of way",
-            "Improper turn", "Driver inattention",
-        ]))
+        # collision_type/primary_factor MUST be branched on hit_and_run_flag first, not on
+        # scenario - hit_and_run_flag can land True by its 5% base rate for ANY scenario
+        # string (including one totally unrelated to police-report, e.g. a caller passing
+        # "surgery"), and when that happens collision_type must still never be "Single
+        # Vehicle" (a fleeing second vehicle contradicts "single vehicle" by definition).
+        # Branching on scenario alone (the previous approach) only closed this hole for the
+        # literal "hit_and_run" scenario name and left it open for every other one - this is
+        # what produced a real report with COLLISION TYPE: Single Vehicle and HIT & RUN: Yes
+        # side by side.
+        if hit_and_run_flag:
+            collision_type = random.choice(["Rear-end", "Sideswipe", "Angle"])
+            primary_factor = random.choice(["Unsafe speed for conditions", "Driver inattention"])
+        elif scenario == "rear_end_collision":
+            collision_type = "Rear-end"
+            primary_factor = "Following too closely"
+        elif scenario == "intersection_accident":
+            collision_type = random.choice(["Angle", "Head-on"])
+            primary_factor = "Failure to yield right of way"
+        else:
+            collision_type = random.choice(["Rear-end", "Sideswipe", "Head-on", "Angle", "Single Vehicle"])
+            primary_factor = random.choice([
+                "Unsafe speed for conditions", "Following too closely", "Failure to yield right of way",
+                "Improper turn", "Driver inattention",
+            ])
         cited = True if hit_and_run_flag else random.random() < 0.6
         # police-report also serves as the "Incident Report" in the property-claim
         # packet (fire_damage/water_damage/theft/wind_damage) - reuse the same

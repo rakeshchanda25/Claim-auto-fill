@@ -95,10 +95,46 @@ def test_police_report_hit_and_run_collision_type_is_never_single_vehicle():
     # A hit-and-run necessarily involves a second vehicle that fled - a
     # "Single Vehicle" collision_type contradicts hit_and_run="Yes" and made
     # the narrative literally read "Two-vehicle single vehicle collision".
+    # hit_and_run_flag is only ~85% likely even for the "hit_and_run" scenario
+    # (see synthetic_data.py), so this must check the actual outcome
+    # (data["hit_and_run"]), not just the scenario name - a trial where the
+    # flag lands False is a legitimate non-hit-and-run report and Single
+    # Vehicle is a valid collision_type for it.
     for _ in range(_TRIALS):
         data = build_synthetic_data("police-report", "hit_and_run")
-        assert data["collision_type"] != "Single Vehicle"
-        assert "single vehicle" not in data["narrative"].lower()
+        if data["hit_and_run"] == "Yes":
+            assert data["collision_type"] != "Single Vehicle"
+            assert "single vehicle" not in data["narrative"].lower()
+
+
+def test_police_report_never_shows_single_vehicle_with_hit_and_run_yes_for_any_scenario():
+    # Real bug seen in production: doc_type=police-report was called with
+    # scenario='surgery' (a medical-family scenario name, meaningless for a
+    # police report) - since collision_type/primary_factor used to be branched
+    # on the scenario STRING rather than on hit_and_run_flag, a report could
+    # come back with COLLISION TYPE: Single Vehicle and HIT & RUN: Yes side by
+    # side, which is a logical contradiction (a "single vehicle" collision has
+    # no second vehicle to flee). This must hold for every scenario name that
+    # can arrive here - including ones that have nothing to do with this doc
+    # type - not just the literal "hit_and_run" scenario.
+    for scenario in ("surgery", "hospital_admission", "chronic_medication", "general", "slip_and_fall"):
+        for _ in range(_TRIALS):
+            data = build_synthetic_data("police-report", scenario)
+            if data["hit_and_run"] == "Yes":
+                assert data["collision_type"] != "Single Vehicle", (
+                    f"scenario={scenario!r}: hit_and_run=Yes but collision_type=Single Vehicle"
+                )
+
+
+def test_police_report_dispatch_arrival_cleared_times_are_chronologically_ordered():
+    for _ in range(_TRIALS):
+        data = build_synthetic_data("police-report", "general")
+        dispatch = data["dispatch_time"]
+        arrival = data["arrival_time"]
+        cleared = data["cleared_time"]
+        assert dispatch <= arrival <= cleared, (
+            f"dispatch={dispatch} arrival={arrival} cleared={cleared} out of order"
+        )
 
 
 def test_police_report_narrative_is_scenario_specific_not_generic_filler():
