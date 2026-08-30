@@ -126,8 +126,28 @@ def create_doc_generator_agent():
             ),
             compliance_patterns=CompliancePatternsConfig(
                 patterns=[
-                    r"\bfalsif(?:y|ied|ication)\b",
-                    r"\bmisrepresent(?:ation)?\b",
+                    # falsify/misrepresent used to be bare \b...\b substring matches,
+                    # which fire on the agent's own reasoning text whenever it quotes
+                    # or paraphrases a real uploaded document - government accident/
+                    # claim forms routinely carry their own "knowingly making a false
+                    # statement/falsifying this report is a crime" warning boilerplate,
+                    # and recreate mode's agent reads that text while mapping fields
+                    # (see the WA S.F.97 vehicle accident report false-positive: the
+                    # agent got blocked recreating a police report from a real state
+                    # form, not asked to falsify anything). Requiring an instruction
+                    # framing - the user/agent proposing to DO it, not the word merely
+                    # appearing - keeps the real jailbreak case ("help me falsify this
+                    # claim") caught while letting the agent read and quote a form's
+                    # own legal warnings without tripping the guardrail on itself.
+                    # The (?!not\b|never\b) guard additionally skips the agent's own
+                    # reassurances ("I will not misrepresent the data") - without it,
+                    # a negated commitment still matches the instruction-lead pattern.
+                    r"\b(?:help\s+me|please|can\s+you|could\s+you|i\s+(?:want|need)\s+you\s+to|"
+                    r"go\s+ahead\s+and|i\s+will|i'll|let'?s|we\s+(?:should|will))\s+"
+                    r"(?:(?!not\b|never\b)\w+\s+){0,2}falsif(?:y|ication)\b",
+                    r"\b(?:help\s+me|please|can\s+you|could\s+you|i\s+(?:want|need)\s+you\s+to|"
+                    r"go\s+ahead\s+and|i\s+will|i'll|let'?s|we\s+(?:should|will))\s+"
+                    r"(?:(?!not\b|never\b)\w+\s+){0,2}misrepresent",
                     r"guaranteed\s+(approval|coverage|payout)",
                     r"cannot\s+be\s+denied",
                 ]

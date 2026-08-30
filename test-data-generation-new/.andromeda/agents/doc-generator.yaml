@@ -46,8 +46,16 @@ middleware:
         - "disregard\\s+(the\\s+)?system\\s+prompt"
         - "bypass\\s+(safety|guardrails|policy)"
     compliance_patterns:
+      # falsify/misrepresent require an instruction framing (help me/please/I will/
+      # let's + the word), not a bare substring match - see agent_factory.py's
+      # compliance_patterns comment for why: a bare match fires on the agent quoting
+      # a real uploaded form's own "falsifying this report is a crime" boilerplate
+      # while recreating it, which is legitimate reference reading, not a request
+      # to falsify anything. The (?!not\b|never\b) guard also skips the agent's own
+      # negated reassurances ("I will not misrepresent the data"). Keep this list in
+      # sync with agent_factory.py's.
       patterns:
-        - "\\bfalsif(?:y|ied|ication)\\b"
-        - "\\bmisrepresent(?:ation)?\\b"
+        - "\\b(?:help\\s+me|please|can\\s+you|could\\s+you|i\\s+(?:want|need)\\s+you\\s+to|go\\s+ahead\\s+and|i\\s+will|i'll|let'?s|we\\s+(?:should|will))\\s+(?:(?!not\\b|never\\b)\\w+\\s+){0,2}falsif(?:y|ication)\\b"
+        - "\\b(?:help\\s+me|please|can\\s+you|could\\s+you|i\\s+(?:want|need)\\s+you\\s+to|go\\s+ahead\\s+and|i\\s+will|i'll|let'?s|we\\s+(?:should|will))\\s+(?:(?!not\\b|never\\b)\\w+\\s+){0,2}misrepresent"
         - "guaranteed\\s+(approval|coverage|payout)"
         - "cannot\\s+be\\s+denied"
