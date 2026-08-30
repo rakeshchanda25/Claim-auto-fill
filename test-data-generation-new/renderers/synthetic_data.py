@@ -711,10 +711,21 @@ def _police_narrative(scenario, incident_date, location, weather, road_cond, spe
     already claim happened, not a disconnected paragraph of prose next to
     them. property_facts (from _property_scenario_facts) does the same job
     when this doc type is serving as the property-packet's Incident Report."""
-    p1_open = random.choice([
-        f"On {incident_date}, officers were dispatched to {location} in reference to a motor vehicle collision.",
-        f"Officers responded to a reported traffic collision at {location} on {incident_date}.",
-    ])
+    # Two openers exist per shape so the report doesn't read identically every time -
+    # each is worded correctly for its own shape from the start (a post-hoc .replace()
+    # on a collision-worded opener only matches the ONE of the two sentences that
+    # contains that exact substring, silently leaving the other's "traffic collision"
+    # wording in a fire/water/theft/wind report - the bug this replaced).
+    if property_facts:
+        p1_open = random.choice([
+            f"On {incident_date}, officers were dispatched to {location} in reference to a property damage incident.",
+            f"Officers responded to a reported property damage incident at {location} on {incident_date}.",
+        ])
+    else:
+        p1_open = random.choice([
+            f"On {incident_date}, officers were dispatched to {location} in reference to a motor vehicle collision.",
+            f"Officers responded to a reported traffic collision at {location} on {incident_date}.",
+        ])
     # hit_and_run_flag is checked FIRST, before the scenario branches - it is only
     # ~85% likely even for scenario == "hit_and_run" (see the police-report branch
     # above), so branching on the scenario string alone would have this paragraph
@@ -723,8 +734,12 @@ def _police_narrative(scenario, incident_date, location, weather, road_cond, spe
     # 5% base rate can still produce a real hit-and-run that needs this account,
     # not the generic fallback). Matches the same fix applied to collision_type/
     # primary_factor above - both are keyed off the actual outcome, not the
-    # requested scenario name.
-    if hit_and_run_flag:
+    # requested scenario name. `and not property_facts` matters too: that same 5%
+    # base rate can land True for a fire/water/theft/wind report, which has no
+    # Driver 1/Driver 2 vehicles at all - without this guard the narrative would
+    # tell a two-vehicle hit-and-run story directly contradicting the property-
+    # incident fields the rest of the document actually renders.
+    if hit_and_run_flag and not property_facts:
         p1 = p1_open + (
             f" The {party1['vehicle_year']} {party1['vehicle_make']} {party1['vehicle_model']} (Driver 1, "
             f"{party1['name']}) was struck by a second vehicle, subsequently identified as the "
@@ -767,7 +782,7 @@ def _police_narrative(scenario, incident_date, location, weather, road_cond, spe
         )
     elif property_facts:
         fact_str = "; ".join(f"{f['label'].lower()}: {f['value']}" for f in property_facts if f["value"])
-        p1 = p1_open.replace("motor vehicle collision", "property damage incident") + (
+        p1 = p1_open + (
             f" Reporting party {party1['name']} advised responding officers of the extent of the damage "
             f"on scene. {fact_str}."
         )
@@ -785,7 +800,9 @@ def _police_narrative(scenario, incident_date, location, weather, road_cond, spe
         p2 = "Both vehicles were documented and photographed on scene; see Section 4/5 for damage detail."
 
     p3 = (
-        "Both parties were interviewed on scene and statements were obtained (see Section 6). "
+        ("The reporting party and available witnesses were interviewed on scene and statements were "
+         "obtained (see Section 6). " if property_facts else
+         "Both parties were interviewed on scene and statements were obtained (see Section 6). ")
         + ("Driver 2 was cited for a traffic code violation; a citation was issued and a court date "
            "assigned (see Section 7). " if (not property_facts and party2["citation_number"] != "None") else "")
         + "This report was completed and forwarded for records processing per department policy."
@@ -1823,18 +1840,34 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
         # products-liability cause at all. Anchor one cause to the scenario,
         # then fill out the rest of the sample from what is left - keeps the
         # variety (2-3 causes) while guaranteeing the scenario is represented.
-        _cause_pool = ["Negligence", "Breach of Duty of Care", "Premises Liability",
-                       "Negligent Infliction of Emotional Distress", "Strict Product Liability"]
+        # The extra causes are drawn from a per-scenario COMPATIBLE pool, not
+        # the full list - the full list mixes theories that don't co-occur in
+        # one fact pattern (a fall on a property has no product to be
+        # defective; a botched medical procedure isn't a premises condition),
+        # so sampling it unrestricted could pad a medical-malpractice
+        # complaint with "Strict Product Liability" and "Premises Liability" -
+        # causes of action a real complaint alleging that incident never
+        # would plead together.
         _anchor = {
             "slip_and_fall": "Premises Liability",
             "medical_malpractice": "Negligence",
             "product_liability": "Strict Product Liability",
         }.get(scenario)
+        _compatible_extras = {
+            "slip_and_fall": ["Negligence", "Breach of Duty of Care",
+                               "Negligent Infliction of Emotional Distress"],
+            "medical_malpractice": ["Breach of Duty of Care",
+                                     "Negligent Infliction of Emotional Distress"],
+            "product_liability": ["Negligence", "Breach of Duty of Care",
+                                    "Negligent Infliction of Emotional Distress"],
+        }.get(scenario)
         if _anchor:
             causes = [_anchor] + random.sample(
-                [c for c in _cause_pool if c != _anchor], k=random.choice([1, 2])
+                _compatible_extras, k=min(len(_compatible_extras), random.choice([1, 2]))
             )
         else:
+            _cause_pool = ["Negligence", "Breach of Duty of Care", "Premises Liability",
+                           "Negligent Infliction of Emotional Distress", "Strict Product Liability"]
             causes = random.sample(_cause_pool, k=random.choice([2, 3]))
 
         def _attorney(role: str = "") -> dict:

@@ -542,10 +542,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const statusEl = document.getElementById('ai-status-indicator');
     const countInput = document.getElementById('ai-count');
     const seedInput = document.getElementById('ai-seed');
-    const scenarioSection = document.getElementById('ai-scenario-section');
     const docSectionLabel = document.getElementById('ai-doc-section-label');
-    const fillPromptSection = document.getElementById('ai-fill-prompt-section');
-    const fillPromptInput = document.getElementById('ai-fill-prompt');
 
     fetch('/api/ai-doc-types')
         .then(r => r.json())
@@ -561,13 +558,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
     function renderDocCards() {
-        // Fill mode fills the user's OWN uploaded document - there is no
-        // template to pick, so the whole doc-type picker is irrelevant here.
-        const isFill = activeMode === 'fill';
-        docSectionLabel.classList.toggle('hidden', isFill);
-        grid.classList.toggle('hidden', isFill);
-        if (isFill) return;
-
         const isPacket = activeMode === 'packet';
         const items = isPacket ? aiPackets : aiDocTypes;
         docSectionLabel.textContent = isPacket ? 'Select Packet Type' : 'Select Document Type';
@@ -603,11 +593,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateGenerateBtn() {
-        generateBtn.disabled = activeMode === 'fill' ? !referenceFile : !selectedDocId;
+        generateBtn.disabled = !selectedDocId;
         const isPacket = activeMode === 'packet';
         generateBtn.querySelector('.btn-text').textContent = isPacket
             ? '📦 Build Packet'
-            : activeMode === 'fill' ? '📝 Fill Form' : '✨ Generate Document';
+            : '✨ Generate Document';
     }
 
     document.getElementById('ai-mode-pills').addEventListener('click', e => {
@@ -617,10 +607,8 @@ document.addEventListener('DOMContentLoaded', () => {
         pill.classList.add('active');
         activeMode = pill.dataset.mode;
         selectedDocId = null;
-        const needsRef = activeMode === 'recreate' || activeMode === 'fill';
+        const needsRef = activeMode === 'recreate';
         refSection.classList.toggle('hidden', !needsRef);
-        scenarioSection.classList.toggle('hidden', activeMode === 'fill');
-        fillPromptSection.classList.toggle('hidden', activeMode !== 'fill');
         renderDocCards();
         updateGenerateBtn();
         setStatus('idle', 'Ready');
@@ -717,7 +705,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     generateBtn.addEventListener('click', async () => {
-        if (activeMode === 'fill' ? !referenceFile : !selectedDocId) return;
+        if (!selectedDocId) return;
 
         setStatus('running', 'Running agent...');
         const span = generateBtn.querySelector('.btn-text');
@@ -729,19 +717,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         startProgressSimulation();
 
-        // Fill mode has no doc-type picker (it fills the uploaded document
-        // itself, not a template) - derive a label from the upload for the
-        // backend's required doc_type field, and send the free-text prompt
-        // as the scenario description instead of a picked scenario pill.
         const fd = new FormData();
-        fd.append('doc_type', activeMode === 'fill'
-            ? (referenceFile.name.replace(/\.[^.]+$/, '') || 'reference-document')
-            : selectedDocId);
+        fd.append('doc_type', selectedDocId);
         fd.append('mode', activeMode === 'packet' ? 'packet' : activeMode);
-        fd.append('scenario', activeMode === 'fill' ? (fillPromptInput.value.trim() || 'general') : selectedScenario);
+        fd.append('scenario', selectedScenario);
         fd.append('count', countInput.value);
         if (seedInput.value) fd.append('seed', seedInput.value);
-        if (referenceFile && (activeMode === 'recreate' || activeMode === 'fill')) {
+        if (referenceFile && activeMode === 'recreate') {
             fd.append('reference_file', referenceFile);
         }
 

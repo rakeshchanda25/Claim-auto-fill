@@ -11,23 +11,12 @@ logger = logging.getLogger(__name__)
 from .tools import (
     analyze_uploaded_reference,
     build_packet,
-    fill_docx_form_controls,
-    fill_pdf_form_tool,
-    fill_pdf_widgets,
-    fit_grid_row,
-    flow_text_into_widgets,
     generate_synthetic_data,
-    get_pdf_form_fields,
-    inspect_docx_form_structure,
-    inspect_pdf_form_structure,
-    inspect_region,
     recreate_document_data,
     render_document_to_pdf,
     render_packet,
     revise_document_data,
     validate_document_structure,
-    verify_docx_fill,
-    verify_pdf_fill,
 )
 
 _PROJECT_ROOT = Path(__file__).parent.parent
@@ -96,25 +85,12 @@ def create_doc_generator_agent():
     _TOOLS = [
         generate_synthetic_data,
         render_document_to_pdf,
-        fill_pdf_form_tool,
-        get_pdf_form_fields,
         analyze_uploaded_reference,
         recreate_document_data,
         build_packet,
         render_packet,
         revise_document_data,
         validate_document_structure,
-        # dynamic-form-fill: works on any AcroForm template, no per-form config
-        inspect_pdf_form_structure,
-        inspect_region,
-        flow_text_into_widgets,
-        fit_grid_row,
-        fill_pdf_widgets,
-        verify_pdf_fill,
-        # dynamic-docx-fill: same pattern for Word content-control forms
-        inspect_docx_form_structure,
-        fill_docx_form_controls,
-        verify_docx_fill,
     ]
 
     for _t in _TOOLS:
@@ -220,19 +196,6 @@ def create_doc_generator_agent():
         prompt=(
             "You are the lead insurance document generation agent for IDP testing. "
             "ALWAYS load the matching skill via load_skill before any generation step. "
-            "FILL mode and GENERATE mode are opposite tasks - never conflate them. "
-            "For FILLING a supplied fillable PDF form (the user uploaded an existing document and "
-            "wants ITS OWN fields populated): load_skill('dynamic-form-fill') and follow it. That "
-            "skill works on any AcroForm template, including ones never seen before - discover the "
-            "layout at runtime with inspect_pdf_form_structure (and inspect_region when a "
-            "label is unclear). Never assume a form's fields, never infer a field's meaning from "
-            "its raw internal name, and NEVER call generate_synthetic_data or render_document_to_pdf "
-            "for this task - those produce a brand new document from a template, not a filled copy "
-            "of the uploaded one. "
-            "For FILLING a supplied .docx with Word content controls: load_skill('dynamic-docx-fill') "
-            "and follow it instead - discover the controls at runtime with "
-            "inspect_docx_form_structure. Same rule: never assume a docx's controls, and never "
-            "fall back to generate_synthetic_data/render_document_to_pdf. "
             "For GENERATING a single new document from scratch (no uploaded reference): call "
             "generate_synthetic_data, validate_document_structure, then render_document_to_pdf. "
             "NEVER pass a `data` argument to validate_document_structure or "
@@ -255,8 +218,8 @@ def create_doc_generator_agent():
             "everything a skill contains. Every step must be one of the tool calls the loaded "
             "skill names; if you catch yourself exploring the filesystem instead of calling "
             "those tools, stop and call the next tool in the skill's workflow. "
-            "Every mode's output is staged server-side (single documents via render_document_to_pdf/"
-            "fill_pdf_widgets/fill_docx_form_controls, packets via render_packet) - once "
+            "Every mode's output is staged server-side (single documents via render_document_to_pdf, "
+            "packets via render_packet) - once "
             "staging is done, your final answer is just a short JSON status object, e.g. "
             "{\"status\": \"ok\"} or {\"status\": \"ok\", \"components\": 4}. Never put a document's "
             "bytes in your own output."
@@ -395,13 +358,13 @@ def run_with_reference(agent, prompt: str, reference_bytes: bytes | None):
     """Runs the agent with `reference_bytes` staged as this request's
     uploaded reference document (see tools.py's reference-document-staging
     tools - a tool-calling model cannot transcribe a PDF/docx's raw bytes as
-    a JSON argument, so fill/recreate tools read this staged value instead
-    of taking bytes as an LLM-supplied parameter). Also clears and then
-    returns whatever OUTPUT document got staged during the run (see
-    tools.stage_artifact) - the same "can't carry bytes through the model's
-    own text" problem applies just as much on the way out, so
-    render_document_to_pdf/fill_pdf_widgets/fill_docx_form_controls stage
-    their result here instead of returning it, and this function is where
+    a JSON argument, so recreate's analyze_uploaded_reference tool reads this
+    staged value instead of taking bytes as an LLM-supplied parameter). Also
+    clears and then returns whatever OUTPUT document got staged during the
+    run (see tools.stage_artifact) - the same "can't carry bytes through the
+    model's own text" problem applies just as much on the way out, so
+    render_document_to_pdf stages its result here instead of returning it,
+    and this function is where
     that staged result actually gets retrieved - never by parsing it out of
     the model's final answer.
 

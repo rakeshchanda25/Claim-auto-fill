@@ -4,7 +4,7 @@ from typing import Optional, Literal
 
 class GenerationRequest(BaseModel):
     doc_type: str
-    mode: Literal["generate", "recreate", "fill", "packet"]
+    mode: Literal["generate", "recreate", "packet"]
     scenario: str = "general"
     count: int = 1
     seed: Optional[int] = None

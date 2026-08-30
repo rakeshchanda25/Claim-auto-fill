@@ -207,7 +207,7 @@ async def ai_generate_document(
         )
         logger.debug(f"[3/6] raw agent text: {result_str!r}")
 
-        # Single-document modes (generate/fill/recreate) and packet mode both
+        # Single-document modes (generate/recreate) and packet mode both
         # stage their finished document(s) server-side instead of routing them
         # through the model's own text (see agent_factory.run_with_reference /
         # tools.stage_artifact / tools.stage_packet_component) - if either was
@@ -346,7 +346,17 @@ async def get_ai_doc_types():
     return JSONResponse({"document_types": doc_types, "packets": packets, "scenarios": SCENARIO_REGISTRY})
 
 
-app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
+class NoCacheStaticFiles(StaticFiles):
+    """Forces browsers to revalidate frontend assets on every load instead of
+    silently reusing a stale main.js/index.html after an edit."""
+
+    def file_response(self, *args, **kwargs):
+        response = super().file_response(*args, **kwargs)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
+app.mount("/", NoCacheStaticFiles(directory="frontend", html=True), name="frontend")
 
 
 if __name__ == "__main__":
