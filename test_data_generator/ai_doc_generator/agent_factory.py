@@ -69,6 +69,9 @@ def create_doc_generator_agent():
             "If using editable install, re-install or check permissions."
         ) from e
 
+    from .guardrail_diagnostics import install as _install_guardrail_diagnostics
+    _install_guardrail_diagnostics()
+
     _TOOLS = [
         generate_synthetic_data,
         render_document_to_pdf,
