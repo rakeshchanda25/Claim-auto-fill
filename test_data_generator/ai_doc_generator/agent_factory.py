@@ -54,7 +54,11 @@ def create_doc_generator_agent():
             ModelConfig,
             WorkspaceAgentConfig,
         )
-        from andromeda.config.config import CompliancePatternsConfig, PromptInjectionPatternsConfig
+        from andromeda.config.config import (
+            CompliancePatternsConfig,
+            DataPatternsConfig,
+            PromptInjectionPatternsConfig,
+        )
         from andromeda.core import WorkspaceAgent
         from andromeda.tools.toolkit import register_tool
         from andromeda.workspace import (
@@ -106,6 +110,38 @@ def create_doc_generator_agent():
             input=True,
             output=True,
             tool=False,
+            # andromeda's factory.py bundles a THIRD guardrail in with whatever
+            # input/output flags are set here: DataPrivacyMiddleware(strategy=
+            # "block", patterns=<these data_patterns>) - it isn't a separate
+            # opt-in, it rides along with prompt_injection/compliance whenever
+            # guardrails.input or .output is True. Its default phone pattern
+            # (\b(?:\+?1[-.\s]?)?(?:\(?\d{3}\)?[-.\s]?)\d{3}[-.\s]?\d{4}\b)
+            # matches any bare 10-digit number with no separators - which is
+            # exactly the shape of a policy number, claim number, or member ID
+            # (confirmed: Guidewire's own policy_number "9185479590" matches
+            # it outright). strategy="block" means a match doesn't redact, it
+            # kills the whole generation - fundamentally incompatible with a
+            # document generator whose entire job is to emit realistic
+            # phone/SSN/policy-number-shaped synthetic data. Blanking every
+            # pattern here disables only that PII-block layer (see
+            # andromeda/core/middleware/common.py's resolve_data_patterns/
+            # default_data_patterns: an empty string is dropped, so an empty
+            # DataPatternsConfig would register zero patterns) - prompt-
+            # injection and compliance checks below are untouched, since
+            # they're keyed off their own separate pattern lists.
+            #
+            # NOT plain empty strings, though: DataPrivacyMiddleware.__init__
+            # does `dict(patterns or default_data_patterns())` (privacy.py) -
+            # an empty {} is falsy in Python, so passing one there silently
+            # falls back to the DEFAULT patterns instead of disabling them,
+            # defeating the point (confirmed directly against the real
+            # pipeline: resolve_data_patterns() on all-empty strings returns
+            # {}, and {} or default_data_patterns() evaluates the fallback).
+            # `(?!)` is a negative lookahead of nothing - it structurally can
+            # never match anything, anywhere - so these four entries stay
+            # non-empty strings (dict stays truthy, no fallback) while being
+            # permanently harmless.
+            data_patterns=DataPatternsConfig(email="(?!)", ssn="(?!)", phone="(?!)", credit_card="(?!)"),
             prompt_injection_patterns=PromptInjectionPatternsConfig(
                 patterns=[
                     r"ignore.*(previous|above|earlier).*instructions",
