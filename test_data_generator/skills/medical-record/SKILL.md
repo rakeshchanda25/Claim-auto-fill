@@ -21,6 +21,8 @@ allowed-tools: generate_synthetic_data render_document_to_pdf validate_document_
 6. Physical Examination — system-by-system findings
 7. Assessment — ICD-10 codes (2-4 codes, clinically plausible)
 8. Plan — CPT codes, Rx, follow-up schedule
+8a. Scenario Details Section — present for every registered scenario across every packet
+    (13 total), omitted only for `general` — see "IDP Test Scenarios" below
 9. Physician Signature Block — Name, NPI, DEA if applicable, signed date
 
 ## Synthetic Data Rules
@@ -30,4 +32,15 @@ allowed-tools: generate_synthetic_data render_document_to_pdf validate_document_
 - All names, DOB, addresses from Faker
 
 ## IDP Test Scenarios
-See references/test-scenarios.md for edge cases.
+See references/test-scenarios.md for edge cases and full scenario coverage (medical-record is
+reused by every packet, so it is called with 13 different scenario names, not just 4).
+
+## Document composition
+Like every doc type, this template is decomposed into named Jinja macros ("components") in
+`renderers/templates/medical_record.html`, assembled by `renderers/components.py`'s
+`COMPONENT_COMPOSITION["medical-record"]`. Unlike police-report (which has two structurally
+different shapes depending on scenario), every registered scenario for this doc type resolves
+to the SAME component list - a real clinical visit note doesn't restructure by scenario in the real
+world, only its content does (see the scenario-specific data-generation notes above). The
+mechanism exists uniformly across every doc type for architectural consistency, even where
+it isn't exercised to produce different shapes.

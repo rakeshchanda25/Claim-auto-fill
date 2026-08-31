@@ -1,4 +1,4 @@
-import pymupdf
+import fitz
 import cv2
 import json
 import numpy as np
@@ -68,8 +68,8 @@ def simulate_scan(
     rotation: bool = False,
     rotation_rules: str = "[]"
 ) -> bytes:    
-    doc = pymupdf.open(stream=pdf_bytes, filetype="pdf")
-    out_doc = pymupdf.open()
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    out_doc = fitz.open()
     
     page_rotations = {}  
     if rotation:
@@ -97,12 +97,12 @@ def simulate_scan(
         page = doc[page_num]
 
         if overlay_image_bytes:
-            rect = pymupdf.Rect(page.rect.width - 220, 20, page.rect.width - 20, 220)
+            rect = fitz.Rect(page.rect.width - 220, 20, page.rect.width - 20, 220)
             page.insert_image(rect, stream=overlay_image_bytes)
 
         zoom = 2.0
-        mat = pymupdf.Matrix(zoom, zoom)
-        pix = page.get_pixmap(matrix=mat, alpha=False, colorspace=pymupdf.csRGB)
+        mat = fitz.Matrix(zoom, zoom)
+        pix = page.get_pixmap(matrix=mat, alpha=False, colorspace=fitz.csRGB)
         
         img_array = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.h, pix.w, 3)
         

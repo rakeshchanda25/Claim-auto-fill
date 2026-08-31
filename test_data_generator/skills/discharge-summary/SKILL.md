@@ -24,6 +24,9 @@ allowed-tools: generate_synthetic_data render_document_to_pdf validate_document_
 5. Plan for Transition — ruled fill-in lines (blank when discharge was for goals-achieved or
    expired, since there is nothing to transition)
 6. Summary of Patient Discharge Instructions
+6a. Scenario Details Section — present for hospital_admission/surgery/emergency_visit/
+   outpatient_procedure (the only scenarios this doc type is ever called with) — see
+   references/test-scenarios.md
 7. Clinician Signature and Date
 
 ## `reason` field
@@ -40,3 +43,13 @@ A dict with exactly one of these keys `True` (rest `False`): `goals_achieved`,
 - Ruled-line list fields (`reason_comments`, `care_plan_notes`, `assessment_notes`,
   `transition_plan`, `discharge_instruction_notes`) may be empty lists - the template pads
   blank ruled lines itself, do not pad them yourself
+
+## Document composition
+Like every doc type, this template is decomposed into named Jinja macros ("components") in
+`renderers/templates/discharge_summary.html`, assembled by `renderers/components.py`'s
+`COMPONENT_COMPOSITION["discharge-summary"]`. Unlike police-report (which has two structurally
+different shapes depending on scenario), every registered scenario for this doc type resolves
+to the SAME component list - a real home-health discharge summary doesn't restructure by scenario in the real
+world, only its content does (see the scenario-specific data-generation notes above). The
+mechanism exists uniformly across every doc type for architectural consistency, even where
+it isn't exercised to produce different shapes.

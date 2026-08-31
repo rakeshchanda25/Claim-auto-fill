@@ -3,8 +3,8 @@ name: cms-1500
 description: >
   Generate CMS-1500 (HCFA 02/12) professional claim forms for IDP testing - physician office,
   outpatient, and specialist claims. Template covers boxes 1a-33a with a real service-line grid
-  (24A-J). Rendered through the placeholder-then-fill pipeline (see render_document_to_pdf), so
-  the output is a genuine fillable AcroForm PDF, not a flat image.
+  (24A-J). Rendered the same way as every other template - see render_document_to_pdf -
+  a flat print of the form, not a fillable AcroForm PDF.
 metadata:
   owner: idp-test-team
   version: "2"
@@ -35,7 +35,19 @@ allowed-tools: generate_synthetic_data render_document_to_pdf validate_document_
 ## Synthetic Data Rules
 - NPI: 10 digits · Prior auth: AUTH + 8 digits · Federal Tax ID: 9 digits (no dashes)
 - Accept assignment: always YES for test data
-- Box 10 (employment/auto/other accident related) is driven by `scenario`: auto-accident
-  scenarios (`rear_end_collision`, `intersection_accident`) set Box 10b to YES with a state;
-  everything else defaults to NO.
+- Box 10 (employment/auto/other accident related) is driven by `scenario`: `rear_end_collision`/
+  `intersection_accident`/`slip_and_fall` set Box 10b to YES (10b also gets a state for the two
+  auto scenarios); everything else defaults to NO.
 - Keep dates in a sensible order: date of illness ≤ date of service ≤ signature date.
+- Box 19 (Additional Claim Info) is populated with a one-line scenario-facts summary, since
+  CMS-1500's fixed box layout can't grow a new section - see references/test-scenarios.md.
+
+## Document composition
+Like every doc type, this template is decomposed into named Jinja macros ("components") in
+`renderers/templates/cms_1500.html`, assembled by `renderers/components.py`'s
+`COMPONENT_COMPOSITION["cms-1500"]`. Unlike police-report (which has two structurally
+different shapes depending on scenario), every registered scenario for this doc type resolves
+to the SAME component list - a real federal claim form doesn't restructure by scenario in the real
+world, only its content does (see the scenario-specific data-generation notes above). The
+mechanism exists uniformly across every doc type for architectural consistency, even where
+it isn't exercised to produce different shapes.

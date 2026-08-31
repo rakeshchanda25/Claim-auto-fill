@@ -14,3 +14,7 @@
 - `loan_number`: Mortgage loan number (`^LN\d{10}$`)
 - `adjuster_name`: Assigned claims adjuster
 - `adjuster_phone`: Adjuster contact number
+- `scenario_facts_title`: section heading (`"Fire Details"` etc.), `""` when the scenario has
+  no facts defined
+- `scenario_facts`: list of `{label, value}` - see "Scenario-Specific Details Section" in
+  SKILL.md for what each scenario supplies

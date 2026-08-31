@@ -37,6 +37,11 @@ produces is modeled as inter-state supply.
 - `grand_total` = `subtotal_taxable_value + igst_amount`
 - `hsn_summary` groups items by `hsn_sac`, each group's own taxable value / IGST amount / total
   summing to the invoice totals
+
+## Scenario coverage
+`items` is drawn from a scenario-specific pool/price band, not one fixed drug list - see
+`references/test-scenarios.md` for the exact pool and price range per scenario
+(`chronic_medication` / `specialty_drug` / `compounded_medication`).
 - `total_in_words` / `tax_in_words`: Indian digit grouping (Lakh/Crore, not Western
   thousand/million) - see `synthetic_data.py`'s `_amount_in_words()` / `_int_to_words()`
 
@@ -53,3 +58,13 @@ produces is modeled as inter-state supply.
 `rx_number`, `fill_date`, `drug_name`, `ndc_code`, `form`, `prescriber_name`, `prescriber_dea`,
 `prescriber_npi` are still generated (kept for backward-compat, an earlier US-style dispensing
 receipt used them) but the current template does not render any of them.
+
+## Document composition
+Like every doc type, this template is decomposed into named Jinja macros ("components") in
+`renderers/templates/pharmacy_invoice.html`, assembled by `renderers/components.py`'s
+`COMPONENT_COMPOSITION["pharmacy-invoice"]`. Unlike police-report (which has two structurally
+different shapes depending on scenario), every registered scenario for this doc type resolves
+to the SAME component list - a real GST tax invoice doesn't restructure by scenario in the real
+world, only its content does (see the scenario-specific data-generation notes above). The
+mechanism exists uniformly across every doc type for architectural consistency, even where
+it isn't exercised to produce different shapes.

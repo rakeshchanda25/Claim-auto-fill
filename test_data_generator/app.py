@@ -1,35 +1,22 @@
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import Response, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+import json
+import uvicorn
+from pathlib import Path
+from typing import List,Optional
+from pdf_manager import replace_text_in_pdf, combine_pdfs
+from scanner_simulator import simulate_scan
 from starlette.concurrency import run_in_threadpool
 import base64
 import io
-import json
 import logging
 import zipfile
-import uvicorn
-from pathlib import Path
-from typing import List, Optional
-from pdf_manager import replace_text_in_pdf, combine_pdfs
-from scanner_simulator import simulate_scan
 from ai_doc_generator.config import GenerationRequest
 from ai_doc_generator.prompt_builder import build_generation_prompt
 from ai_doc_generator.packets import PACKET_REGISTRY, SCENARIO_REGISTRY
-
-# Single place that configures logging for the whole process - every other
-# module just does `logger = logging.getLogger(__name__)` and its records
-# propagate up to this. Called here (the entrypoint) so it runs exactly
-# once regardless of import order. Deliberately not touching uvicorn's own
-# "uvicorn.error"/"uvicorn.access" loggers (different names, no collision) -
-# this is what makes the [INFO] ai_doc_generator.* / renderers.* lines show
-# up alongside uvicorn's own request lines in the same console.
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    datefmt="%H:%M:%S",
-)
-logger = logging.getLogger(__name__)
+from guidewire_lookup import extract_claim_id, fetch_claim_facts
 
 app = FastAPI(title="PDF Test Data Generator API")
 
@@ -41,11 +28,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%H:%M:%S",
+)
+logger = logging.getLogger(__name__)
 
 @app.on_event("shutdown")
 def _close_shared_agent():
     from ai_doc_generator.agent_factory import close_shared_agent
     close_shared_agent()
+
+@app.get("/api/health")
+async def health_check():
+    return {"status": "ok"}
 
 @app.post("/api/replace")
 async def replace_pdf_text(
@@ -149,7 +146,6 @@ async def api_combine(
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-
 @app.post("/api/ai-generate")
 async def ai_generate_document(
     doc_type: str = Form(...),
@@ -159,6 +155,7 @@ async def ai_generate_document(
     seed: Optional[int] = Form(None),
     reference_file: Optional[UploadFile] = File(None),
     custom_fields: str = Form("{}"),
+    user_input: str = Form(""),
 ):
     ref_bytes = None
     ref_ext = None
@@ -170,7 +167,28 @@ async def ai_generate_document(
         f"[1/6] request received: mode={mode} doc_type={doc_type} scenario={scenario!r} "
         f"count={count} seed={seed} reference={ref_ext or 'none'}"
         f"{f' ({len(ref_bytes)} bytes)' if ref_bytes else ''}"
+        f"{f' user_input={len(user_input)} chars' if user_input else ''}"
     )
+
+    custom_fields_dict = json.loads(custom_fields)
+
+    # A claim ID/number typed into the free-text user_input box pulls live claim
+    # data from Guidewire and merges it into custom_fields, which the LLM already
+    # treats as authoritative-but-partial (see prompt_builder.py's
+    # _custom_fields_block: "use verbatim wherever it fits, only invent the
+    # rest") - so any field Guidewire doesn't have still gets Faker-generated
+    # exactly as it does today. A lookup failure (unreachable Guidewire, unknown
+    # claim ID) logs and falls through to plain generation rather than failing
+    # the whole request - the claim data is an enrichment, not a requirement.
+    claim_id = extract_claim_id(user_input)
+    if claim_id:
+        logger.info(f"[1/6] detected claim id/number {claim_id!r} in user input - looking up Guidewire")
+        try:
+            claim_facts = await run_in_threadpool(fetch_claim_facts, claim_id)
+            logger.info(f"[1/6] Guidewire lookup ok: {len(claim_facts)} claim fact(s) retrieved")
+            custom_fields_dict = {**claim_facts, **custom_fields_dict}
+        except Exception as exc:
+            logger.warning(f"[1/6] Guidewire lookup for {claim_id!r} failed, continuing without it: {exc}")
 
     req = GenerationRequest(
         doc_type=doc_type,
@@ -180,7 +198,8 @@ async def ai_generate_document(
         seed=seed,
         reference_bytes=ref_bytes,
         reference_file_type=ref_ext,
-        custom_fields=json.loads(custom_fields),
+        custom_fields=custom_fields_dict,
+        user_input=user_input,
     )
 
     def _run():
@@ -207,13 +226,6 @@ async def ai_generate_document(
         )
         logger.debug(f"[3/6] raw agent text: {result_str!r}")
 
-        # Single-document modes (generate/fill/recreate) and packet mode both
-        # stage their finished document(s) server-side instead of routing them
-        # through the model's own text (see agent_factory.run_with_reference /
-        # tools.stage_artifact / tools.stage_packet_component) - if either was
-        # staged this run, it IS the answer; no need to parse anything out of
-        # result_str for the actual file content. The JSON-text parsing below
-        # is a legacy fallback only, for the rare case nothing got staged.
         if artifact_bytes is not None:
             ext = artifact_kind or "pdf"
             logger.info(f"[4/6] using staged artifact directly (kind={ext}), skipping text-JSON parsing")
@@ -346,8 +358,20 @@ async def get_ai_doc_types():
     return JSONResponse({"document_types": doc_types, "packets": packets, "scenarios": SCENARIO_REGISTRY})
 
 
-app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
+class NoCacheStaticFiles(StaticFiles):
+    """Forces browsers to revalidate frontend assets on every load instead of
+    silently reusing a stale main.js/index.html after an edit."""
 
+    def file_response(self, *args, **kwargs):
+        response = super().file_response(*args, **kwargs)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
+app.mount("/", NoCacheStaticFiles(directory="frontend", html=True), name="frontend")
+
+FRONTEND_DIR = Path(__file__).resolve().parent / "frontend"
+
+app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
 
 if __name__ == "__main__":
-    uvicorn.run("app:app", host="0.0.0.0", port=8011, reload=True)
+    uvicorn.run("app:app", host="127.0.0.1", port=8015, reload=True)

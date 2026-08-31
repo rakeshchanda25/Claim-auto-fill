@@ -1,0 +1,310 @@
+{
+  "success": true,
+  "requested_claim_id": "000-00-053109",
+  "resolved_claim_id": "cc:Sa-nF94NVcYYWZhgPfEVl",
+  "data": {
+    "claim_details": {
+      "claim_number": "000-00-053109",
+      "policy_number": "9185479590",
+      "status": "Open",
+      "loss_type": "Auto",
+      "loss_cause": "Collision with pedestrian",
+      "loss_date": "2026-08-01T04:01:00.000Z",
+      "insured": "Micheal Turner",
+      "reporter": "Micheal Turner",
+      "assigned_adjuster": "John Wesley",
+      "adjuster_id": "cc:S8nlsEitC1KVJtWKoi4cV",
+      "assigned_group": "Claim Audit Reviewer_1",
+      "assigned_group_id": "cc:SJg2PdKqNrpMI6p3qJrBx",
+      "assigned_group_uri": "/admin/v1/groups/cc:SJg2PdKqNrpMI6p3qJrBx",
+      "jurisdiction": "Ohio",
+      "line_of_business": "Personal Auto Line",
+      "line_of_business_code": "PersonalAutoLine",
+      "how_reported": "Phone",
+      "reported_date": "2026-08-30T07:33:22.415Z",
+      "main_contact": "Micheal Turner",
+      "loss_location": "4521 Maple Grove Rd, Columbus, OH 43215",
+      "policy_address": "4521 Maple Grove Rd, Columbus, OH 43215"
+    },
+    "policy_details": {
+      "policy_number": "9185479590",
+      "policy_type": "Personal Auto",
+      "policy_effective_date": "2026-01-01T05:01:00.000Z",
+      "policy_expiration_date": "2027-01-01T05:01:00.000Z",
+      "currency": "USD",
+      "insured": "Micheal Turner"
+    },
+    "activities": {
+      "count": 2,
+      "activities": [
+        {
+          "id": "cc:S9DUM6jwAR6ZlemiF2bET",
+          "subject": "Make initial contact with insured",
+          "activity_pattern": "contact_insured",
+          "activity_type": "General",
+          "assigned_user": "John Wesley",
+          "assigned_group": "Claim Audit Reviewer_1",
+          "status": "Complete",
+          "priority": "Urgent",
+          "due_date": "2026-08-31T12:33:22.415Z",
+          "create_time": "2026-08-30T07:37:31.759Z",
+          "mandatory": false,
+          "escalated": false,
+          "externally_owned": false,
+          "related_to": "000-00-053109",
+          "assigned_by_user": "John Wesley",
+          "assignment_status": "Assigned",
+          "importance": "Not On Calendar",
+          "description": null
+        },
+        {
+          "id": "cc:St8B_i4tCGtr7XYo1abPt",
+          "subject": "Initial 30 day file review",
+          "activity_pattern": "initial_30day_review",
+          "activity_type": "General",
+          "assigned_user": "John Wesley",
+          "assigned_group": "Claim Audit Reviewer_1",
+          "status": "Complete",
+          "priority": "Normal",
+          "due_date": "2026-09-29T07:37:31.734Z",
+          "create_time": "2026-08-30T07:37:31.759Z",
+          "mandatory": false,
+          "escalated": false,
+          "externally_owned": false,
+          "related_to": "000-00-053109",
+          "assigned_by_user": "John Wesley",
+          "assignment_status": "Assigned",
+          "importance": "Not On Calendar",
+          "description": null
+        }
+      ]
+    },
+    "notes": {
+      "count": 1,
+      "notes": [
+        {
+          "id": "cc:S34WiTNaVMHmiMpPhQsoe",
+          "author": "John Wesley",
+          "created_date": "2026-08-30T10:31:31.597Z",
+          "updated_date": "2026-08-30T10:32:07.317Z",
+          "body_summary": "Contacted insured and claimant to collect required information, Medical report and police report att...",
+          "confidential": false,
+          "topic": "General",
+          "related_to": "000-00-053109"
+        }
+      ]
+    },
+    "history_events": {
+      "count": 5,
+      "events": [
+        {
+          "timestamp": "2026-08-30T07:37:31.738Z",
+          "type": "Assigned",
+          "description": "Assigned to user John Wesley in group Claim Audit Reviewer_1",
+          "user": "John Wesley"
+        },
+        {
+          "timestamp": "2026-08-30T07:37:31.739Z",
+          "type": "Opened",
+          "description": "New claim saved",
+          "user": "John Wesley"
+        },
+        {
+          "timestamp": "2026-08-30T07:50:46.577Z",
+          "type": "Viewed",
+          "description": null,
+          "user": "John Wesley"
+        },
+        {
+          "timestamp": "2026-08-31T04:59:40.985Z",
+          "type": "Viewed",
+          "description": null,
+          "user": "Super User"
+        },
+        {
+          "timestamp": "2026-08-31T05:58:07.927Z",
+          "type": "Viewed",
+          "description": null,
+          "user": "Athar Kaleem"
+        }
+      ]
+    },
+    "exposures": {
+      "count": 0,
+      "exposures": []
+    },
+    "contacts": {
+      "count": 2,
+      "contacts": [
+        {
+          "display_name": "",
+          "first_name": null,
+          "last_name": null,
+          "contact_subtype": "Company",
+          "contact_prohibited": false,
+          "roles": [
+            {
+              "role": "Agent",
+              "active": true,
+              "related_to": "9185479590",
+              "related_type": "Policy"
+            }
+          ]
+        },
+        {
+          "display_name": "Micheal Turner",
+          "first_name": "Micheal",
+          "last_name": "Turner",
+          "contact_subtype": "Person",
+          "contact_prohibited": false,
+          "roles": [
+            {
+              "role": "Main Contact",
+              "active": true,
+              "related_to": "000-00-053109",
+              "related_type": "Claim"
+            },
+            {
+              "role": "Reporter",
+              "active": true,
+              "related_to": "000-00-053109",
+              "related_type": "Claim"
+            },
+            {
+              "role": "Insured",
+              "active": true,
+              "related_to": "9185479590",
+              "related_type": "Policy"
+            },
+            {
+              "role": "Other",
+              "active": true,
+              "related_to": "9185479590",
+              "related_type": "Policy"
+            }
+          ]
+        }
+      ]
+    },
+    "vehicle_incidents": {
+      "count": 0,
+      "vehicle_incidents": []
+    },
+    "reserves": {
+      "count": 0,
+      "reserves": []
+    },
+    "payments": {
+      "count": 0,
+      "payments": []
+    },
+    "checks": {
+      "count": 0,
+      "checks": []
+    },
+    "document_searches": {
+      "claim_id": "cc:Sa-nF94NVcYYWZhgPfEVl",
+      "default_profile": "auto_insurance",
+      "queries": [
+        "estimate|appraisal|repair estimate",
+        "photo|photos|image|inspection",
+        "police report|accident report",
+        "tow|towing|storage",
+        "rental",
+        "injury|medical|bodily injury",
+        "total loss|salvage|title",
+        "payment|settlement|release"
+      ],
+      "results": [
+        {
+          "claim_id": "cc:Sa-nF94NVcYYWZhgPfEVl",
+          "pattern": "estimate|appraisal|repair estimate",
+          "pdf_document_count": 2,
+          "matched_count": 0,
+          "matches": [],
+          "no_matches": true,
+          "extraction_failures": []
+        },
+        {
+          "claim_id": "cc:Sa-nF94NVcYYWZhgPfEVl",
+          "pattern": "photo|photos|image|inspection",
+          "pdf_document_count": 2,
+          "matched_count": 0,
+          "matches": [],
+          "no_matches": true,
+          "extraction_failures": []
+        },
+        {
+          "claim_id": "cc:Sa-nF94NVcYYWZhgPfEVl",
+          "pattern": "police report|accident report",
+          "pdf_document_count": 2,
+          "matched_count": 1,
+          "matches": [
+            {
+              "name": "Traffic Incident Report Narrative.pdf",
+              "snippets": [
+                "SYNTHETIC DEMO DOCUMENT — NOT AN OFFICIAL POLICE RECORD\nTRAFFIC INCIDENT REPORT — NARRATIVE\nIncident No.: CPD-DEMO-2026-0801-4317",
+                "was observed at the scene. No independent witnesses were identified at the time of this report.\n1",
+                "The Turner vehicle sustained a minor scuff to the rear passenger-side bumper and remained operable.\nRoadway and driveway surfaces were dry. Weather was clear . No evidence of alcohol or drug involvement\nwas observed at the scene. No independent witnesses were identified at the time of this report."
+              ]
+            }
+          ],
+          "no_matches": false,
+          "extraction_failures": []
+        },
+        {
+          "claim_id": "cc:Sa-nF94NVcYYWZhgPfEVl",
+          "pattern": "tow|towing|storage",
+          "pdf_document_count": 2,
+          "matched_count": 0,
+          "matches": [],
+          "no_matches": true,
+          "extraction_failures": []
+        },
+        {
+          "claim_id": "cc:Sa-nF94NVcYYWZhgPfEVl",
+          "pattern": "rental",
+          "pdf_document_count": 2,
+          "matched_count": 0,
+          "matches": [],
+          "no_matches": true,
+          "extraction_failures": []
+        },
+        {
+          "claim_id": "cc:Sa-nF94NVcYYWZhgPfEVl",
+          "pattern": "injury|medical|bodily injury",
+          "pdf_document_count": 2,
+          "matched_count": 1,
+          "matches": [
+            {
+              "name": "Emergency Department Discharge Summary.pdf",
+              "snippets": [
+                "SYNTHETIC DEMO DOCUMENT — NOT AN ACTUAL MEDICAL RECORD\nEMERGENCY DEPARTMENT DISCHARGE SUMMARY\nPatient: David Miller"
+              ]
+            }
+          ],
+          "no_matches": false,
+          "extraction_failures": []
+        },
+        {
+          "claim_id": "cc:Sa-nF94NVcYYWZhgPfEVl",
+          "pattern": "total loss|salvage|title",
+          "pdf_document_count": 2,
+          "matched_count": 0,
+          "matches": [],
+          "no_matches": true,
+          "extraction_failures": []
+        },
+        {
+          "claim_id": "cc:Sa-nF94NVcYYWZhgPfEVl",
+          "pattern": "payment|settlement|release",
+          "pdf_document_count": 2,
+          "matched_count": 0,
+          "matches": [],
+          "no_matches": true,
+          "extraction_failures": []
+        }
+      ]
+    }
+  }
+}

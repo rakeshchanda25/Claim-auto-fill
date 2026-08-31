@@ -4,15 +4,24 @@ from .config import GenerationRequest
 
 
 def _custom_fields_block(req: GenerationRequest) -> str:
-    """User-supplied values must reach the agent in EVERY mode - they were
-    previously only wired into 'generate', so a name/amount pinned by the
-    user was silently dropped when filling or recreating a form."""
+    """ User supplied values passing to LLM so they can be used for filling or recreating the a form
+    """
     if not req.custom_fields:
         return ""
     return (
         f"\n\nUSER-SUPPLIED VALUES (authoritative - use each of these verbatim wherever "
         f"it fits a field, and only invent the remaining values):\n{req.custom_fields}"
     )
+
+
+def _user_input_block(req: GenerationRequest) -> str:
+    """Free-form text typed in the frontend's "User Input" box. Distinct from
+    custom_fields (structured field:value overrides, including any facts a
+    Guidewire claim lookup added - see app.py's ai_generate_document): this is
+    plain guidance/instructions, not necessarily field-shaped."""
+    if not req.user_input:
+        return ""
+    return f"\n\nUSER INPUT (incorporate what's relevant to this document):\n{req.user_input}"
 
 
 def build_generation_prompt(req: GenerationRequest) -> str:
@@ -36,6 +45,7 @@ def build_generation_prompt(req: GenerationRequest) -> str:
             "claim; do not try to adjust them. Once render_packet returns, reply with a short "
             "JSON status object: {\"status\": \"ok\", \"components\": <count>}."
             + _custom_fields_block(req)
+            + _user_input_block(req)
             + json_footer
         )
 
@@ -53,10 +63,6 @@ def build_generation_prompt(req: GenerationRequest) -> str:
     if req.mode == "generate":
         return (
             f"Generate a single '{req.doc_type}' document for scenario '{req.scenario}'.\n"
-            # A variant template (e.g. acord-new) has no skill of its own - it
-            # shares the parent form's field contract, so it loads the parent's
-            # skill. Without resolving, load_skill would look for a directory
-            # that does not exist.
             f"1. Load the skill: load_skill('{resolve_doc_type(req.doc_type)}').\n"
             f"2. Call generate_synthetic_data(doc_type='{req.doc_type}', scenario='{req.scenario}'"
             + (f", seed={req.seed}" if req.seed is not None else "") + ").\n"
@@ -66,6 +72,7 @@ def build_generation_prompt(req: GenerationRequest) -> str:
             f"5. Call render_document_to_pdf(template_name='{req.doc_type.replace('-', '_')}')."
             + staged_footer
             + _custom_fields_block(req)
+            + _user_input_block(req)
             + json_footer
         )
 
@@ -104,71 +111,11 @@ def build_generation_prompt(req: GenerationRequest) -> str:
             f"5. Call render_document_to_pdf(template_name='{req.doc_type.replace('-', '_')}')."
             + staged_footer
             + _custom_fields_block(req)
+            + _user_input_block(req)
             + json_footer
         )
 
-    if req.mode == "fill" and (req.reference_file_type or "").lower().lstrip(".") == "docx":
-        return (
-            f"Fill the user's uploaded .docx (Word content-control form) with coherent synthetic "
-            f"data. The user's own instructions for what to fill in are: '{req.scenario}'.\n"
-            "0. ABSOLUTE RULE: you are filling the user's UPLOADED document in place. NEVER call "
-            "generate_synthetic_data or render_document_to_pdf in this mode - those create a brand "
-            "new document from a template, which is not this task, no matter how thin the "
-            "instructions above look.\n"
-            "1. Load the skill: load_skill('dynamic-docx-fill') and follow it exactly. It works on "
-            "ANY docx with content controls, including one never seen before - do not assume this "
-            "document's controls or layout.\n"
-            "2. Call inspect_docx_form_structure() to discover the document's real controls (the "
-            "uploaded file's bytes are supplied automatically, do not attempt to pass them): each "
-            "one's type (text/richText/date/checkbox/dropdown/combobox), harvested label, and - for "
-            "dropdown/comboBox - its exact choices.\n"
-            "3. Decide what each control is asking for FROM ITS LABEL, never from its raw `tag`. "
-            "For a dropdown/comboBox you MUST pick one of its own `choices[].display` values.\n"
-            "4. Choose values, keeping ONE coherent identity, date order, and arithmetic across "
-            "the whole document.\n"
-            "5. Call fill_docx_form_controls(values={...}, checks={...}, choices={...}), then "
-            "verify_docx_fill(expected_values) (no docx argument needed - it reads the "
-            "just-filled docx automatically, but expected_values IS still required) and "
-            "resolve any mismatch.\n"
-            "6. The filled docx is staged automatically the moment fill_docx_form_controls runs - "
-            "you never see or handle its bytes, and must NOT attempt to encode or embed them "
-            "yourself. Once verify_docx_fill confirms ok, just return a short JSON status object: "
-            "{\"status\": \"ok\"}."
-            + _custom_fields_block(req)
-            + json_footer
-        )
-
-    if req.mode == "fill":
-        return (
-            f"Fill the user's uploaded fillable PDF form with coherent synthetic data. The user's "
-            f"own instructions for what to fill in are: '{req.scenario}'.\n"
-            "0. ABSOLUTE RULE: you are filling the user's UPLOADED document in place. NEVER call "
-            "generate_synthetic_data or render_document_to_pdf in this mode - those create a brand "
-            "new document from a template, which is not this task, no matter how thin the "
-            "instructions above look.\n"
-            "1. Load the skill: load_skill('dynamic-form-fill') and follow it exactly. "
-            "It works on ANY AcroForm template, including one never seen before - do not "
-            "assume this form's fields or layout.\n"
-            "2. Call inspect_pdf_form_structure() to discover the form's real structure (the "
-            "uploaded file's bytes are supplied automatically, do not attempt to pass them): runs "
-            "with harvested labels, Yes/No pairs with their question text, repeating grids, and "
-            "section headings.\n"
-            "3. Decide what each run/pair/grid column is asking for FROM ITS LABEL, never from "
-            "its internal widget name. If a label is empty or ambiguous, call "
-            "inspect_region on that widget's rect to read more of the surrounding page text.\n"
-            "4. Choose values, keeping ONE coherent identity, date order, and arithmetic across "
-            "the whole form.\n"
-            "5. Fit text with flow_text_into_widgets (runs) and fit_grid_row (table rows) - never "
-            "guess a font size.\n"
-            "6. Call fill_pdf_widgets(widget_values, widget_fonts, watermark=...), then "
-            "verify_pdf_fill(expected_values) (no PDF argument needed - it reads the just-filled "
-            "PDF automatically) and resolve any mismatch.\n"
-            "7. The filled PDF is staged automatically the moment fill_pdf_widgets runs - you never "
-            "see or handle its bytes, and must NOT attempt to encode or embed them yourself (a "
-            "document is far too large to transcribe as text). Once verify_pdf_fill confirms ok, "
-            "just return a short JSON status object: {\"status\": \"ok\"}."
-            + _custom_fields_block(req)
-            + json_footer
-        )
-
-    return f"Generate a '{req.doc_type}' document for scenario '{req.scenario}'." + _custom_fields_block(req) + json_footer
+    return (
+        f"Generate a '{req.doc_type}' document for scenario '{req.scenario}'."
+        + _custom_fields_block(req) + _user_input_block(req) + json_footer
+    )

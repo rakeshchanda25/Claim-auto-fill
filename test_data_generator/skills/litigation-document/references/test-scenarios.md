@@ -1,9 +1,13 @@
 # Litigation Document IDP Test Scenarios
 
-- `medical_malpractice`: Injury complaint alleging provider negligence and liability.
-- `slip_and_fall`: Premises liability complaint detailing a slip-and-fall accident.
-- `product_liability`: Complaint alleging a defective product caused injury.
+- `slip_and_fall`: Premises liability complaint - `causes_of_action` always includes
+  "Premises Liability".
+- `medical_malpractice`: Provider negligence complaint - `causes_of_action` always includes
+  "Negligence" (the pool has no "Medical Malpractice" label; "Negligence" is the malpractice-
+  appropriate cause here).
+- `product_liability`: Defective-product complaint - `causes_of_action` always includes
+  "Strict Product Liability".
 
-`causes_of_action` is drawn from a fixed pool independent of the chosen scenario (see SKILL.md) -
-do not assume `medical_malpractice` produces a "Medical Malpractice" cause of action; the pool
-does not contain that label.
+Each scenario's anchor cause is guaranteed present; the remaining 1-2 causes in the 2-3-item
+list are still randomly sampled from the rest of the pool for variety. See "Causes of Action
+Pool" in SKILL.md.

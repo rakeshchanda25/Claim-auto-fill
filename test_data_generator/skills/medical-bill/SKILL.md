@@ -21,6 +21,8 @@ allowed-tools: generate_synthetic_data render_document_to_pdf validate_document_
    Assessment, Plan (`_clinical_note_fields()` in synthetic_data.py - the exact same shape
    medical-record uses)
 5. Itemized Charges Table — CPT code, description, units, charge per line
+5a. Scenario Details Section — same 13-scenario coverage as medical-record (reused across
+   every packet) — see references/test-scenarios.md
 6. Summary Box — Total charges, adjustments, amount paid, balance due
 7. Payment Instructions and Due Date
 
@@ -33,3 +35,13 @@ allowed-tools: generate_synthetic_data render_document_to_pdf validate_document_
 ## Synthetic Data Rules
 - Account number: ACC + 8 digits
 - Charges per CPT: $150 to $2,500
+
+## Document composition
+Like every doc type, this template is decomposed into named Jinja macros ("components") in
+`renderers/templates/medical_bill.html`, assembled by `renderers/components.py`'s
+`COMPONENT_COMPOSITION["medical-bill"]`. Unlike police-report (which has two structurally
+different shapes depending on scenario), every registered scenario for this doc type resolves
+to the SAME component list - a real superbill doesn't restructure by scenario in the real
+world, only its content does (see the scenario-specific data-generation notes above). The
+mechanism exists uniformly across every doc type for architectural consistency, even where
+it isn't exercised to produce different shapes.

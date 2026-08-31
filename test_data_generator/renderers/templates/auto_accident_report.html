@@ -107,14 +107,14 @@
 <body>
 <div class="sheet">
 
-  <!-- ===== Header ===== -->
+{% macro doc_header(data) %}
   <div class="doc-header">
     <div class="form-meta">
-      <img src="{{ seal_url | default('data:image/png;base64,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', true) }}" alt="State seal">
+      <img src="{{ data.seal_url | default('data:image/png;base64,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', true) }}" alt="State seal">
       <div class="form-num">
         <div>FORM</div>
-        <div>{{ form_number | default('S.F. 97') }}</div>
-        <div>{{ form_revision | default('RMD EF 02/12') }}</div>
+        <div>{{ data.form_number | default('S.F. 97') }}</div>
+        <div>{{ data.form_revision | default('RMD EF 02/12') }}</div>
       </div>
     </div>
     <div class="title-center">
@@ -123,37 +123,39 @@
     </div>
     <div class="date-box">
       <div class="row"><span>Date of Accident (MM/DD/YYYY)</span></div>
-      <div class="row"><span class="val">{{ accident_date }}</span></div>
+      <div class="row"><span class="val">{{ data.accident_date }}</span></div>
       <div class="row">
         <span>Time</span>
         <span class="time-opts">
-          <span>{{ box(accident_time_ampm, 'AM') }} AM</span>
-          <span>{{ box(accident_time_ampm, 'PM') }} PM</span>
+          <span>{{ box(data.accident_time_ampm, 'AM') }} AM</span>
+          <span>{{ box(data.accident_time_ampm, 'PM') }} PM</span>
         </span>
       </div>
-      <div class="row"><span class="val">{{ accident_time }}</span></div>
+      <div class="row"><span class="val">{{ data.accident_time }}</span></div>
     </div>
   </div>
+{% endmacro %}
 
-  <!-- ===== Instructions ===== -->
+{% macro instructions(data) %}
   <div class="instructions">
     <div class="lead"><b>INSTRUCTIONS:</b> This report must be mailed* within two working days to the following offices:</div>
     <div class="two-col">
       <div class="item">
-        <span class="num">①</span>{{ office1_name | default('Department of Enterprise Services') }}<br>
-        {{ office1_division | default('Office of Risk Management') }}<br>
-        {{ office1_address | default('1500 Jefferson Street SE / POB 41466') }}<br>
-        {{ office1_city_state_zip | default('Olympia, Washington 98504-1466') }}
+        <span class="num">①</span>{{ data.office1_name | default('Department of Enterprise Services') }}<br>
+        {{ data.office1_division | default('Office of Risk Management') }}<br>
+        {{ data.office1_address | default('1500 Jefferson Street SE / POB 41466') }}<br>
+        {{ data.office1_city_state_zip | default('Olympia, Washington 98504-1466') }}
       </div>
       <div class="item">
-        <span class="num">②</span>{{ office2_name | default('Safety/Risk Management') }}<br>
-        {{ office2_division | default('Office of Reporting Agency') }}
+        <span class="num">②</span>{{ data.office2_name | default('Safety/Risk Management') }}<br>
+        {{ data.office2_division | default('Office of Reporting Agency') }}
       </div>
     </div>
-    <div class="note">*Scanned form can be e-mailed to {{ scan_email | default('desmiriskmanagement@des.wa.gov') }}</div>
+    <div class="note">*Scanned form can be e-mailed to {{ data.scan_email | default('desmiriskmanagement@des.wa.gov') }}</div>
   </div>
+{% endmacro %}
 
-  <!-- ===== Section: State Employee / Driver ===== -->
+{% macro state_employee(data) %}
   <div class="section">
     <div class="tab"><span class="tab-text">STATE EMPLOYEE</span></div>
     <div class="fields">
@@ -161,24 +163,24 @@
       <table class="ftable">
         <colgroup><col style="width:32%"><col style="width:12%"><col style="width:22%"><col style="width:34%"></colgroup>
         <tr>
-          <td class="field"><div class="lbl">Business Address</div><div class="val">{{ employee.business_address }}</div></td>
-          <td class="field"><div class="lbl">Zip</div><div class="val">{{ employee.zip }}</div></td>
-          <td class="field"><div class="lbl">Business Phone</div><div class="val">{{ employee.business_phone }}</div></td>
-          <td class="field"><div class="lbl">Email</div><div class="val">{{ employee.email }}</div></td>
+          <td class="field"><div class="lbl">Business Address</div><div class="val">{{ data.employee.business_address }}</div></td>
+          <td class="field"><div class="lbl">Zip</div><div class="val">{{ data.employee.zip }}</div></td>
+          <td class="field"><div class="lbl">Business Phone</div><div class="val">{{ data.employee.business_phone }}</div></td>
+          <td class="field"><div class="lbl">Email</div><div class="val">{{ data.employee.email }}</div></td>
         </tr>
       </table>
 
       <table class="ftable">
         <colgroup><col style="width:22%"><col style="width:20%"><col style="width:24%"><col style="width:34%"></colgroup>
         <tr>
-          <td class="field"><div class="lbl">Operator's License No.</div><div class="val">{{ employee.license_no }}</div></td>
-          <td class="field"><div class="lbl">License Restrictions</div><div class="val">{{ employee.license_restrictions }}</div></td>
-          <td class="field"><div class="lbl">If Yes, Indicate</div><div class="val">{{ employee.if_yes_indicate }}</div></td>
+          <td class="field"><div class="lbl">Operator's License No.</div><div class="val">{{ data.employee.license_no }}</div></td>
+          <td class="field"><div class="lbl">License Restrictions</div><div class="val">{{ data.employee.license_restrictions }}</div></td>
+          <td class="field"><div class="lbl">If Yes, Indicate</div><div class="val">{{ data.employee.if_yes_indicate }}</div></td>
           <td class="field">
             <div class="lbl">Was vehicle being used on Official State Business?</div>
             <div class="chkrow">
-              <span>{{ box(employee.official_business, true) }} Yes</span>
-              <span>{{ box(employee.official_business, false) }} No</span>
+              <span>{{ box(data.employee.official_business, true) }} Yes</span>
+              <span>{{ box(data.employee.official_business, false) }} No</span>
             </div>
           </td>
         </tr>
@@ -186,8 +188,9 @@
 
     </div>
   </div>
+{% endmacro %}
 
-  <!-- ===== Section: Vehicle No. 1 ===== -->
+{% macro vehicle1(data) %}
   <div class="section">
     <div class="tab"><span class="tab-text">VEHICLE NO. 1</span></div>
     <div class="fields">
@@ -198,18 +201,18 @@
           <col style="width:14%"><col style="width:10%"><col style="width:10%"><col style="width:20%">
         </colgroup>
         <tr>
-          <td class="field"><div class="lbl">License No.</div><div class="val">{{ vehicle1.license_no }}</div></td>
-          <td class="field"><div class="lbl">Year</div><div class="val">{{ vehicle1.year }}</div></td>
-          <td class="field"><div class="lbl">Make</div><div class="val">{{ vehicle1.make }}</div></td>
-          <td class="field"><div class="lbl">Body Type</div><div class="val">{{ vehicle1.body_type }}</div></td>
-          <td class="field"><div class="lbl">Where Located</div><div class="val">{{ vehicle1.where_located }}</div></td>
-          <td class="field"><div class="lbl">No. of Passengers</div><div class="val">{{ vehicle1.no_of_passengers }}</div></td>
-          <td class="field"><div class="lbl">Est. Repair Cost</div><div class="val">{{ vehicle1.est_repair_cost }}</div></td>
+          <td class="field"><div class="lbl">License No.</div><div class="val">{{ data.vehicle1.license_no }}</div></td>
+          <td class="field"><div class="lbl">Year</div><div class="val">{{ data.vehicle1.year }}</div></td>
+          <td class="field"><div class="lbl">Make</div><div class="val">{{ data.vehicle1.make }}</div></td>
+          <td class="field"><div class="lbl">Body Type</div><div class="val">{{ data.vehicle1.body_type }}</div></td>
+          <td class="field"><div class="lbl">Where Located</div><div class="val">{{ data.vehicle1.where_located }}</div></td>
+          <td class="field"><div class="lbl">No. of Passengers</div><div class="val">{{ data.vehicle1.no_of_passengers }}</div></td>
+          <td class="field"><div class="lbl">Est. Repair Cost</div><div class="val">{{ data.vehicle1.est_repair_cost }}</div></td>
           <td class="field">
             <div class="lbl">Have you had a prior accident while driving on state business?</div>
             <div class="chkrow">
-              <span>{{ box(vehicle1.prior_accident, true) }} Yes</span>
-              <span>{{ box(vehicle1.prior_accident, false) }} No</span>
+              <span>{{ box(data.vehicle1.prior_accident, true) }} Yes</span>
+              <span>{{ box(data.vehicle1.prior_accident, false) }} No</span>
             </div>
           </td>
         </tr>
@@ -218,23 +221,24 @@
       <table class="ftable">
         <colgroup><col style="width:24%"><col style="width:76%"></colgroup>
         <tr>
-          <td class="field"><div class="lbl">Owning Agency</div><div class="val">{{ vehicle1.owning_agency }}</div></td>
-          <td class="field"><div class="lbl">Describe Damage Fully (Parts, type, and extent of damage)</div><div class="val">{{ vehicle1.damage_description }}</div></td>
+          <td class="field"><div class="lbl">Owning Agency</div><div class="val">{{ data.vehicle1.owning_agency }}</div></td>
+          <td class="field"><div class="lbl">Describe Damage Fully (Parts, type, and extent of damage)</div><div class="val">{{ data.vehicle1.damage_description }}</div></td>
         </tr>
       </table>
 
       <table class="ftable">
         <colgroup><col style="width:76%"><col style="width:24%"></colgroup>
         <tr>
-          <td class="field"><div class="lbl">If Privately Owned, Name and Address of Owner (If State Owned, Equipment No. Only)</div><div class="val">{{ vehicle1.private_owner_or_equipment_no }}</div></td>
-          <td class="field"><div class="lbl">Insurer</div><div class="val">{{ vehicle1.insurer }}</div></td>
+          <td class="field"><div class="lbl">If Privately Owned, Name and Address of Owner (If State Owned, Equipment No. Only)</div><div class="val">{{ data.vehicle1.private_owner_or_equipment_no }}</div></td>
+          <td class="field"><div class="lbl">Insurer</div><div class="val">{{ data.vehicle1.insurer }}</div></td>
         </tr>
       </table>
 
     </div>
   </div>
+{% endmacro %}
 
-  <!-- ===== Section: Other Vehicles ===== -->
+{% macro other_vehicles(data) %}
   <div class="section">
     <div class="tab"><span class="tab-text">OTHER VEHICLES</span></div>
     <div class="fields">
@@ -242,10 +246,10 @@
       <table class="ftable">
         <colgroup><col style="width:25%"><col style="width:25%"><col style="width:25%"><col style="width:25%"></colgroup>
         <tr>
-          <td class="field"><div class="lbl">Owner Car No. 2</div><div class="val">{{ vehicle2.owner_name }}</div></td>
-          <td class="field"><div class="lbl">Phone</div><div class="val">{{ vehicle2.owner_phone }}</div></td>
-          <td class="field"><div class="lbl">Owner Car No. 3</div><div class="val">{{ vehicle3.owner_name }}</div></td>
-          <td class="field"><div class="lbl">Phone</div><div class="val">{{ vehicle3.owner_phone }}</div></td>
+          <td class="field"><div class="lbl">Owner Car No. 2</div><div class="val">{{ data.vehicle2.owner_name }}</div></td>
+          <td class="field"><div class="lbl">Phone</div><div class="val">{{ data.vehicle2.owner_phone }}</div></td>
+          <td class="field"><div class="lbl">Owner Car No. 3</div><div class="val">{{ data.vehicle3.owner_name }}</div></td>
+          <td class="field"><div class="lbl">Phone</div><div class="val">{{ data.vehicle3.owner_phone }}</div></td>
         </tr>
       </table>
 
@@ -254,12 +258,12 @@
           <col style="width:17%"><col style="width:17%"><col style="width:16%"><col style="width:17%"><col style="width:17%"><col style="width:16%">
         </colgroup>
         <tr>
-          <td class="field"><div class="lbl">Address</div><div class="val">{{ vehicle2.owner_address }}</div></td>
-          <td class="field"><div class="lbl">City</div><div class="val">{{ vehicle2.owner_city }}</div></td>
-          <td class="field"><div class="lbl">Zip</div><div class="val">{{ vehicle2.owner_zip }}</div></td>
-          <td class="field"><div class="lbl">Address</div><div class="val">{{ vehicle3.owner_address }}</div></td>
-          <td class="field"><div class="lbl">City</div><div class="val">{{ vehicle3.owner_city }}</div></td>
-          <td class="field"><div class="lbl">Zip</div><div class="val">{{ vehicle3.owner_zip }}</div></td>
+          <td class="field"><div class="lbl">Address</div><div class="val">{{ data.vehicle2.owner_address }}</div></td>
+          <td class="field"><div class="lbl">City</div><div class="val">{{ data.vehicle2.owner_city }}</div></td>
+          <td class="field"><div class="lbl">Zip</div><div class="val">{{ data.vehicle2.owner_zip }}</div></td>
+          <td class="field"><div class="lbl">Address</div><div class="val">{{ data.vehicle3.owner_address }}</div></td>
+          <td class="field"><div class="lbl">City</div><div class="val">{{ data.vehicle3.owner_city }}</div></td>
+          <td class="field"><div class="lbl">Zip</div><div class="val">{{ data.vehicle3.owner_zip }}</div></td>
         </tr>
       </table>
 
@@ -268,12 +272,12 @@
           <col style="width:17%"><col style="width:10%"><col style="width:23%"><col style="width:17%"><col style="width:10%"><col style="width:23%">
         </colgroup>
         <tr>
-          <td class="field"><div class="lbl">Driver</div><div class="val">{{ vehicle2.driver_name }}</div></td>
-          <td class="field"><div class="lbl">Age</div><div class="val">{{ vehicle2.driver_age }}</div></td>
-          <td class="field"><div class="lbl">Phone</div><div class="val">{{ vehicle2.driver_phone }}</div></td>
-          <td class="field"><div class="lbl">Driver</div><div class="val">{{ vehicle3.driver_name }}</div></td>
-          <td class="field"><div class="lbl">Age</div><div class="val">{{ vehicle3.driver_age }}</div></td>
-          <td class="field"><div class="lbl">Phone</div><div class="val">{{ vehicle3.driver_phone }}</div></td>
+          <td class="field"><div class="lbl">Driver</div><div class="val">{{ data.vehicle2.driver_name }}</div></td>
+          <td class="field"><div class="lbl">Age</div><div class="val">{{ data.vehicle2.driver_age }}</div></td>
+          <td class="field"><div class="lbl">Phone</div><div class="val">{{ data.vehicle2.driver_phone }}</div></td>
+          <td class="field"><div class="lbl">Driver</div><div class="val">{{ data.vehicle3.driver_name }}</div></td>
+          <td class="field"><div class="lbl">Age</div><div class="val">{{ data.vehicle3.driver_age }}</div></td>
+          <td class="field"><div class="lbl">Phone</div><div class="val">{{ data.vehicle3.driver_phone }}</div></td>
         </tr>
       </table>
 
@@ -282,22 +286,22 @@
           <col style="width:17%"><col style="width:17%"><col style="width:16%"><col style="width:17%"><col style="width:17%"><col style="width:16%">
         </colgroup>
         <tr>
-          <td class="field"><div class="lbl">Address</div><div class="val">{{ vehicle2.driver_address }}</div></td>
-          <td class="field"><div class="lbl">City</div><div class="val">{{ vehicle2.driver_city }}</div></td>
-          <td class="field"><div class="lbl">Zip</div><div class="val">{{ vehicle2.driver_zip }}</div></td>
-          <td class="field"><div class="lbl">Address</div><div class="val">{{ vehicle3.driver_address }}</div></td>
-          <td class="field"><div class="lbl">City</div><div class="val">{{ vehicle3.driver_city }}</div></td>
-          <td class="field"><div class="lbl">Zip</div><div class="val">{{ vehicle3.driver_zip }}</div></td>
+          <td class="field"><div class="lbl">Address</div><div class="val">{{ data.vehicle2.driver_address }}</div></td>
+          <td class="field"><div class="lbl">City</div><div class="val">{{ data.vehicle2.driver_city }}</div></td>
+          <td class="field"><div class="lbl">Zip</div><div class="val">{{ data.vehicle2.driver_zip }}</div></td>
+          <td class="field"><div class="lbl">Address</div><div class="val">{{ data.vehicle3.driver_address }}</div></td>
+          <td class="field"><div class="lbl">City</div><div class="val">{{ data.vehicle3.driver_city }}</div></td>
+          <td class="field"><div class="lbl">Zip</div><div class="val">{{ data.vehicle3.driver_zip }}</div></td>
         </tr>
       </table>
 
       <table class="ftable">
         <colgroup><col style="width:25%"><col style="width:25%"><col style="width:25%"><col style="width:25%"></colgroup>
         <tr>
-          <td class="field"><div class="lbl">Driver's License No.</div><div class="val">{{ vehicle2.driver_license_no }}</div></td>
-          <td class="field"><div class="lbl">Vehicle License No.</div><div class="val">{{ vehicle2.vehicle_license_no }}</div></td>
-          <td class="field"><div class="lbl">Driver's License No.</div><div class="val">{{ vehicle3.driver_license_no }}</div></td>
-          <td class="field"><div class="lbl">Vehicle License No.</div><div class="val">{{ vehicle3.vehicle_license_no }}</div></td>
+          <td class="field"><div class="lbl">Driver's License No.</div><div class="val">{{ data.vehicle2.driver_license_no }}</div></td>
+          <td class="field"><div class="lbl">Vehicle License No.</div><div class="val">{{ data.vehicle2.vehicle_license_no }}</div></td>
+          <td class="field"><div class="lbl">Driver's License No.</div><div class="val">{{ data.vehicle3.driver_license_no }}</div></td>
+          <td class="field"><div class="lbl">Vehicle License No.</div><div class="val">{{ data.vehicle3.vehicle_license_no }}</div></td>
         </tr>
       </table>
 
@@ -306,47 +310,48 @@
           <col style="width:17%"><col style="width:8%"><col style="width:17%"><col style="width:17%"><col style="width:8%"><col style="width:17%">
         </colgroup>
         <tr>
-          <td class="field"><div class="lbl">Vehicle Make</div><div class="val">{{ vehicle2.vehicle_make }}</div></td>
-          <td class="field"><div class="lbl">Year</div><div class="val">{{ vehicle2.vehicle_year }}</div></td>
-          <td class="field"><div class="lbl">Body Type</div><div class="val">{{ vehicle2.body_type }}</div></td>
-          <td class="field"><div class="lbl">Vehicle Make</div><div class="val">{{ vehicle3.vehicle_make }}</div></td>
-          <td class="field"><div class="lbl">Year</div><div class="val">{{ vehicle3.vehicle_year }}</div></td>
-          <td class="field"><div class="lbl">Body Type</div><div class="val">{{ vehicle3.body_type }}</div></td>
+          <td class="field"><div class="lbl">Vehicle Make</div><div class="val">{{ data.vehicle2.vehicle_make }}</div></td>
+          <td class="field"><div class="lbl">Year</div><div class="val">{{ data.vehicle2.vehicle_year }}</div></td>
+          <td class="field"><div class="lbl">Body Type</div><div class="val">{{ data.vehicle2.body_type }}</div></td>
+          <td class="field"><div class="lbl">Vehicle Make</div><div class="val">{{ data.vehicle3.vehicle_make }}</div></td>
+          <td class="field"><div class="lbl">Year</div><div class="val">{{ data.vehicle3.vehicle_year }}</div></td>
+          <td class="field"><div class="lbl">Body Type</div><div class="val">{{ data.vehicle3.body_type }}</div></td>
         </tr>
       </table>
 
       <table class="ftable">
         <colgroup><col style="width:50%"><col style="width:50%"></colgroup>
         <tr>
-          <td class="field"><div class="lbl">Name of Passengers</div><div class="val">{{ vehicle2.passengers }}</div></td>
-          <td class="field"><div class="lbl">Name of Passengers</div><div class="val">{{ vehicle3.passengers }}</div></td>
+          <td class="field"><div class="lbl">Name of Passengers</div><div class="val">{{ data.vehicle2.passengers }}</div></td>
+          <td class="field"><div class="lbl">Name of Passengers</div><div class="val">{{ data.vehicle3.passengers }}</div></td>
         </tr>
       </table>
 
       <table class="ftable">
         <colgroup><col style="width:12%"><col style="width:38%"><col style="width:12%"><col style="width:38%"></colgroup>
         <tr>
-          <td class="field"><div class="lbl">Repair Cost</div><div class="val">{{ vehicle2.repair_cost }}</div></td>
-          <td class="field"><div class="lbl">Describe Damage</div><div class="val">{{ vehicle2.damage_description }}</div></td>
-          <td class="field"><div class="lbl">Repair Cost</div><div class="val">{{ vehicle3.repair_cost }}</div></td>
-          <td class="field"><div class="lbl">Describe Damage</div><div class="val">{{ vehicle3.damage_description }}</div></td>
+          <td class="field"><div class="lbl">Repair Cost</div><div class="val">{{ data.vehicle2.repair_cost }}</div></td>
+          <td class="field"><div class="lbl">Describe Damage</div><div class="val">{{ data.vehicle2.damage_description }}</div></td>
+          <td class="field"><div class="lbl">Repair Cost</div><div class="val">{{ data.vehicle3.repair_cost }}</div></td>
+          <td class="field"><div class="lbl">Describe Damage</div><div class="val">{{ data.vehicle3.damage_description }}</div></td>
         </tr>
       </table>
 
       <table class="ftable">
         <colgroup><col style="width:32%"><col style="width:18%"><col style="width:32%"><col style="width:18%"></colgroup>
         <tr>
-          <td class="field"><div class="lbl">Insurance Company</div><div class="val">{{ vehicle2.insurance_company }}</div></td>
-          <td class="field"><div class="lbl">Policy No.</div><div class="val">{{ vehicle2.policy_no }}</div></td>
-          <td class="field"><div class="lbl">Insurance Company</div><div class="val">{{ vehicle3.insurance_company }}</div></td>
-          <td class="field"><div class="lbl">Policy No.</div><div class="val">{{ vehicle3.policy_no }}</div></td>
+          <td class="field"><div class="lbl">Insurance Company</div><div class="val">{{ data.vehicle2.insurance_company }}</div></td>
+          <td class="field"><div class="lbl">Policy No.</div><div class="val">{{ data.vehicle2.policy_no }}</div></td>
+          <td class="field"><div class="lbl">Insurance Company</div><div class="val">{{ data.vehicle3.insurance_company }}</div></td>
+          <td class="field"><div class="lbl">Policy No.</div><div class="val">{{ data.vehicle3.policy_no }}</div></td>
         </tr>
       </table>
 
     </div>
   </div>
+{% endmacro %}
 
-  <!-- ===== Section: Other Property ===== -->
+{% macro other_property(data) %}
   <div class="section">
     <div class="tab"><span class="tab-text">OTHER PROPERTY</span></div>
     <div class="fields">
@@ -354,25 +359,26 @@
       <table class="ftable">
         <colgroup><col style="width:78%"><col style="width:22%"></colgroup>
         <tr>
-          <td class="field"><div class="lbl">What was Damaged?</div><div class="val">{{ other_property.what_was_damaged }}</div></td>
-          <td class="field"><div class="lbl">Repair Cost</div><div class="val">{{ other_property.repair_cost }}</div></td>
+          <td class="field"><div class="lbl">What was Damaged?</div><div class="val">{{ data.other_property.what_was_damaged }}</div></td>
+          <td class="field"><div class="lbl">Repair Cost</div><div class="val">{{ data.other_property.repair_cost }}</div></td>
         </tr>
       </table>
 
       <table class="ftable">
         <colgroup><col style="width:46%"><col style="width:20%"><col style="width:14%"><col style="width:20%"></colgroup>
         <tr>
-          <td class="field"><div class="lbl">Name and Address of Owner</div><div class="val">{{ other_property.owner_name_address }}</div></td>
-          <td class="field"><div class="lbl">City</div><div class="val">{{ other_property.city }}</div></td>
-          <td class="field"><div class="lbl">Zip</div><div class="val">{{ other_property.zip }}</div></td>
-          <td class="field"><div class="lbl">Phone</div><div class="val">{{ other_property.phone }}</div></td>
+          <td class="field"><div class="lbl">Name and Address of Owner</div><div class="val">{{ data.other_property.owner_name_address }}</div></td>
+          <td class="field"><div class="lbl">City</div><div class="val">{{ data.other_property.city }}</div></td>
+          <td class="field"><div class="lbl">Zip</div><div class="val">{{ data.other_property.zip }}</div></td>
+          <td class="field"><div class="lbl">Phone</div><div class="val">{{ data.other_property.phone }}</div></td>
         </tr>
       </table>
 
     </div>
   </div>
+{% endmacro %}
 
-  <!-- ===== Section: Injured Parties ===== -->
+{% macro injured_parties(data) %}
   <div class="section">
     <div class="tab"><span class="tab-text">INJURED PARTIES</span></div>
     <div class="fields">
@@ -390,7 +396,7 @@
           <th>Veh. 3</th>
           <th>Ped.</th>
         </tr>
-        {% for p in injured_parties %}
+        {% for p in data.injured_parties %}
         <tr>
           <td class="left">{{ p.name_address }}</td>
           <td class="left">{{ p.extent_of_injury }}</td>
@@ -404,8 +410,9 @@
       </table>
     </div>
   </div>
+{% endmacro %}
 
-  <!-- ===== Section: Witnesses ===== -->
+{% macro witnesses(data) %}
   <div class="section">
     <div class="tab"><span class="tab-text">WITNESSES</span></div>
     <div class="fields">
@@ -419,7 +426,7 @@
           <th>City</th>
           <th>Phone</th>
         </tr>
-        {% for w in witnesses %}
+        {% for w in data.witnesses %}
         <tr>
           <td class="left">{{ w.name }}</td>
           <td class="left">{{ w.address }}</td>
@@ -430,8 +437,9 @@
       </table>
     </div>
   </div>
+{% endmacro %}
 
-  <!-- ===== Section: Other (bottom) ===== -->
+{% macro other_section(data) %}
   <div class="section">
     <div class="tab"><span class="tab-text">OTHER</span></div>
     <div class="fields">
@@ -441,37 +449,66 @@
           <td class="field">
             <div class="lbl">Police Investigated?</div>
             <div class="chkrow">
-              <span>{{ box(other.police_investigated, true) }} Yes</span>
-              <span>{{ box(other.police_investigated, false) }} No</span>
+              <span>{{ box(data.other.police_investigated, true) }} Yes</span>
+              <span>{{ box(data.other.police_investigated, false) }} No</span>
             </div>
           </td>
-          <td class="field"><div class="lbl">Which Division (Sheriff, WSP, City)</div><div class="val">{{ other.police_division }}</div></td>
+          <td class="field"><div class="lbl">Which Division (Sheriff, WSP, City)</div><div class="val">{{ data.other.police_division }}</div></td>
           <td class="field">
             <div class="lbl">Citation Issued?</div>
             <div class="chkrow">
-              <span>{{ box(other.citation_issued, true) }} Yes</span>
-              <span>{{ box(other.citation_issued, false) }} No</span>
+              <span>{{ box(data.other.citation_issued, true) }} Yes</span>
+              <span>{{ box(data.other.citation_issued, false) }} No</span>
             </div>
             <div class="lbl" style="margin-top:4px;">Issued To:</div>
             <div class="chkrow">
-              <span>{{ box(other.citation_issued_to, 'You') }} You</span>
-              <span>{{ box(other.citation_issued_to, 'Veh. 2') }} Veh. 2</span>
-              <span>{{ box(other.citation_issued_to, 'Veh. 3') }} Veh. 3</span>
+              <span>{{ box(data.other.citation_issued_to, 'You') }} You</span>
+              <span>{{ box(data.other.citation_issued_to, 'Veh. 2') }} Veh. 2</span>
+              <span>{{ box(data.other.citation_issued_to, 'Veh. 3') }} Veh. 3</span>
             </div>
           </td>
           <td class="field">
             <div class="lbl">Have you filed a Collision Report (Form SF-97a) if Required by Law?</div>
             <div class="chkrow">
-              <span>{{ box(other.collision_report_filed, true) }} Yes</span>
-              <span>{{ box(other.collision_report_filed, false) }} No</span>
+              <span>{{ box(data.other.collision_report_filed, true) }} Yes</span>
+              <span>{{ box(data.other.collision_report_filed, false) }} No</span>
             </div>
           </td>
         </tr>
       </table>
     </div>
   </div>
+{% endmacro %}
 
-  <div class="footer-note">{{ footer_note | default('') }}</div>
+{% macro scenario_details(data) %}
+  {% if data.scenario_facts %}
+  <div class="section">
+    <div class="tab"><span class="tab-text">{{ data.scenario_facts_title|upper }}</span></div>
+    <div class="fields">
+      <table class="ftable">
+        <colgroup>{% for fact in data.scenario_facts %}<col style="width:{{ (100 / data.scenario_facts|length)|round(0,'floor')|int }}%">{% endfor %}</colgroup>
+        <tr>
+          {% for fact in data.scenario_facts %}
+          <td class="field"><div class="lbl">{{ fact.label }}</div><div class="val">{{ fact.value }}</div></td>
+          {% endfor %}
+        </tr>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+{% endmacro %}
+
+{% macro footer_note(data) %}
+  <div class="footer-note">{{ data.footer_note | default('') }}</div>
+{% endmacro %}
+
+{% set component_map = {
+  "doc_header": doc_header, "instructions": instructions, "state_employee": state_employee,
+  "vehicle1": vehicle1, "other_vehicles": other_vehicles, "other_property": other_property,
+  "injured_parties": injured_parties, "witnesses": witnesses, "other_section": other_section,
+  "scenario_details": scenario_details, "footer_note": footer_note,
+} %}
+{% for c in components %}{{ component_map[c](data) }}{% endfor %}
 
 </div>
 </body>

@@ -3,6 +3,8 @@ import string
 from datetime import date, timedelta
 from faker import Faker
 
+from renderers.components import get_components
+
 _fake = Faker()
 
 _ICD10 = {
@@ -187,13 +189,158 @@ def _line_items(scenario: str):
     return items
 
 
-def _clinical_note_fields() -> dict:
+_CLINICAL_NOTE_TEXT = {
+    "hospital_admission": (
+        "Admitted for further evaluation and management of {diag}.",
+        "Patient presented with worsening symptoms prompting admission for inpatient monitoring "
+        "and treatment. Initial workup was notable for {diag}, and the decision was made to admit "
+        "for further management.",
+        "General: acute distress noted on admission, improving with treatment. Cardiovascular: "
+        "regular rate and rhythm. Pulmonary: clear to auscultation bilaterally, no respiratory "
+        "distress at time of exam.",
+        "Continue inpatient monitoring, serial labs, and treatment per admitting team; reassess "
+        "for discharge readiness daily.",
+    ),
+    "surgery": (
+        "Pre-operative evaluation for scheduled surgical procedure related to {diag}.",
+        "Patient scheduled for surgical intervention following workup confirming the need for "
+        "operative management of {diag}. Pre-operative clearance obtained; patient tolerated the "
+        "procedure well.",
+        "Post-operative: incision site clean, dry, and intact without signs of infection. Vital "
+        "signs stable. No acute distress.",
+        "Post-operative pain management, wound care instructions, and follow-up with surgical "
+        "team in 1-2 weeks.",
+    ),
+    "emergency_visit": (
+        "Acute onset of symptoms prompting emergency department visit.",
+        "Patient presented to the emergency department with acute symptom onset. Triage "
+        "assessment and workup performed; findings consistent with {diag}.",
+        "Vital signs reviewed on arrival; focused exam performed per presenting complaint, "
+        "findings documented above under Vital Signs.",
+        "Emergency department treatment administered; patient stabilized and disposition "
+        "determined per ED protocol.",
+    ),
+    "outpatient_procedure": (
+        "Scheduled outpatient procedure related to {diag}.",
+        "Patient presented for a scheduled outpatient procedure following prior workup. Procedure "
+        "was performed without complication and patient was monitored per facility protocol prior "
+        "to discharge same day.",
+        "Procedure site examined post-procedure, no acute abnormality noted. Patient alert, vital "
+        "signs within normal limits.",
+        "Same-day discharge with standard post-procedure instructions; follow-up as scheduled.",
+    ),
+    "rear_end_collision": (
+        "Neck and back pain following motor vehicle collision (rear-end impact).",
+        "Patient reports being the restrained driver of a vehicle struck from behind by another "
+        "vehicle. Since the collision, patient has experienced neck stiffness and low back pain, "
+        "worsening over the following 24-48 hours, consistent with a whiplash-type mechanism.",
+        "Musculoskeletal: tenderness to palpation over cervical/lumbar paraspinal musculature, "
+        "decreased range of motion secondary to pain. No focal neurological deficit on exam.",
+        "Conservative management with analgesics, activity modification, and physical therapy "
+        "referral; follow-up in 1-2 weeks to reassess.",
+    ),
+    "intersection_accident": (
+        "Pain following motor vehicle collision (intersection impact).",
+        "Patient reports involvement in a motor vehicle collision at an intersection, struck by "
+        "another vehicle. Patient denies loss of consciousness; reports pain onset shortly after "
+        "the collision.",
+        "Musculoskeletal: tenderness to palpation over cervical/lumbar paraspinal musculature, "
+        "decreased range of motion secondary to pain. No focal neurological deficit on exam.",
+        "Conservative management with analgesics, activity modification, and physical therapy "
+        "referral; follow-up in 1-2 weeks to reassess.",
+    ),
+    "hit_and_run": (
+        "Injuries following motor vehicle collision; striking vehicle fled the scene.",
+        "Patient reports being struck by another vehicle whose driver fled the scene prior to law "
+        "enforcement arrival. Patient was evaluated on scene and referred for further care.",
+        "Musculoskeletal: tenderness to palpation over cervical/lumbar paraspinal musculature, "
+        "decreased range of motion secondary to pain. No focal neurological deficit on exam.",
+        "Conservative management with analgesics, activity modification, and physical therapy "
+        "referral; follow-up in 1-2 weeks to reassess.",
+    ),
+    "slip_and_fall": (
+        "Pain following a fall on a hazardous walking surface.",
+        "Patient reports slipping and falling on a hazardous walking surface, sustaining injury on "
+        "impact. Patient was evaluated for the resulting injury.",
+        "Musculoskeletal: tenderness and swelling at the site of injury, decreased range of "
+        "motion. Skin intact, no open wound noted.",
+        "Immobilization/bracing as indicated, analgesics, and follow-up with orthopedics as "
+        "needed.",
+    ),
+    "medical_malpractice": (
+        "Follow-up evaluation related to complications from prior treatment.",
+        "Patient presents for evaluation of complications arising from prior medical treatment. "
+        "Clinical course and findings are being documented for care coordination and case review.",
+        "Exam focused on the affected system per the complication under evaluation; findings "
+        "documented above.",
+        "Coordinate care with treating specialists; document findings for ongoing case review and "
+        "further management.",
+    ),
+    "product_liability": (
+        "Injury sustained while using a consumer product.",
+        "Patient reports sustaining injury while using a product in its intended manner, when the "
+        "product reportedly failed or malfunctioned. Patient was evaluated and treated for the "
+        "resulting injury.",
+        "Exam findings consistent with the reported injury mechanism; site of injury examined and "
+        "documented.",
+        "Wound/injury care as indicated, pain management, and follow-up to monitor healing.",
+    ),
+    "chronic_medication": (
+        "Routine follow-up for chronic condition management ({diag}).",
+        "Patient presents for a scheduled follow-up visit to manage an ongoing chronic condition. "
+        "Medication regimen reviewed; patient reports overall stability with current treatment "
+        "plan.",
+        "General: well-appearing, no acute distress. Exam findings consistent with stable chronic "
+        "condition management.",
+        "Continue current medication regimen with routine monitoring; refill prescriptions as "
+        "needed and schedule next follow-up.",
+    ),
+    "specialty_drug": (
+        "Follow-up for specialty medication therapy.",
+        "Patient presents for follow-up while on specialty biologic therapy. Response to treatment "
+        "and any adverse effects reviewed.",
+        "General: no acute distress. Injection/infusion site (if applicable) examined, no signs of "
+        "local reaction.",
+        "Continue specialty therapy per protocol; monitor response and coordinate with specialty "
+        "pharmacy for continued authorization/dispensing.",
+    ),
+    "compounded_medication": (
+        "Follow-up regarding compounded medication therapy.",
+        "Patient presents for follow-up on a compounded medication formulation, prescribed due to "
+        "a need not met by commercially available products. Tolerability and effectiveness "
+        "reviewed.",
+        "General: no acute distress; no adverse reaction to compounded formulation noted on exam.",
+        "Continue compounded medication as prescribed; reassess at next visit and adjust "
+        "formulation if needed.",
+    ),
+}
+
+
+def _clinical_note_fields(scenario: str = "general", icd_codes=None) -> dict:
     """Chief complaint / HPI / vitals / exam / assessment / plan - the encounter-note fields
     shared by medical-record and medical-bill (the latter is a "superbill", the common
-    real-world combined clinical-note-plus-itemized-charges document)."""
+    real-world combined clinical-note-plus-itemized-charges document).
+
+    chief_complaint/hpi/physical_exam/plan used to be pure Faker Lorem-Ipsum-style text
+    regardless of scenario - _CLINICAL_NOTE_TEXT covers all 13 scenario names this doc-type
+    family can be called with (see PACKET_REGISTRY - it's reused by every packet), same
+    coverage as _medical_scenario_facts(). An unrecognised scenario (e.g. "general") falls
+    back to generic-but-real prose rather than Faker gibberish."""
+    diag = icd_codes[0][1] if icd_codes else "the presenting condition"
+    entry = _CLINICAL_NOTE_TEXT.get(scenario)
+    if entry:
+        chief_complaint, hpi, physical_exam, plan = entry
+        chief_complaint = chief_complaint.format(diag=diag)
+        hpi = hpi.format(diag=diag)
+    else:
+        chief_complaint = "Patient presents for evaluation."
+        hpi = f"Patient reports symptom onset prompting today's visit, consistent with {diag}. History reviewed and documented."
+        physical_exam = ("General exam performed; findings documented above under Vital Signs, "
+                          "with no acute abnormality noted otherwise.")
+        plan = "Continue monitoring, treat symptomatically, and follow up as needed."
     return {
-        "chief_complaint": _fake.sentence(nb_words=8),
-        "hpi": _fake.paragraph(nb_sentences=4),
+        "chief_complaint": chief_complaint,
+        "hpi": hpi,
         "vitals": {
             "bp": f"{random.randint(100,140)}/{random.randint(60,90)}",
             "hr": str(random.randint(60, 100)),
@@ -203,10 +350,471 @@ def _clinical_note_fields() -> dict:
             "weight": f"{random.randint(120, 280)} lbs",
             "height": f"{random.randint(60, 74)} in",
         },
-        "physical_exam": _fake.paragraph(nb_sentences=3),
-        "assessment": _fake.sentence(nb_words=6),
-        "plan": _fake.paragraph(nb_sentences=3),
+        "physical_exam": physical_exam,
+        "assessment": diag,
+        "plan": plan,
     }
+
+
+# --- scenario-driven structural facts ---------------------------------
+# Several doc types register 3-4 scenarios that used to render through the
+# exact same template with only cosmetic value differences (a fire, a flood,
+# and a theft all produced the identical "Loss Information" box, just with a
+# different `cause_of_loss` string) - the scenario name never changed the
+# document's STRUCTURE. Each function below returns (section_title, facts)
+# for one doc-type family; the template renders whatever it gets back
+# generically (one heading + a label/value loop), so it never needs to know
+# the scenario names or grow a new {% if %} branch. Adding a scenario to an
+# EXISTING family, or a whole new family, is a Python-only change - add one
+# branch here, nothing in the .html ever changes. An unrecognised scenario
+# (e.g. "general") returns ("", []), which the template's own {% if
+# scenario_facts %} guard turns into "section omitted", not a blank box.
+
+def _property_scenario_facts(scenario: str) -> tuple[str, list[dict]]:
+    if scenario == "fire_damage":
+        return "Fire Details", [
+            {"label": "Fire Department Notified", "value": random.choice(["Yes", "Yes", "No"])},
+            {"label": "Responding Fire Department", "value": _fake.city() + " Fire Department"},
+            {"label": "Fire Report Number", "value": "FD" + "".join(random.choices(string.digits, k=6))},
+            {"label": "Suspected Cause of Ignition", "value": random.choice(
+                ["Electrical fault", "Unattended cooking", "Lightning strike", "Undetermined"])},
+        ]
+    if scenario == "water_damage":
+        return "Water Details", [
+            {"label": "Water Source", "value": random.choice(
+                ["Burst supply pipe", "Roof leak during storm", "Water heater failure", "Sump pump failure"])},
+            {"label": "Water Mitigation Company", "value": _fake.company() + " Restoration"},
+            {"label": "Moisture Reading at Inspection", "value": f"{random.randint(18, 60)}%"},
+            {"label": "Mold Remediation Required", "value": random.choice(["Yes", "No", "No"])},
+        ]
+    if scenario == "theft":
+        return "Theft Details", [
+            {"label": "Police Report Number", "value": "RPT" + "".join(random.choices(string.digits, k=8))},
+            {"label": "Evidence of Forced Entry", "value": random.choice(["Yes", "No"])},
+            {"label": "Items Reported Stolen", "value": ", ".join(random.sample(
+                ["television", "laptop computer", "jewelry", "power tools", "bicycle",
+                 "camera equipment", "gaming console", "firearms (registered)"], k=random.randint(2, 3)
+            ))},
+            {"label": "Estimated Recovery", "value": random.choice(["None to date", "Partial recovery", "Fully recovered"])},
+        ]
+    if scenario == "wind_damage":
+        return "Storm Details", [
+            {"label": "Storm / Event Name", "value": random.choice(["", "", "Winter Storm " + _fake.first_name()])},
+            {"label": "Peak Wind Gust", "value": f"{random.randint(45, 110)} mph"},
+            {"label": "National Weather Service Advisory #", "value": "NWS-" + "".join(random.choices(string.digits, k=5))},
+            {"label": "Tree/Debris Damage", "value": random.choice(["Yes", "No"])},
+        ]
+    return "", []
+
+
+def _auto_scenario_facts(scenario: str) -> tuple[str, list[dict]]:
+    if scenario == "rear_end_collision":
+        return "Rear-End Collision Details", [
+            {"label": "Following Distance Estimated", "value": f"{random.randint(1, 3)} car length(s)"},
+            {"label": "Brake Lights Observed", "value": random.choice(["Yes, functioning", "No / not observed"])},
+            {"label": "Road Grade", "value": random.choice(["Level", "Downhill approach", "Uphill approach"])},
+        ]
+    if scenario == "intersection_accident":
+        return "Intersection Details", [
+            {"label": "Traffic Control Device", "value": random.choice(["Traffic signal", "Stop sign", "Yield sign", "Uncontrolled"])},
+            {"label": "Right-of-Way Violation Alleged", "value": random.choice(["Yes", "Disputed"])},
+            {"label": "Turning Movement Involved", "value": random.choice(["Left turn", "Right turn", "None - through traffic"])},
+        ]
+    if scenario == "hit_and_run":
+        return "Hit and Run Details", [
+            {"label": "Fleeing Vehicle Description", "value": random.choice([
+                "Dark sedan, partial plate only", "Pickup truck, no plate observed", "SUV, color unconfirmed"])},
+            {"label": "Direction of Travel", "value": random.choice(["Northbound", "Southbound", "Eastbound", "Westbound"])},
+            {"label": "BOLO Issued", "value": random.choice(["Yes", "No"])},
+        ]
+    return "", []
+
+
+def _medical_scenario_facts(scenario: str) -> tuple[str, list[dict]]:
+    # Shared across every medical-family doc type (medical-record, medical-bill,
+    # discharge-summary, cms-1500, ub-04). These doc types get reused across every
+    # packet (see PACKET_REGISTRY) so this covers all 13 non-property scenario
+    # names they can actually be called with, not just the 4 "medical" ones -
+    # a chart note for a slip-and-fall ER visit should read differently from
+    # one for a chronic-medication refill visit.
+    if scenario == "hospital_admission":
+        return "Admission Details", [
+            {"label": "Admission Type", "value": random.choice(["Emergency", "Elective", "Urgent"])},
+            {"label": "Length of Stay", "value": f"{random.randint(1, 6)} day(s)"},
+            {"label": "Attending Service", "value": random.choice(["Internal Medicine", "Hospitalist", "General Surgery"])},
+        ]
+    if scenario == "surgery":
+        return "Surgical Details", [
+            {"label": "Anesthesia Type", "value": random.choice(["General", "Regional", "MAC/Sedation"])},
+            {"label": "OR Time", "value": f"{random.randint(45, 210)} minutes"},
+            {"label": "ASA Class", "value": random.choice(["I", "II", "III"])},
+        ]
+    if scenario == "emergency_visit":
+        return "Emergency Visit Details", [
+            {"label": "Triage Level (ESI)", "value": str(random.randint(2, 4))},
+            {"label": "Arrival Mode", "value": random.choice(["Ambulance", "Walk-in", "Private Vehicle"])},
+            {"label": "ED Disposition", "value": random.choice(["Discharged home", "Admitted", "Transferred"])},
+        ]
+    if scenario == "outpatient_procedure":
+        return "Outpatient Procedure Details", [
+            {"label": "Facility Type", "value": random.choice(["Ambulatory Surgery Center", "Hospital Outpatient Department"])},
+            {"label": "Same-Day Discharge", "value": "Yes"},
+            {"label": "Pre-Procedure Clearance", "value": random.choice(["Not required", "PCP clearance obtained"])},
+        ]
+    if scenario == "rear_end_collision":
+        return "Mechanism of Injury", [
+            {"label": "Mechanism", "value": "Motor vehicle collision - rear-end impact"},
+            {"label": "Restraint Use", "value": random.choice(["Seatbelt worn", "Seatbelt worn, shoulder only"])},
+            {"label": "Reported Symptoms", "value": random.choice(["Neck pain/stiffness", "Low back pain", "Headache"])},
+        ]
+    if scenario == "intersection_accident":
+        return "Mechanism of Injury", [
+            {"label": "Mechanism", "value": random.choice(["Motor vehicle collision - T-bone/angle impact", "Motor vehicle collision - head-on impact"])},
+            {"label": "Loss of Consciousness", "value": random.choice(["Denied", "Brief, <1 minute"])},
+            {"label": "Restraint Use", "value": random.choice(["Seatbelt worn", "Unrestrained"])},
+        ]
+    if scenario == "hit_and_run":
+        return "Mechanism of Injury", [
+            {"label": "Mechanism", "value": "Motor vehicle collision - striking vehicle fled scene"},
+            {"label": "Reported to Law Enforcement", "value": "Yes"},
+            {"label": "Restraint Use", "value": random.choice(["Seatbelt worn", "Unrestrained"])},
+        ]
+    if scenario == "slip_and_fall":
+        return "Mechanism of Injury", [
+            {"label": "Mechanism", "value": random.choice(["Fall on wet/slippery surface", "Fall on uneven walking surface", "Fall down stairs"])},
+            {"label": "Ambulatory Status Post-Fall", "value": random.choice(["Ambulatory with assistance", "Unable to bear weight"])},
+            {"label": "Pre-existing Condition Aggravated", "value": random.choice(["None reported", "Prior joint condition"])},
+        ]
+    if scenario == "medical_malpractice":
+        return "Related Treatment History", [
+            {"label": "Alleged Deviation from Standard of Care", "value": random.choice(["Delayed diagnosis", "Surgical complication", "Medication error"])},
+            {"label": "Prior Treating Facility", "value": _fake.company() + " Medical Center"},
+            {"label": "Second Opinion Obtained", "value": random.choice(["Yes", "No"])},
+        ]
+    if scenario == "product_liability":
+        return "Product-Related Injury Details", [
+            {"label": "Product Involved", "value": random.choice(["Household appliance", "Power tool", "Consumer electronics device", "Furniture"])},
+            {"label": "Injury Mechanism", "value": random.choice(["Thermal/burn injury", "Laceration", "Impact/crush injury"])},
+            {"label": "Product Retained as Evidence", "value": random.choice(["Yes", "No"])},
+        ]
+    if scenario == "chronic_medication":
+        return "Chronic Condition Management", [
+            {"label": "Condition Being Managed", "value": random.choice(["Hypertension", "Type 2 Diabetes", "Hyperlipidemia"])},
+            {"label": "Medication Adherence", "value": random.choice(["Compliant", "Occasionally misses doses"])},
+            {"label": "Refill Frequency", "value": random.choice(["30-day supply", "90-day supply"])},
+        ]
+    if scenario == "specialty_drug":
+        return "Specialty Drug Therapy Details", [
+            {"label": "Prior Authorization Status", "value": random.choice(["Approved", "Pending renewal"])},
+            {"label": "Dispensing Pharmacy", "value": "Specialty pharmacy (limited distribution)"},
+            {"label": "Response Monitoring", "value": random.choice(["Lab monitoring per protocol", "Clinical response assessed at follow-up"])},
+        ]
+    if scenario == "compounded_medication":
+        return "Compounded Medication Details", [
+            {"label": "Reason for Compounding", "value": random.choice(["Dosage strength unavailable commercially", "Allergy to standard inactive ingredient", "Alternate delivery form required"])},
+            {"label": "Compounding Pharmacy", "value": _fake.company() + " Compounding Pharmacy"},
+            {"label": "Formulation", "value": random.choice(["Topical cream", "Oral suspension", "Capsule"])},
+        ]
+    return "", []
+
+
+def _vehicle_damage_descriptions(scenario) -> tuple[str, str]:
+    """(state vehicle's damage, other vehicle's damage) - was two independent
+    _fake.sentence() calls, so a rear_end_collision report could just as
+    easily describe front-end damage on the state vehicle as rear-end."""
+    if scenario == "rear_end_collision":
+        return (
+            random.choice(["Rear bumper and trunk crumpled from impact.", "Rear-end damage to bumper and taillight assembly."]),
+            random.choice(["Front bumper and hood damage consistent with striking vehicle ahead.", "Front-end damage, radiator support bent."]),
+        )
+    if scenario == "intersection_accident":
+        return (
+            random.choice(["Driver-side door and quarter panel damage from T-bone impact.", "Front-end damage from intersection collision."]),
+            random.choice(["Front-end damage from intersection collision.", "Passenger-side damage from impact within intersection."]),
+        )
+    if scenario == "hit_and_run":
+        return (
+            random.choice(["Side panel scraped and dented; paint transfer observed.", "Rear quarter panel damage with paint transfer from fleeing vehicle."]),
+            "Not inspected - fleeing vehicle not recovered at time of report.",
+        )
+    return (
+        random.choice(["Minor body damage, cosmetic only.", "Moderate damage to exterior panel."]),
+        random.choice(["Minor body damage, cosmetic only.", "Moderate damage to exterior panel."]),
+    )
+
+
+def _litigation_narrative(scenario, plaintiff_name, defendant_name, incident_date):
+    """(facts paragraph, [3 general-allegation paragraphs]) - was pure Faker
+    Lorem-Ipsum-style prose regardless of scenario, so a product_liability
+    complaint read no differently from a slip_and_fall one even though
+    causes_of_action was already anchored to the scenario. This makes the
+    prose actually recount the anchored cause."""
+    if scenario == "slip_and_fall":
+        facts = (
+            f"On or about {incident_date}, Plaintiff {plaintiff_name} was lawfully present on premises "
+            f"owned, operated, and/or maintained by Defendant {defendant_name} when Plaintiff slipped and "
+            f"fell due to a hazardous condition on the walking surface that Defendant knew or should have "
+            f"known about and failed to remedy or warn against. As a direct and proximate result, "
+            f"Plaintiff sustained bodily injury requiring ongoing medical treatment."
+        )
+        allegations = [
+            "Defendant owed a duty to Plaintiff, a lawful invitee on the premises, to maintain the "
+            "property in a reasonably safe condition and to warn of known hazards.",
+            "Defendant breached that duty by allowing a hazardous condition on the walking surface to "
+            "exist and persist without adequate warning, inspection, or remediation.",
+            "As a direct and proximate result of Defendant's breach, Plaintiff fell and sustained "
+            "injuries, incurring medical expenses, lost wages, and pain and suffering.",
+        ]
+    elif scenario == "medical_malpractice":
+        facts = (
+            f"On or about {incident_date}, Plaintiff {plaintiff_name} received medical treatment from "
+            f"Defendant {defendant_name}. Defendant's treatment fell below the applicable standard of "
+            f"care ordinarily exercised by practitioners in the same field under similar circumstances, "
+            f"proximately causing Plaintiff to suffer injury that competent care would have avoided."
+        )
+        allegations = [
+            "Defendant owed Plaintiff a duty to provide medical care consistent with the applicable "
+            "standard of care for a practitioner of the same specialty.",
+            "Defendant breached that duty by deviating from the applicable standard of care in the "
+            "diagnosis, treatment, and/or management of Plaintiff's condition.",
+            "As a direct and proximate result of Defendant's breach, Plaintiff suffered injury, "
+            "additional medical expenses, and other damages that competent care would have avoided.",
+        ]
+    elif scenario == "product_liability":
+        facts = (
+            f"On or about {incident_date}, Plaintiff {plaintiff_name} was using a product designed, "
+            f"manufactured, and/or sold by Defendant {defendant_name} in a manner reasonably foreseeable "
+            f"to Defendant when the product failed and/or malfunctioned due to a defect in its design "
+            f"and/or manufacture, proximately causing Plaintiff to suffer bodily injury."
+        )
+        allegations = [
+            "Defendant designed, manufactured, and/or sold the product at issue and placed it into "
+            "the stream of commerce in a defective and unreasonably dangerous condition.",
+            "The product's defect existed at the time it left Defendant's control and was not "
+            "substantially altered before it reached Plaintiff.",
+            "As a direct and proximate result of the product's defect, Plaintiff sustained bodily "
+            "injury, medical expenses, and other damages while using the product as intended.",
+        ]
+    else:
+        facts = (
+            f"On or about {incident_date}, Plaintiff {plaintiff_name} was injured due to the negligent "
+            f"conduct of Defendant {defendant_name}, giving rise to the causes of action set forth below."
+        )
+        allegations = [
+            "Defendant owed Plaintiff a duty of reasonable care under the circumstances.",
+            "Defendant breached that duty through the negligent conduct described above.",
+            "As a direct and proximate result of Defendant's breach, Plaintiff sustained damages.",
+        ]
+    return facts, allegations
+
+
+def _discharge_narrative(scenario: str, diag: str) -> dict:
+    """summary_of_care_plan/goals_achieved_summary/care_plan_notes/assessment_notes/
+    discharge_instructions for discharge-summary. Before this, synthetic_data.py never set
+    summary_of_care_plan or goals_achieved_summary at all - discharge_summary.html's own
+    Jinja `| default(...)` fallback then printed the SAME hardcoded pregnancy/antepartum
+    boilerplate on every single discharge summary regardless of scenario ("Antepartum
+    assessment with vital signs..."), which is the single worst instance of the static-
+    content bug: not even scenario-blind Faker filler, just literally identical text. This
+    doc type is only ever called with the 4 medical scenarios (see PACKET_REGISTRY)."""
+    entries = {
+        "hospital_admission": (
+            f"Skilled nursing visits initiated following inpatient hospital admission for "
+            f"{diag}. Patient monitored for stability, medication management reviewed, and "
+            f"caregiver educated on post-admission care needs.",
+            "Patient demonstrates improved stability since admission; caregiver verbalizes "
+            "understanding of the post-admission care plan and follow-up requirements.",
+            ["Vital signs stable across visits.", "Medication compliance reviewed and reinforced."],
+            ["No new acute findings since last visit.", "Patient tolerating current care plan well."],
+            f"Continue prescribed home care regimen for {diag}. Attend all scheduled follow-up "
+            f"appointments, monitor for any worsening symptoms, and contact physician with any "
+            f"new or worsening concerns.",
+        ),
+        "surgery": (
+            f"Skilled nursing visits initiated following surgical procedure for {diag}. Wound/"
+            f"incision care provided, pain management reviewed, and patient monitored for "
+            f"post-operative complications.",
+            "Incision healing well with no signs of infection; patient and caregiver verbalize "
+            "understanding of post-operative care instructions.",
+            ["Incision site clean, dry, and intact at each visit.", "Pain adequately managed with current regimen."],
+            ["No signs of surgical site infection observed.", "Mobility improving per post-op plan."],
+            "Continue post-operative wound care as instructed, take pain medication as directed, "
+            "avoid strenuous activity per surgeon's restrictions, and attend the post-operative "
+            "follow-up appointment.",
+        ),
+        "emergency_visit": (
+            f"Skilled nursing visits initiated following an emergency department visit for "
+            f"{diag}. Patient monitored for symptom resolution and medication compliance "
+            f"reviewed.",
+            "Patient's condition has stabilized since the emergency visit; caregiver verbalizes "
+            "understanding of the follow-up care plan.",
+            ["Symptoms trending toward resolution.", "No return ED visits since discharge."],
+            ["Vital signs within expected range at each visit.", "Medication regimen tolerated well."],
+            "Monitor for recurrence of presenting symptoms, take medications as prescribed, "
+            "follow up with primary care provider, and return to the emergency department if "
+            "symptoms worsen.",
+        ),
+        "outpatient_procedure": (
+            f"Skilled nursing visits initiated following an outpatient procedure for {diag}. "
+            f"Procedure site monitored and patient educated on post-procedure care.",
+            "Procedure site healing appropriately; patient verbalizes understanding of "
+            "post-procedure instructions and follow-up schedule.",
+            ["Procedure site without signs of complication.", "Patient ambulating without difficulty."],
+            ["No adverse reaction to procedure noted.", "Patient adherent to post-procedure precautions."],
+            "Follow post-procedure care instructions provided at discharge, keep the procedure "
+            "site clean and dry as directed, and attend the scheduled follow-up visit.",
+        ),
+    }
+    entry = entries.get(scenario)
+    if not entry:
+        return {}
+    care_plan, goals, care_notes, assess_notes, instructions = entry
+    return {
+        "summary_of_care_plan": care_plan,
+        "goals_achieved_summary": goals,
+        "care_plan_notes": care_notes,
+        "assessment_notes": assess_notes,
+        "discharge_instructions": instructions,
+    }
+
+
+def _facts_line(facts: list[dict]) -> str:
+    # CMS-1500 and UB-04 are standardized federal forms with a fixed box
+    # layout - unlike the other templates, they can't grow a new section for
+    # scenario_facts without breaking that real-world layout. Their existing
+    # free-text boxes (19. Additional Claim Information / UB-04 Remarks) are
+    # the form-correct place for this, so collapse facts to one line instead.
+    return "; ".join(f"{f['label']}: {f['value']}" for f in facts)
+
+
+def _witness_statement(scenario, hit_and_run_flag, party2):
+    if hit_and_run_flag:
+        return random.choice([
+            "I saw the other car hit them and just take off, didn't even slow down.",
+            "The vehicle that caused it sped away right after impact, I got a partial plate but that's it.",
+        ])
+    if scenario == "rear_end_collision":
+        return "I saw the car behind just plow right into the back of the other one, they never braked."
+    if scenario == "intersection_accident":
+        return "One of them ran the light/sign and they collided right in the middle of the intersection."
+    return f"I heard the impact and saw both vehicles come to a stop; {party2['name']}'s car looked like it took the worse damage."
+
+
+def _police_narrative(scenario, incident_date, location, weather, road_cond, speed_limit, party1, party2,
+                       collision_type, primary_factor, hit_and_run_flag, property_facts):
+    """3 narrative paragraphs + a 1-line summary. Faker filler here used to be
+    the same random Lorem-Ipsum-style sentences regardless of scenario - a
+    hit_and_run report read no differently from a rear-end one. This builds
+    the actual account from the fields already generated for this report
+    (parties, collision_type, primary_factor, weather/road conditions), so
+    the story it tells is the one collision_type/primary_factor/hit_and_run
+    already claim happened, not a disconnected paragraph of prose next to
+    them. property_facts (from _property_scenario_facts) does the same job
+    when this doc type is serving as the property-packet's Incident Report."""
+    # Two openers exist per shape so the report doesn't read identically every time -
+    # each is worded correctly for its own shape from the start (a post-hoc .replace()
+    # on a collision-worded opener only matches the ONE of the two sentences that
+    # contains that exact substring, silently leaving the other's "traffic collision"
+    # wording in a fire/water/theft/wind report - the bug this replaced).
+    if property_facts:
+        p1_open = random.choice([
+            f"On {incident_date}, officers were dispatched to {location} in reference to a property damage incident.",
+            f"Officers responded to a reported property damage incident at {location} on {incident_date}.",
+        ])
+    else:
+        p1_open = random.choice([
+            f"On {incident_date}, officers were dispatched to {location} in reference to a motor vehicle collision.",
+            f"Officers responded to a reported traffic collision at {location} on {incident_date}.",
+        ])
+    # hit_and_run_flag is checked FIRST, before the scenario branches - it is only
+    # ~85% likely even for scenario == "hit_and_run" (see the police-report branch
+    # above), so branching on the scenario string alone would have this paragraph
+    # claim a fleeing vehicle even on the ~15% of "hit_and_run"-scenario reports
+    # where the flag actually landed False (and vice versa: any other scenario's
+    # 5% base rate can still produce a real hit-and-run that needs this account,
+    # not the generic fallback). Matches the same fix applied to collision_type/
+    # primary_factor above - both are keyed off the actual outcome, not the
+    # requested scenario name. `and not property_facts` matters too: that same 5%
+    # base rate can land True for a fire/water/theft/wind report, which has no
+    # Driver 1/Driver 2 vehicles at all - without this guard the narrative would
+    # tell a two-vehicle hit-and-run story directly contradicting the property-
+    # incident fields the rest of the document actually renders.
+    if hit_and_run_flag and not property_facts:
+        p1 = p1_open + (
+            f" The {party1['vehicle_year']} {party1['vehicle_make']} {party1['vehicle_model']} (Driver 1, "
+            f"{party1['name']}) was struck by a second vehicle, subsequently identified as the "
+            f"{party2['vehicle_year']} {party2['vehicle_make']} {party2['vehicle_model']} registered to "
+            f"{party2['registered_owner']}, whose operator fled the scene prior to officer arrival without "
+            f"exchanging information."
+        )
+        p2 = (
+            f"A witness canvass and vehicle registration check subsequently identified the fleeing vehicle "
+            f"and its registered owner, {party2['name']}, who was later located and identified as Driver 2 "
+            f"for purposes of this report. Primary contributing factor: {primary_factor.lower()}."
+        )
+    elif scenario == "rear_end_collision":
+        p1 = p1_open + (
+            f" Preliminary investigation determined that {party2['vehicle_year']} {party2['vehicle_make']} "
+            f"{party2['vehicle_model']} (Driver 2, {party2['name']}) struck the rear of the "
+            f"{party1['vehicle_year']} {party1['vehicle_make']} {party1['vehicle_model']} (Driver 1, "
+            f"{party1['name']}) while Vehicle 1 was stopped or slowing for traffic ahead. "
+            f"Posted speed limit in the area is {speed_limit} MPH; road conditions were reported as "
+            f"{road_cond.lower()} under {weather.lower()} weather."
+        )
+        p2 = (
+            f"Driver 2 stated they did not have adequate time to stop and struck Vehicle 1's rear bumper. "
+            f"The primary contributing factor was determined to be {primary_factor.lower()}. Damage to "
+            f"Vehicle 1 was concentrated to the rear; damage to Vehicle 2 was concentrated to the front end."
+        )
+    elif scenario == "intersection_accident":
+        p1 = p1_open + (
+            f" Investigation determined the collision occurred within the intersection between the "
+            f"{party1['vehicle_year']} {party1['vehicle_make']} {party1['vehicle_model']} (Driver 1, "
+            f"{party1['name']}) and the {party2['vehicle_year']} {party2['vehicle_make']} "
+            f"{party2['vehicle_model']} (Driver 2, {party2['name']}), producing a {collision_type.lower()} "
+            f"impact pattern. Road conditions were reported as {road_cond.lower()} under {weather.lower()} "
+            f"weather, posted speed limit {speed_limit} MPH."
+        )
+        p2 = (
+            f"Investigation determined the primary contributing factor to be {primary_factor.lower()} on "
+            f"the part of Driver 2. Both vehicles sustained damage consistent with an intersection impact; "
+            f"see Section 4/5 for vehicle-specific damage detail."
+        )
+    elif property_facts:
+        fact_str = "; ".join(f"{f['label'].lower()}: {f['value']}" for f in property_facts if f["value"])
+        p1 = p1_open + (
+            f" Reporting party {party1['name']} advised responding officers of the extent of the damage "
+            f"on scene. {fact_str}."
+        )
+        p2 = (
+            f"Officers documented the scene and coordinated with the responding agencies noted above. "
+            f"Weather at the time was {weather.lower()}; the property was secured pending insurance "
+            f"adjuster inspection."
+        )
+    else:
+        p1 = p1_open + (
+            f" Driver 1, {party1['name']}, and Driver 2, {party2['name']}, were both present on scene. "
+            f"Collision type was recorded as {collision_type}; primary contributing factor: "
+            f"{primary_factor.lower()}."
+        )
+        p2 = "Both vehicles were documented and photographed on scene; see Section 4/5 for damage detail."
+
+    p3 = (
+        ("The reporting party and available witnesses were interviewed on scene and statements were "
+         "obtained (see Section 6). " if property_facts else
+         "Both parties were interviewed on scene and statements were obtained (see Section 6). ")
+        + ("Driver 2 was cited for a traffic code violation; a citation was issued and a court date "
+           "assigned (see Section 7). " if (not property_facts and party2["citation_number"] != "None") else "")
+        + "This report was completed and forwarded for records processing per department policy."
+    )
+    paragraphs = [p1, p2, p3]
+    summary = (
+        f"{'Two-vehicle ' + collision_type.lower() + ' collision' if not property_facts else scenario.replace('_', ' ')} "
+        f"at {location}"
+        + ("; hit and run, driver of Vehicle 2 fled the scene prior to officer arrival." if hit_and_run_flag and not property_facts
+           else f"; primary factor {primary_factor.lower()}." if not property_facts else ".")
+    )
+    return paragraphs, summary
 
 
 def _address():
@@ -295,16 +903,28 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
         "policy_number": policy_num,
         "provider_npi": _npi(),
         "scenario": scenario,
+        # which named Jinja component macros this document assembles, and in what order -
+        # see renderers/components.py. Set once here for every doc type; a doc-type branch
+        # below may still add scenario-specific DATA a component needs (e.g. police-report's
+        # property_incident component), but the composition list itself always comes from
+        # the registry, not ad-hoc per-branch logic.
+        "components": get_components(doc_type, scenario),
     }
 
     if doc_type == "medical-record":
-        base.update(_clinical_note_fields())
+        # medical-record is reused across every packet (medical/auto-accident/
+        # litigation/pharmacy) - see PACKET_REGISTRY - so it can be called with
+        # any of 13 different scenario names, not just the 4 "medical" ones.
+        facts_title, facts = _medical_scenario_facts(scenario)
+        base.update(_clinical_note_fields(scenario, icd_codes))
         base.update({
             "encounter_type": random.choice(["Office Visit", "Emergency Visit", "Follow-Up", "Consultation"]),
             "allergies": random.choice(["NKDA (No Known Drug Allergies)", "Penicillin", "Sulfa drugs", "Latex"]),
             "current_medications": [d[0] for d in random.sample(_NDC_DRUGS, 2)],
             "signed_by": physician["physician_name"],
             "signed_date": dos.strftime("%m/%d/%Y"),
+            "scenario_facts_title": facts_title,
+            "scenario_facts": facts,
         })
 
     elif doc_type == "discharge-summary":
@@ -332,6 +952,9 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
         reason[reason_key] = True
         reason["expired_date"] = discharge_date.strftime("%m/%d/%Y") if reason_key == "expired" else ""
         reason["other_detail"] = "Patient relocated out of service area" if reason_key == "other" else ""
+        facts_title, facts = _medical_scenario_facts(scenario)
+        discharge_diag = icd_codes[0][1] if icd_codes else "the presenting condition"
+        discharge_narrative = _discharge_narrative(scenario, discharge_diag)
 
         base.update({
             # legacy inpatient-hospital fields - unused by the current template, kept for
@@ -340,7 +963,10 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
             "attending_physician": physician["physician_name"],
             "admission_diagnosis": icd_codes[0][1] if icd_codes else "Acute illness",
             "discharge_diagnosis": icd_codes[0][1] if icd_codes else "Resolved",
-            "hospital_course": _fake.paragraph(nb_sentences=5),
+            "hospital_course": (
+                f"Patient's hospital course related to {discharge_diag} was reviewed prior to "
+                f"transition to home health services." if discharge_narrative else _fake.paragraph(nb_sentences=5)
+            ),
             "discharge_condition": random.choice(["Stable", "Improved", "Good"]),
             "follow_up": f"Follow up with {physician['physician_name']} in {random.randint(7, 21)} days",
             "medications_at_discharge": [
@@ -363,23 +989,38 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
             "number_of_visits": str(num_visits),
             "diagnosis": icd_codes[0][1] if icd_codes else "Resolved",
             "reason": reason,
-            "reason_comments": [] if reason_key == "goals_achieved" else [_fake.sentence(nb_words=10)],
-            "care_plan_notes": [_fake.sentence(nb_words=8)],
-            "assessment_notes": [_fake.sentence(nb_words=8)],
+            "reason_comments": [] if reason_key == "goals_achieved" else [
+                f"Discharge reason: {reason_key.replace('_', ' ')}, related to ongoing management of {discharge_diag}."
+            ],
             "assessment_of_patient_condition": random.choice(["Stable", "Improved", "Guarded"]),
-            "transition_plan": [_fake.sentence(nb_words=10)] if reason_key not in ("goals_achieved", "expired") else [],
-            "discharge_instructions": _fake.paragraph(nb_sentences=3),
+            "transition_plan": [
+                f"Transitioning care for {discharge_diag} to the next level of service; records and "
+                f"care plan forwarded to receiving provider."
+            ] if reason_key not in ("goals_achieved", "expired") else [],
             "discharge_instruction_notes": [],
             "clinician_signature": physician["physician_name"],
             "signature_date": discharge_date.strftime("%m/%d/%Y"),
+            "scenario_facts_title": facts_title,
+            "scenario_facts": facts,
         })
+        # summary_of_care_plan/goals_achieved_summary/care_plan_notes/assessment_notes/
+        # discharge_instructions: only set for the 4 registered scenarios (see
+        # _discharge_narrative) - anything else leaves these keys unset, so the
+        # template's own `| default(...)` fallback text applies (unchanged behavior for
+        # "general"/an unrecognized scenario).
+        if discharge_narrative:
+            base.update(discharge_narrative)
+        else:
+            base.setdefault("care_plan_notes", [])
+            base.setdefault("assessment_notes", [])
 
     elif doc_type == "medical-bill":
         # Adjustment (contractual write-off) rate varies by payer/negotiated
         # rate in reality - was pinned to 15% on every bill, so "balance" was
         # always exactly 85% of the charge no matter what.
         adjustments = round(total * random.uniform(0.05, 0.30), 2)
-        base.update(_clinical_note_fields())
+        facts_title, facts = _medical_scenario_facts(scenario)
+        base.update(_clinical_note_fields(scenario, icd_codes))
         base.update({
             "account_number": "ACC" + "".join(random.choices(string.digits, k=8)),
             "statement_date": date.today().strftime("%m/%d/%Y"),
@@ -388,6 +1029,8 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
             "amount_paid": 0.00,
             "adjustments": adjustments,
             "balance": round(total - adjustments, 2),
+            "scenario_facts_title": facts_title,
+            "scenario_facts": facts,
         })
 
     elif doc_type == "cms-1500":
@@ -395,6 +1038,7 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
             ["Medicare", "Medicaid", "TRICARE", "CHAMPVA", "Group Health Plan", "FECA Blk Lung", "Other"]
         )
         illness_date = dos - timedelta(days=random.randint(0, 14))
+        facts_title, facts = _medical_scenario_facts(scenario)
         base.update({
             "insured_id": patient["insurance_id"],
             "insured_name": patient["patient_name"],
@@ -430,7 +1074,7 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
             "hospitalization_to": "",
             "outside_lab": "NO",
             "outside_lab_charges": 0.00,
-            "additional_claim_info": "",
+            "additional_claim_info": _facts_line(facts),
             "resubmission_code": "",
             "original_ref_number": "",
             "prior_auth_number": "AUTH" + "".join(random.choices(string.digits, k=8)),
@@ -523,6 +1167,11 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
                         "paid_by_other_ins", "deductible", "copay", "coinsurance", "paid_amount", "amount_you_owe")
         }
         deductible_satisfied = deductible_limit - remaining_deductible
+        # eob-explanation is reused by both the litigation packet (slip_and_fall/
+        # medical_malpractice/product_liability) and the pharmacy packet
+        # (chronic_medication/specialty_drug/compounded_medication) - the shared
+        # medical-family facts function already covers exactly those 6 names.
+        facts_title, facts = _medical_scenario_facts(scenario)
 
         # Legacy single-ratio fields - unused by the current template, kept for callers that
         # might still reference them (validate_document_structure no longer requires these).
@@ -589,6 +1238,8 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
                 "Amount(s) shown may include totals from claims which are still being processed "
                 "and for which you have not been notified."
             ),
+            "scenario_facts_title": facts_title,
+            "scenario_facts": facts,
         })
 
     elif doc_type == "acord-25":
@@ -676,13 +1327,65 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
     elif doc_type == "police-report":
         report_city = _fake.city()
         report_state = random.choice(_STATES)
-        dispatch_t = f"{random.randint(6,22):02d}:{random.randint(0,59):02d}"
-        arrival_t = f"{random.randint(6,22):02d}:{random.randint(0,59):02d}"
-        cleared_t = f"{random.randint(6,22):02d}:{random.randint(0,59):02d}"
-        hit_and_run_flag = random.random() < 0.08
-        cited = random.random() < 0.6
+        # dispatch/arrival/cleared used to be 3 independently random times with no
+        # ordering guarantee, so a report could show arrival before dispatch, or a
+        # multi-hour dispatch-to-arrival gap for a routine traffic stop. Chained as
+        # dispatch -> +minutes -> arrival -> +minutes -> cleared instead.
+        dispatch_minutes = random.randint(6 * 60, 22 * 60)
+        arrival_minutes = dispatch_minutes + random.randint(4, 25)
+        cleared_minutes = arrival_minutes + random.randint(20, 90)
+        dispatch_t = f"{dispatch_minutes // 60:02d}:{dispatch_minutes % 60:02d}"
+        arrival_t = f"{arrival_minutes // 60:02d}:{arrival_minutes % 60:02d}"
+        cleared_t = f"{cleared_minutes // 60:02d}:{cleared_minutes % 60:02d}"
+        # collision_type/hit_and_run/primary_factor used to be independently
+        # random regardless of which scenario was requested - a
+        # "hit_and_run"-scenario report was no more likely to actually BE a
+        # hit and run than any other scenario. Correlating them here is a
+        # pure data change (no template touch) - see _property_scenario_facts
+        # above for the same principle applied to a doc type that had no
+        # scenario-varying field to correlate at all.
+        hit_and_run_flag = random.random() < (0.85 if scenario == "hit_and_run" else 0.05)
+        # collision_type/primary_factor MUST be branched on hit_and_run_flag first, not on
+        # scenario - hit_and_run_flag can land True by its 5% base rate for ANY scenario
+        # string (including one totally unrelated to police-report, e.g. a caller passing
+        # "surgery"), and when that happens collision_type must still never be "Single
+        # Vehicle" (a fleeing second vehicle contradicts "single vehicle" by definition).
+        # Branching on scenario alone (the previous approach) only closed this hole for the
+        # literal "hit_and_run" scenario name and left it open for every other one - this is
+        # what produced a real report with COLLISION TYPE: Single Vehicle and HIT & RUN: Yes
+        # side by side.
+        if hit_and_run_flag:
+            collision_type = random.choice(["Rear-end", "Sideswipe", "Angle"])
+            primary_factor = random.choice(["Unsafe speed for conditions", "Driver inattention"])
+        elif scenario == "rear_end_collision":
+            collision_type = "Rear-end"
+            primary_factor = "Following too closely"
+        elif scenario == "intersection_accident":
+            collision_type = random.choice(["Angle", "Head-on"])
+            primary_factor = "Failure to yield right of way"
+        else:
+            collision_type = random.choice(["Rear-end", "Sideswipe", "Head-on", "Angle", "Single Vehicle"])
+            primary_factor = random.choice([
+                "Unsafe speed for conditions", "Following too closely", "Failure to yield right of way",
+                "Improper turn", "Driver inattention",
+            ])
+        cited = True if hit_and_run_flag else random.random() < 0.6
+        # police-report also serves as the "Incident Report" in the property-claim
+        # packet (fire_damage/water_damage/theft/wind_damage) - reuse the same
+        # facts function property-loss-notice uses. Returns ("", []) for the auto
+        # scenarios above, which already have their own dedicated fields.
+        facts_title, facts = _property_scenario_facts(scenario)
+        _party1_damage_desc, _party2_damage_desc = _vehicle_damage_descriptions(scenario)
+        if scenario == "hit_and_run":
+            # In police-report (unlike auto-accident-report) the fleeing vehicle
+            # IS eventually identified per the narrative's witness/registration
+            # canvass, so its damage gets inspected rather than left unknown.
+            _party2_damage_desc = random.choice([
+                "Front-end damage consistent with striking another vehicle, later inspected upon identification.",
+                "Paint transfer and front bumper damage matching the collision, documented upon vehicle recovery.",
+            ])
 
-        def _party(role: str, at_fault: bool) -> dict:
+        def _party(role: str, at_fault: bool, damage_desc: str) -> dict:
             year = random.randint(2012, 2024)
             make, model = random.choice([
                 ("Toyota", "Camry"), ("Honda", "Accord"), ("Ford", "F-150"),
@@ -711,7 +1414,7 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
                 "insurer": random.choice(_INSURERS),
                 "policy_number": _policy_number(),
                 "damage_severity": severity,
-                "damage_description": _fake.sentence(nb_words=10),
+                "damage_description": damage_desc,
                 "towed": "Yes" if severity == "Major" else "No",
                 "citation_number": ("CIT" + "".join(random.choices(string.digits, k=8))) if (at_fault and cited) else "None",
                 "at_fault": at_fault,
@@ -720,8 +1423,16 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
                 "transported_to": (_fake.company() + " Medical Center") if injured != "No" else "-",
             }
 
-        party1 = _party("Driver 1", at_fault=False)
-        party2 = _party("Driver 2", at_fault=True)
+        party1 = _party("Driver 1", at_fault=False, damage_desc=_party1_damage_desc)
+        party2 = _party("Driver 2", at_fault=True, damage_desc=_party2_damage_desc)
+        location = _fake.street_address() + ", " + report_city + ", " + report_state
+        weather = random.choice(["Clear", "Rain", "Fog", "Snow", "Overcast"])
+        road_cond = random.choice(["Dry", "Wet", "Icy", "Under Construction"])
+        speed_limit_val = random.choice([25, 35, 45, 55, 65])
+        narrative_paragraphs, narrative_summary = _police_narrative(
+            scenario, dos.strftime("%m/%d/%Y"), location, weather, road_cond, speed_limit_val,
+            party1, party2, collision_type, primary_factor, hit_and_run_flag, facts,
+        )
 
         base.update({
             "incident_number": "RPT" + "".join(random.choices(string.digits, k=8)),
@@ -733,7 +1444,7 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
             "dispatch_time": dispatch_t,
             "arrival_time": arrival_t,
             "cleared_time": cleared_t,
-            "location": _fake.street_address() + ", " + report_city + ", " + report_state,
+            "location": location,
             "city": report_city,
             "county": _fake.city() + " County",
             "officer_name": "Officer " + _fake.last_name(),
@@ -747,21 +1458,18 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
             "department_ncic": str(random.randint(100000, 999999)),
             "case_status": random.choice(["Open", "Closed", "Under Investigation"]),
             "citation_issued": "Yes" if cited else "No",
-            "weather_conditions": random.choice(["Clear", "Rain", "Fog", "Snow", "Overcast"]),
+            "weather_conditions": weather,
             "lighting_conditions": random.choice(["Daylight", "Dusk", "Dark - Street Lights", "Dark - No Street Lights"]),
-            "road_conditions": random.choice(["Dry", "Wet", "Icy", "Under Construction"]),
+            "road_conditions": road_cond,
             "traffic_control": random.choice(["Signal - functioning", "Stop Sign", "None", "Officer/Flagger"]),
-            "speed_limit": str(random.choice([25, 35, 45, 55, 65])) + " MPH",
-            "collision_type": random.choice(["Rear-end", "Sideswipe", "Head-on", "Angle", "Single Vehicle"]),
+            "speed_limit": str(speed_limit_val) + " MPH",
+            "collision_type": collision_type,
             "num_vehicles": "2",
             "hit_and_run": "Yes" if hit_and_run_flag else "No",
-            "primary_factor": random.choice([
-                "Unsafe speed for conditions", "Following too closely", "Failure to yield right of way",
-                "Improper turn", "Driver inattention",
-            ]),
+            "primary_factor": primary_factor,
             "other_factors": random.choice(["None noted", "Stop-and-go congestion", "Wet roadway", "Sun glare"]),
-            "narrative": _fake.paragraph(nb_sentences=5),
-            "narrative_paragraphs": [_fake.paragraph(nb_sentences=4) for _ in range(3)],
+            "narrative": narrative_summary,
+            "narrative_paragraphs": narrative_paragraphs,
             "parties_involved": [party1, party2],
             "property_damage_items": [
                 {
@@ -776,7 +1484,7 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
             "witnesses": [
                 {
                     "name": _fake.name(), "address": _fake.street_address() + ", " + report_city + ", " + report_state,
-                    "phone": _fake.phone_number(), "statement": _fake.sentence(nb_words=16),
+                    "phone": _fake.phone_number(), "statement": _witness_statement(scenario, hit_and_run_flag, party2),
                 }
             ],
             "enforcement_party_cited": "Party 2" if cited else "None",
@@ -802,6 +1510,8 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
             "records_release_date": (dos + timedelta(days=7)).strftime("%m/%d/%Y"),
             "records_request_number": "R-" + str(dos.year) + "-" + "".join(random.choices(string.digits, k=4)),
             "page_count": "3",
+            "scenario_facts_title": facts_title,
+            "scenario_facts": facts,
         })
 
     elif doc_type == "demand-letter":
@@ -811,6 +1521,13 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
         # letter. special_damages computed first, general_damages takes the
         # remainder so the two still sum exactly to demand_amt.
         special_damages = round(demand_amt * random.uniform(0.25, 0.55), 2)
+        # demand-letter only ever appears in the litigation packet
+        # (slip_and_fall/medical_malpractice/product_liability) - the shared
+        # medical-family facts function already covers those 3 names.
+        facts_title, facts = _medical_scenario_facts(scenario)
+        demand_facts_para, _ = _litigation_narrative(
+            scenario, patient["patient_name"], "the responsible party", dos.strftime("%m/%d/%Y")
+        )
         base.update({
             "claimant_name": patient["patient_name"],
             "claimant_attorney": "Law Offices of " + _fake.last_name() + " & " + _fake.last_name(),
@@ -822,7 +1539,9 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
             "general_damages": round(demand_amt - special_damages, 2),
             "settlement_deadline": (date.today() + timedelta(days=30)).strftime("%m/%d/%Y"),
             "letter_date": date.today().strftime("%m/%d/%Y"),
-            "facts_summary": _fake.paragraph(nb_sentences=6),
+            "facts_summary": demand_facts_para,
+            "scenario_facts_title": facts_title,
+            "scenario_facts": facts,
         })
 
     elif doc_type == "pharmacy-invoice":
@@ -838,13 +1557,42 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
         # supply is not modeled here - customer_gstin varies only whether the sale is B2B.
         customer_gstin = _gstin() if random.random() < 0.3 else ""
 
-        _HSN_POOL = ["3004", "3003", "3005", "2106"]
-        num_items = random.randint(2, 4)
+        # Item pool/pricing used to be the same fixed maintenance-drug list
+        # (_NDC_DRUGS) and the same $50-800 price band regardless of scenario,
+        # so a "specialty_drug" invoice looked identical to a routine refill.
+        # Real specialty drugs (biologics) run far higher per fill than a
+        # chronic maintenance med, and a compounded prescription is a custom
+        # mix, not an off-the-shelf NDC product - both are worth a distinct
+        # item pool and price band, not just a different cause_of_loss-style
+        # label on the same numbers.
+        _SPECIALTY_DRUGS = [
+            ("Humira (Adalimumab) 40mg/0.4mL", "SPEC-HUM40"),
+            ("Enbrel (Etanercept) 50mg", "SPEC-ENB50"),
+            ("Ozempic (Semaglutide) 1mg", "SPEC-OZE01"),
+            ("Ocrevus (Ocrelizumab) 300mg", "SPEC-OCR300"),
+        ]
+        _COMPOUNDED_ITEMS = [
+            ("Compounded Testosterone Cream 2%", "CMP-TRT2"),
+            ("Compounded Pain Relief Cream - Custom Formula", "CMP-PAIN"),
+            ("Compounded Pediatric Suspension - Custom Flavor", "CMP-PEDS"),
+            ("Compounded Bio-Identical Hormone Capsules", "CMP-HRT"),
+        ]
+        if scenario == "specialty_drug":
+            _item_pool = _SPECIALTY_DRUGS
+            _hsn_pool, _qty_choices, _price_range = ["3004"], [1, 1, 2], (1500, 6500)
+        elif scenario == "compounded_medication":
+            _item_pool = _COMPOUNDED_ITEMS
+            _hsn_pool, _qty_choices, _price_range = ["3003"], [1, 2], (300, 1200)
+        else:
+            _item_pool = [(d[0], d[1]) for d in _NDC_DRUGS]
+            _hsn_pool, _qty_choices, _price_range = ["3004", "3003", "3005", "2106"], [1, 2, 5, 10], (50, 800)
+
+        num_items = random.randint(2, 4) if scenario != "specialty_drug" else random.randint(1, 2)
         items = []
         for _ in range(num_items):
-            drug_i = random.choice(_NDC_DRUGS)
-            qty = random.choice([1, 2, 5, 10])
-            mrp = round(random.uniform(50, 800), 2)
+            drug_i = random.choice(_item_pool)
+            qty = random.choice(_qty_choices)
+            mrp = round(random.uniform(*_price_range), 2)
             rate = round(mrp * random.uniform(0.7, 0.95), 2)
             discount_pct = round(random.choice([0, 0, 5, 10]), 2)
             taxable_value = round(qty * rate * (1 - discount_pct / 100), 2)
@@ -854,9 +1602,9 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
                 "batch_no": "B" + "".join(random.choices(string.digits, k=6)),
                 "mfg_date": mfg.strftime("%m/%Y"),
                 "expiry_date": (mfg.replace(year=mfg.year + 2)).strftime("%m/%Y"),
-                "hsn_sac": random.choice(_HSN_POOL),
+                "hsn_sac": random.choice(_hsn_pool),
                 "qty": qty,
-                "unit": random.choice(["Strip", "Bottle", "Box"]),
+                "unit": random.choice(["Strip", "Bottle", "Box"]) if scenario != "specialty_drug" else random.choice(["Prefilled Syringe", "Vial", "Auto-Injector"]),
                 "mrp": mrp,
                 "rate": rate,
                 "discount_pct": discount_pct,
@@ -939,6 +1687,7 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
         })
 
     elif doc_type == "property-loss-notice":
+        facts_title, facts = _property_scenario_facts(scenario)
         base.update({
             "insured_name": _fake.name(),
             "loss_date": dos.strftime("%m/%d/%Y"),
@@ -952,6 +1701,8 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
             "deductible": round(random.uniform(500, 5000), 2),
             "adjuster_name": _fake.name(),
             "adjuster_phone": _fake.phone_number(),
+            "scenario_facts_title": facts_title,
+            "scenario_facts": facts,
         })
 
     elif doc_type == "auto-accident-report":
@@ -973,11 +1724,12 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
         other_driver_name_val = _fake.name()
         other_driver_insurer_val = random.choice(_INSURERS)
         other_driver_policy_val = _policy_number()
-        damage_desc = _fake.sentence(nb_words=12)
+        damage_desc, other_damage_desc = _vehicle_damage_descriptions(scenario)
         est_damage = round(random.uniform(1500, 25000), 2)
         towed = random.choice(["Yes", "No"])
         has_injury = random.random() < 0.3
         cited = random.random() < 0.4
+        facts_title, facts = _auto_scenario_facts(scenario)
 
         base.update({
             # legacy flat fields - unused by the current template, kept for callers that
@@ -1047,7 +1799,7 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
                 "body_type": random.choice(["Sedan", "SUV", "Pickup", "Van"]),
                 "passengers": "",
                 "repair_cost": f"{round(est_damage * random.uniform(0.4, 0.9), 2):,.2f}",
-                "damage_description": _fake.sentence(nb_words=10),
+                "damage_description": other_damage_desc,
                 "insurance_company": other_driver_insurer_val,
                 "policy_no": other_driver_policy_val,
             },
@@ -1073,6 +1825,8 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
                 "citation_issued_to": "Veh. 2" if cited else "",
                 "collision_report_filed": cited,
             },
+            "scenario_facts_title": facts_title,
+            "scenario_facts": facts,
         })
 
     elif doc_type == "litigation-document":
@@ -1081,10 +1835,40 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
         forum_county = _fake.city() + " County"
         filing_date_val = date.today()
         prayer_amount = round(random.uniform(50000, 1000000), 0)
-        causes = random.sample([
-            "Negligence", "Breach of Duty of Care", "Premises Liability",
-            "Negligent Infliction of Emotional Distress", "Strict Product Liability",
-        ], k=random.choice([2, 3]))
+        # causes_of_action used to be a pure random.sample regardless of
+        # scenario, so a product_liability complaint could come back with no
+        # products-liability cause at all. Anchor one cause to the scenario,
+        # then fill out the rest of the sample from what is left - keeps the
+        # variety (2-3 causes) while guaranteeing the scenario is represented.
+        # The extra causes are drawn from a per-scenario COMPATIBLE pool, not
+        # the full list - the full list mixes theories that don't co-occur in
+        # one fact pattern (a fall on a property has no product to be
+        # defective; a botched medical procedure isn't a premises condition),
+        # so sampling it unrestricted could pad a medical-malpractice
+        # complaint with "Strict Product Liability" and "Premises Liability" -
+        # causes of action a real complaint alleging that incident never
+        # would plead together.
+        _anchor = {
+            "slip_and_fall": "Premises Liability",
+            "medical_malpractice": "Negligence",
+            "product_liability": "Strict Product Liability",
+        }.get(scenario)
+        _compatible_extras = {
+            "slip_and_fall": ["Negligence", "Breach of Duty of Care",
+                               "Negligent Infliction of Emotional Distress"],
+            "medical_malpractice": ["Breach of Duty of Care",
+                                     "Negligent Infliction of Emotional Distress"],
+            "product_liability": ["Negligence", "Breach of Duty of Care",
+                                    "Negligent Infliction of Emotional Distress"],
+        }.get(scenario)
+        if _anchor:
+            causes = [_anchor] + random.sample(
+                _compatible_extras, k=min(len(_compatible_extras), random.choice([1, 2]))
+            )
+        else:
+            _cause_pool = ["Negligence", "Breach of Duty of Care", "Premises Liability",
+                           "Negligent Infliction of Emotional Distress", "Strict Product Liability"]
+            causes = random.sample(_cause_pool, k=random.choice([2, 3]))
 
         def _attorney(role: str = "") -> dict:
             return {
@@ -1096,11 +1880,15 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
         lead_attorney = _attorney("Managing Partner")
         firm_attorneys = [lead_attorney] + [_attorney() for _ in range(random.randint(2, 4))]
         firm_last_names = [a["name"].split()[-1] for a in firm_attorneys[:3]]
+        defendant_name_val = _fake.company()
+        facts_para, general_allegations = _litigation_narrative(
+            scenario, patient["patient_name"], defendant_name_val, dos.strftime("%m/%d/%Y")
+        )
 
         base.update({
             "plaintiff_name": patient["patient_name"],
             "plaintiff_state_of_incorporation": plaintiff_state,
-            "defendant_name": _fake.company(),
+            "defendant_name": defendant_name_val,
             "defendant_state": _fake.state(),
             "case_number": f"CV-{dos.year}-{random.randint(10000, 99999)}",
             "court_name": f"Superior Court of {forum_state}",
@@ -1118,8 +1906,8 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
             "prayer_amount_numeric": prayer_amount,
             "attorney_name": "Esq. " + lead_attorney["name"],
             "bar_number": "BAR" + "".join(random.choices(string.digits, k=6)),
-            "facts": _fake.paragraph(nb_sentences=6),
-            "general_allegations": [_fake.paragraph(nb_sentences=3) for _ in range(3)],
+            "facts": facts_para,
+            "general_allegations": general_allegations,
             # --- law firm letterhead / recreate-style visual template ---
             "firm_name": ", ".join(firm_last_names) + " LLP",
             "firm_tagline": "Attorneys at Law",
@@ -1134,7 +1922,9 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
             "opposing_firm_name": _fake.last_name() + " & " + _fake.last_name() + " PC",
             "opposing_firm_address": _fake.street_address() + ", " + _fake.city() + ", " + _fake.state() + " " + _fake.zipcode(),
             "letter_recipient_note": "Via Certified Mail — Return Receipt Requested",
-            "letter_reference": _fake.paragraph(nb_sentences=2),
+            "letter_reference": f"This firm represents {patient['patient_name']} in connection with the "
+                                 f"{scenario.replace('_', ' ')} incident of {dos.strftime('%m/%d/%Y')} "
+                                 f"described in the enclosed complaint.",
             "prayer_items": [
                 f"For general and compensatory damages in the sum of {prayer_amount:,.0f} dollars, or according to proof at trial",
                 "For costs of suit incurred herein",
@@ -1160,6 +1950,7 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
         ub_total = round(sum(r["charge"] for r in rev_codes), 2)
         attending_parts = physician["physician_name"].replace("Dr. ", "").split()
         assigned_benefits = random.random() < 0.9
+        facts_title, facts = _medical_scenario_facts(scenario)
         base.update({
             "provider_name": physician["hospital"],
             "provider_address": _address(),
@@ -1218,7 +2009,7 @@ def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
             "employer_name": _fake.company(),
             "patient_reason_dx": icd_codes[0][0] if icd_codes else "",
             "pps_code": "",
-            "remarks": "",
+            "remarks": _facts_line(facts),
             "condition_code": random.choice(["", "", "A0"]),
             "creation_date": date.today().strftime("%m/%d/%y"),
         })

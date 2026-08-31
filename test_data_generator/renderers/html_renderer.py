@@ -88,7 +88,11 @@ def render_html_to_pdf(template_name: str, data: dict) -> bytes:
     template_file = template_name.replace("-", "_") + ".html"
     template = _env.get_template(template_file)
 
-    html_str = template.render(**data)
+    # data=data (in addition to **data) lets a template's component macros take the
+    # whole dict as one parameter instead of each needing its own long, hand-maintained
+    # parameter list - existing top-level references (`{{ patient_name }}` etc, used by
+    # each template's fixed chrome) keep working unchanged via the **data spread.
+    html_str = template.render(data=data, **data)
     logger.info(f"template rendered: {len(html_str)} chars; calling WeasyPrint...")
     pdf_bytes = HTML(string=_with_print_css(html_str), base_url=str(_TEMPLATES_DIR)).write_pdf()
     logger.info(f"render_html_to_pdf done: {len(pdf_bytes)} bytes")

@@ -1,0 +1,414 @@
+{#
+  Recreation of a real specimen traffic-collision report (letterhead, seal, sectioned
+  grid, narrative, field sketch, signatures, records certification). Plain Jinja - not
+  in html_renderer.py's is_standard_form tuple, so this renders through the direct
+  template.render(**data) path. Data keys come from renderers/synthetic_data.py's
+  "police-report" branch. All names/numbers are synthetic test data.
+#}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Traffic Collision Report — Case {{ incident_number }} (SPECIMEN / SYNTHETIC TEST DATA)</title>
+<style>
+  @page { size: Letter; margin: 0; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+  body {
+    margin: 0; padding: 0;
+    font-family: "DejaVu Sans", Arial, sans-serif;
+    color: #111820;
+    background: #6b7280;
+    font-size: 8.2pt;
+  }
+
+  .page {
+    position: relative;
+    width: 8.5in; height: 11in;
+    background: #fdfdfb;
+    overflow: hidden;
+    box-sizing: border-box;
+    padding: 0.42in 0.45in 0.5in 0.45in;
+    page-break-after: always;
+  }
+  .page:last-child { page-break-after: auto; }
+
+  @media print {
+    html, body { margin:0 !important; padding:0 !important; background:#fff; }
+    .page {
+      height: 10.92in; margin:0 !important;
+      overflow:hidden !important;
+      break-inside: avoid; page-break-inside: avoid;
+      break-after: page; page-break-after: always;
+    }
+    .page:last-child { break-after: auto; page-break-after: auto; }
+    .page * { break-inside: avoid; page-break-inside: avoid; }
+  }
+
+  .watermark {
+    position: absolute; top: 4.3in; left: -0.9in; width: 10.3in;
+    text-align: center; transform: rotate(-30deg);
+    font-size: 58pt; font-weight: bold; letter-spacing: 9px;
+    color: rgba(120, 30, 30, 0.075); z-index: 40;
+  }
+
+  /* ---------- letterhead ---------- */
+  .lh { display: table; width: 100%; border-bottom: 2.4pt solid #14304f; padding-bottom: 7px; }
+  .lh-seal { display: table-cell; width: 0.82in; vertical-align: middle; }
+  .lh-mid  { display: table-cell; vertical-align: middle; text-align: center; padding: 0 8px; }
+  .lh-right{ display: table-cell; width: 1.55in; vertical-align: middle; text-align: right; font-size: 6.3pt; color: #45505f; line-height: 1.5; }
+
+  .dept { font-size: 14pt; font-weight: bold; letter-spacing: 1.5px; color: #14304f; line-height: 1.15; text-transform: uppercase; }
+  .dept-sub { font-size: 8.4pt; letter-spacing: 3.4px; color: #14304f; margin-top: 2px; }
+  .dept-addr { font-size: 6.5pt; letter-spacing: .9px; color: #55606f; margin-top: 4px; }
+
+  .titlebar {
+    background: #14304f; color: #fff; text-align: center;
+    font-size: 11pt; font-weight: bold; letter-spacing: 3.4px;
+    padding: 5px 0; margin-top: 7px;
+  }
+  .titlebar small { display:block; font-size: 6.4pt; letter-spacing: 2px; font-weight: normal; margin-top: 2px; color:#c9d6e6; }
+
+  /* ---------- form grid ---------- */
+  table.f { width: 100%; border-collapse: collapse; margin-top: 6px; }
+  table.f td, table.f th { border: 0.7pt solid #35404d; padding: 2px 4px 3px 4px; vertical-align: top; }
+  .lbl { font-size: 5.6pt; letter-spacing: .7px; color: #4a5563; text-transform: uppercase; display: block; }
+  .val { font-size: 8.6pt; color: #101a26; }
+  .val.mono { font-family: "DejaVu Sans Mono", monospace; font-size: 8pt; letter-spacing: .2px; }
+  .val.ink { color: #16305f; }
+
+  .sechead {
+    background: #dfe4ea; border: 0.7pt solid #35404d; border-bottom: none;
+    font-size: 7.2pt; font-weight: bold; letter-spacing: 1.9px;
+    padding: 3px 5px; margin-top: 8px; text-transform: uppercase; color: #1b2733;
+  }
+  .sechead span.r { float: right; font-weight: normal; letter-spacing: .8px; color:#4a5563; }
+
+  .cb { display: inline-block; width: 8px; height: 8px; border: 0.8pt solid #35404d; margin-right: 3px; vertical-align: -1px; text-align: center; line-height: 7px; font-size: 7pt; font-weight: bold; }
+  .cb.x { background:#fff; color:#14304f; }
+
+  .narr { font-size: 8.3pt; line-height: 1.52; text-align: justify; }
+  .narr p { margin: 0 0 5px 0; }
+
+  .foot {
+    position: absolute; left: 0.45in; right: 1.15in; bottom: 0.3in;
+    border-top: 0.7pt solid #9aa3ae; padding-top: 4px;
+    font-size: 5.6pt; letter-spacing: .55px; color: #6b7480;
+  }
+</style>
+</head>
+<body>
+
+<!-- ==================== PAGE 1 ==================== -->
+<div class="page">
+  <div class="watermark">SPECIMEN</div>
+
+  <div class="lh">
+    <div class="lh-seal">
+      <svg viewBox="0 0 200 200" width="76" height="76">
+        <path d="M100 8 L176 40 V104 C176 148 142 178 100 192 C58 178 24 148 24 104 V40 Z" fill="none" stroke="#14304f" stroke-width="7"/>
+        <path d="M100 20 L166 48 V104 C166 142 136 168 100 180 C64 168 34 142 34 104 V48 Z" fill="none" stroke="#b99b52" stroke-width="2.6"/>
+        <circle cx="100" cy="96" r="30" fill="none" stroke="#14304f" stroke-width="3.4"/>
+        <path d="M100 70 L100 122 M74 96 L126 96" stroke="#14304f" stroke-width="3.4"/>
+        <path d="M100 66 L106 82 L123 82 L109 92 L114 108 L100 98 L86 108 L91 92 L77 82 L94 82 Z" fill="#14304f"/>
+      </svg>
+    </div>
+    <div class="lh-mid">
+      <div class="dept">{{ department }}</div>
+      <div class="dept-sub">TRAFFIC INVESTIGATIONS DIVISION</div>
+      <div class="dept-addr">{{ department_address }} &nbsp;·&nbsp; {{ department_phone }}</div>
+    </div>
+    <div class="lh-right">
+      ORI: <b>{{ department_ori }}</b><br>
+      NCIC AGENCY: {{ department_ncic }}<br>
+      RECORDS: {{ department_records_phone }}<br>
+      {{ department_records_email }}
+    </div>
+  </div>
+
+  <div class="titlebar">TRAFFIC COLLISION REPORT<small>PROPERTY DAMAGE / INJURY &nbsp;·&nbsp; PAGE 1 OF {{ page_count }}</small></div>
+
+  <table class="f">
+    <tr>
+      <td style="width:20%"><span class="lbl">Case / Report Number</span><span class="val mono ink"><b>{{ incident_number }}</b></span></td>
+      <td style="width:18%"><span class="lbl">Local Report No.</span><span class="val mono">{{ local_report_number }}</span></td>
+      <td style="width:16%"><span class="lbl">Date of Report</span><span class="val">{{ report_date }}</span></td>
+      <td style="width:14%"><span class="lbl">Time Dispatched</span><span class="val mono">{{ dispatch_time }}</span></td>
+      <td style="width:14%"><span class="lbl">Time Arrived</span><span class="val mono">{{ arrival_time }}</span></td>
+      <td style="width:18%"><span class="lbl">Time Cleared</span><span class="val mono">{{ cleared_time }}</span></td>
+    </tr>
+  </table>
+
+  <div class="sechead">Section 1 — Incident Data <span class="r">CAD Incident {{ cad_incident_number }}</span></div>
+  <table class="f" style="margin-top:0">
+    <tr>
+      <td style="width:17%"><span class="lbl">Date of Collision</span><span class="val">{{ incident_date }}</span></td>
+      <td style="width:12%"><span class="lbl">Time</span><span class="val mono">{{ incident_time }}</span></td>
+      <td colspan="2"><span class="lbl">Location of Collision</span><span class="val">{{ location }}</span></td>
+      <td style="width:14%"><span class="lbl">City / County</span><span class="val">{{ city }} / {{ county }}</span></td>
+    </tr>
+    <tr>
+      <td><span class="lbl">Collision Type</span><span class="val">{{ collision_type }}</span></td>
+      <td><span class="lbl">No. of Vehicles</span><span class="val">{{ num_vehicles }}</span></td>
+      <td style="width:20%"><span class="lbl">Hit &amp; Run</span><span class="val">
+        {% if hit_and_run == "No" %}<span class="cb x">X</span>No &nbsp; <span class="cb"></span>Yes
+        {% else %}<span class="cb"></span>No &nbsp; <span class="cb x">X</span>Yes{% endif %}
+      </span></td>
+      <td style="width:20%"><span class="lbl">Case Status</span><span class="val">{{ case_status }}</span></td>
+      <td><span class="lbl">Citation Issued</span><span class="val">{{ citation_issued }}</span></td>
+    </tr>
+    <tr>
+      <td><span class="lbl">Weather</span><span class="val">{{ weather_conditions }}</span></td>
+      <td><span class="lbl">Lighting</span><span class="val">{{ lighting_conditions }}</span></td>
+      <td><span class="lbl">Roadway Surface</span><span class="val">{{ road_conditions }}</span></td>
+      <td><span class="lbl">Traffic Control</span><span class="val">{{ traffic_control }}</span></td>
+      <td><span class="lbl">Speed Limit</span><span class="val">{{ speed_limit }}</span></td>
+    </tr>
+    <tr>
+      <td colspan="3"><span class="lbl">Primary Collision Factor</span><span class="val">{{ primary_factor }}. Attributed to Party 2.</span></td>
+      <td colspan="2"><span class="lbl">Other Associated Factors</span><span class="val">{{ other_factors }}.</span></td>
+    </tr>
+  </table>
+
+  {% for party in parties_involved %}
+  <div class="sechead">Section {{ loop.index + 1 }} — Party {{ loop.index }} <span class="r">Driver / Owner — {{ "At Fault" if party.at_fault else "Non-Culpable" }}</span></div>
+  <table class="f" style="margin-top:0">
+    <tr>
+      <td colspan="2" style="width:30%"><span class="lbl">Name</span><span class="val"><b>{{ party.name }}</b></span></td>
+      <td style="width:12%"><span class="lbl">Date of Birth</span><span class="val">{{ party.dob }}</span></td>
+      <td style="width:10%"><span class="lbl">Sex</span><span class="val">{{ party.sex }}</span></td>
+      <td style="width:16%"><span class="lbl">Driver License No. / State</span><span class="val mono">{{ party.license_number }} / {{ party.license_state }}</span></td>
+      <td><span class="lbl">Class</span><span class="val mono">{{ party.license_class }}</span></td>
+    </tr>
+    <tr>
+      <td colspan="3"><span class="lbl">Address</span><span class="val">{{ party.address }}</span></td>
+      <td colspan="2"><span class="lbl">Telephone</span><span class="val mono">{{ party.phone }}</span></td>
+      <td><span class="lbl">Injured</span><span class="val">{{ party.injured }}</span></td>
+    </tr>
+    <tr>
+      <td style="width:10%"><span class="lbl">Veh. Year</span><span class="val">{{ party.vehicle_year }}</span></td>
+      <td style="width:20%"><span class="lbl">Make / Model</span><span class="val">{{ party.vehicle_make }} {{ party.vehicle_model }}</span></td>
+      <td><span class="lbl">License Plate / State</span><span class="val mono">{{ party.vehicle_plate }} / {{ party.vehicle_plate_state }}</span></td>
+      <td colspan="2"><span class="lbl">Vehicle Identification Number</span><span class="val mono">{{ party.vehicle_vin }}</span></td>
+    </tr>
+    <tr>
+      <td colspan="3"><span class="lbl">Registered Owner</span><span class="val">{{ party.registered_owner }}</span></td>
+      <td colspan="2"><span class="lbl">Insurance Carrier</span><span class="val">{{ party.insurer }}</span></td>
+      <td><span class="lbl">Policy Number</span><span class="val mono">{{ party.policy_number }}</span></td>
+    </tr>
+    <tr>
+      <td colspan="2"><span class="lbl">Damage Severity</span><span class="val">{{ party.damage_severity }}</span></td>
+      <td colspan="2"><span class="lbl">Point of Impact / Damage Description</span><span class="val">{{ party.damage_description }}</span></td>
+      <td><span class="lbl">Towed</span><span class="val">{{ party.towed }}</span></td>
+      <td><span class="lbl">Citation Issued</span><span class="val mono">{{ party.citation_number }}</span></td>
+    </tr>
+  </table>
+  {% endfor %}
+
+  <div class="foot">
+    CASE {{ incident_number }} &nbsp;·&nbsp; SPECIMEN · SYNTHETIC TEST DATA · FICTITIOUS AGENCY &amp; PARTIES · NOT A GENUINE POLICE RECORD
+  </div>
+  <div style="position:absolute; right:0.45in; bottom:0.29in; font-size:6.2pt; color:#4a5563;">PAGE 1 OF {{ page_count }}</div>
+</div>
+
+<!-- ==================== PAGE 2 ==================== -->
+<div class="page">
+  <div class="watermark">SPECIMEN</div>
+
+  <div style="display:table; width:100%; border-bottom:1.4pt solid #14304f; padding-bottom:4px;">
+    <div style="display:table-cell; font-size:9.5pt; font-weight:bold; letter-spacing:1.6px; color:#14304f;">{{ department|upper }}</div>
+    <div style="display:table-cell; text-align:right; font-size:7.4pt; color:#45505f;">CASE NO. <b class="val mono">{{ incident_number }}</b> &nbsp;·&nbsp; CONTINUATION — PAGE 2 OF {{ page_count }}</div>
+  </div>
+
+  <div class="sechead">Section 4 — Injuries and Medical Transport</div>
+  <table class="f" style="margin-top:0">
+    <tr style="background:#eef1f4">
+      <th style="width:5%"><span class="lbl">Party</span></th>
+      <th style="width:22%"><span class="lbl">Name</span></th>
+      <th style="width:9%"><span class="lbl">Seat / Position</span></th>
+      <th style="width:9%"><span class="lbl">Restraint</span></th>
+      <th style="width:16%"><span class="lbl">Injury Status</span></th>
+      <th><span class="lbl">Transported To</span></th>
+    </tr>
+    {% for party in parties_involved %}
+    <tr>
+      <td><span class="val">{{ loop.index }}</span></td>
+      <td><span class="val">{{ party.name }}</span></td>
+      <td><span class="val">{{ party.seat_position }}</span></td>
+      <td><span class="val">{{ party.restraint }}</span></td>
+      <td><span class="val">{{ party.injured }}</span></td>
+      <td><span class="val">{{ party.transported_to }}</span></td>
+    </tr>
+    {% endfor %}
+  </table>
+
+  <div class="sechead">Section 5 — Property Damage (Other Than Vehicles)</div>
+  <table class="f" style="margin-top:0">
+    {% for item in property_damage_items %}
+    <tr>
+      <td style="width:26%"><span class="lbl">Item Damaged</span><span class="val">{{ item.item }}</span></td>
+      <td style="width:26%"><span class="lbl">Owner</span><span class="val">{{ item.owner }}</span></td>
+      <td style="width:18%"><span class="lbl">Est. Value</span><span class="val mono">${{ "%.2f"|format(item.est_value) }}</span></td>
+      <td><span class="lbl">Reference</span><span class="val mono">{{ item.reference }}</span></td>
+    </tr>
+    {% endfor %}
+    <tr>
+      <td colspan="3"><span class="lbl">Cargo Involved</span><span class="val">{{ cargo_involved }}</span></td>
+      <td><span class="lbl">Hazmat</span><span class="val">{{ hazmat }}</span></td>
+    </tr>
+  </table>
+
+  <div class="sechead">Section 6 — Witnesses and Statements</div>
+  <table class="f" style="margin-top:0">
+    <tr style="background:#eef1f4">
+      <th style="width:4%"><span class="lbl">#</span></th>
+      <th style="width:22%"><span class="lbl">Name</span></th>
+      <th style="width:24%"><span class="lbl">Address</span></th>
+      <th style="width:14%"><span class="lbl">Telephone</span></th>
+      <th><span class="lbl">Summary of Statement</span></th>
+    </tr>
+    {% for w in witnesses %}
+    <tr>
+      <td><span class="val">{{ loop.index }}</span></td>
+      <td><span class="val">{{ w.name }}</span></td>
+      <td><span class="val">{{ w.address }}</span></td>
+      <td><span class="val mono">{{ w.phone }}</span></td>
+      <td><span class="val">{{ w.statement }}</span></td>
+    </tr>
+    {% endfor %}
+  </table>
+
+  <div class="sechead">Section 7 — Enforcement Action</div>
+  <table class="f" style="margin-top:0">
+    <tr>
+      <td style="width:16%"><span class="lbl">Party Cited</span><span class="val">{{ enforcement_party_cited }}</span></td>
+      <td style="width:18%"><span class="lbl">Citation Number</span><span class="val mono">{{ enforcement_citation_number }}</span></td>
+      <td style="width:26%"><span class="lbl">Charges</span><span class="val">{{ enforcement_sections_charged }}</span></td>
+      <td style="width:16%"><span class="lbl">Court Date</span><span class="val">{{ enforcement_court_date }}</span></td>
+      <td><span class="lbl">Court</span><span class="val">{{ enforcement_court_name }}</span></td>
+    </tr>
+    <tr>
+      <td colspan="2"><span class="lbl">Chemical Test</span><span class="val">{{ chemical_test }}</span></td>
+      <td colspan="3"><span class="lbl">Arrest Made</span><span class="val">{{ arrest_made }}</span></td>
+    </tr>
+  </table>
+
+  <div class="sechead">Section 8 — Evidence and Attachments</div>
+  <table class="f" style="margin-top:0">
+    <tr>
+      {% for ev in evidence_items %}
+      <td style="width:{{ (100 / evidence_items|length)|round(0, 'floor')|int }}%"><span class="lbl">Item {{ ev.item_no }}</span><span class="val">{{ ev.description }}</span></td>
+      {% endfor %}
+    </tr>
+  </table>
+
+  <div class="sechead">Section 9 — Narrative <span class="r">Continued on Page 3</span></div>
+  <table class="f" style="margin-top:0">
+    <tr><td>
+      <div class="narr">
+        {% for p in narrative_paragraphs[:2] %}<p>{{ p }}</p>{% endfor %}
+      </div>
+    </td></tr>
+  </table>
+
+  <div class="foot">
+    CASE {{ incident_number }} &nbsp;·&nbsp; SPECIMEN · SYNTHETIC TEST DATA · FICTITIOUS AGENCY &amp; PARTIES · NOT A GENUINE POLICE RECORD
+  </div>
+  <div style="position:absolute; right:0.45in; bottom:0.29in; font-size:6.2pt; color:#4a5563;">PAGE 2 OF {{ page_count }}</div>
+</div>
+
+<!-- ==================== PAGE 3 ==================== -->
+<div class="page">
+  <div class="watermark">SPECIMEN</div>
+
+  <div style="display:table; width:100%; border-bottom:1.4pt solid #14304f; padding-bottom:4px;">
+    <div style="display:table-cell; font-size:9.5pt; font-weight:bold; letter-spacing:1.6px; color:#14304f;">{{ department|upper }}</div>
+    <div style="display:table-cell; text-align:right; font-size:7.4pt; color:#45505f;">CASE NO. <b class="val mono">{{ incident_number }}</b> &nbsp;·&nbsp; CONTINUATION — PAGE 3 OF {{ page_count }}</div>
+  </div>
+
+  <div class="sechead">Section 9 — Narrative (Continued)</div>
+  <table class="f" style="margin-top:0">
+    <tr><td>
+      <div class="narr">
+        {% for p in narrative_paragraphs[2:] %}<p>{{ p }}</p>{% endfor %}
+        <p>{{ narrative }}</p>
+      </div>
+    </td></tr>
+  </table>
+
+  <div class="sechead">Section 10 — Field Sketch (Not to Scale)</div>
+  <table class="f" style="margin-top:0">
+    <tr><td style="padding:6px">
+      <svg viewBox="0 0 720 200" width="100%" height="168">
+        <rect x="10" y="52" width="700" height="96" fill="#f2f4f6" stroke="#8b95a1" stroke-width="1"/>
+        <line x1="10" y1="100" x2="710" y2="100" stroke="#8b95a1" stroke-width="1" stroke-dasharray="14 10"/>
+        <line x1="10" y1="52" x2="710" y2="52" stroke="#35404d" stroke-width="2"/>
+        <line x1="10" y1="148" x2="710" y2="148" stroke="#35404d" stroke-width="2"/>
+        <rect x="430" y="108" width="150" height="30" fill="#dbe3ee" stroke="#14304f" stroke-width="2"/>
+        <text x="495" y="127" font-size="11" font-family="DejaVu Sans" fill="#14304f" text-anchor="middle">V-1</text>
+        <rect x="300" y="108" width="52" height="30" fill="#f4dcdc" stroke="#8a2b2b" stroke-width="2"/>
+        <text x="326" y="127" font-size="10" font-family="DejaVu Sans" fill="#8a2b2b" text-anchor="middle">V-2</text>
+        <line x1="228" y1="118" x2="300" y2="118" stroke="#35404d" stroke-width="3"/>
+        <line x1="228" y1="130" x2="300" y2="130" stroke="#35404d" stroke-width="3"/>
+        <text x="228" y="152" font-size="9" font-family="DejaVu Sans" fill="#35404d">friction marks</text>
+        <path d="M424 123 l-14 -7 l0 14 z" fill="#8a2b2b"/>
+        <text x="418" y="98" font-size="9" font-family="DejaVu Sans" fill="#8a2b2b" text-anchor="end">POINT OF IMPACT</text>
+        <g transform="translate(676,168)">
+          <path d="M0 0 L0 -26 M0 -26 L-5 -18 M0 -26 L5 -18" stroke="#35404d" stroke-width="1.8" fill="none"/>
+          <text x="0" y="12" font-size="10" font-family="DejaVu Sans" fill="#35404d" text-anchor="middle">N</text>
+        </g>
+      </svg>
+    </td></tr>
+  </table>
+
+  <div class="sechead">Section 11 — Reporting Officer Certification</div>
+  <table class="f" style="margin-top:0">
+    <tr>
+      <td style="width:50%">
+        <span class="lbl">Reporting Officer — Signature</span>
+        <svg width="200" height="42" viewBox="0 0 200 42" style="display:block; margin:2px 0 0 2px;">
+          <g fill="none" stroke="#16305f" stroke-width="1.9" stroke-linecap="round">
+            <path d="M6 32 C10 12, 18 3, 25 7 C32 11, 21 27, 17 32 C14 37, 21 38, 29 32 C37 26, 43 13, 49 9 C54 6, 58 11, 54 19 C50 27, 45 31, 51 35"/>
+            <path d="M74 34 C82 15, 94 5, 102 9 C108 13, 96 26, 90 32 C86 36, 94 40, 104 34 C116 27, 130 13, 142 9 C150 6, 154 11, 148 19 C142 27, 138 29, 146 33 C154 37, 168 24, 178 14"/>
+          </g>
+        </svg>
+        <div style="border-top:0.8pt solid #35404d; margin-top:1px;"></div>
+        <span class="val"><b>{{ officer_name }}</b> — Officer, Traffic Investigations</span>
+      </td>
+      <td style="width:16%"><span class="lbl">Badge / Serial</span><span class="val mono">#{{ badge_number }}</span><br><br><span class="lbl">Unit</span><span class="val mono">{{ reporting_officer_unit }}</span></td>
+      <td style="width:16%"><span class="lbl">Date Signed</span><span class="val">{{ reporting_officer_date }}</span><br><br><span class="lbl">Time</span><span class="val mono">{{ reporting_officer_time }}</span></td>
+      <td><span class="lbl">Report Status</span><span class="val">{{ report_status }}</span></td>
+    </tr>
+    <tr>
+      <td>
+        <span class="lbl">Reviewing Supervisor — Signature</span>
+        <svg width="190" height="40" viewBox="0 0 190 40" style="display:block; margin:2px 0 0 2px;">
+          <g fill="none" stroke="#16305f" stroke-width="1.8" stroke-linecap="round">
+            <path d="M6 30 C12 10, 22 2, 28 7 C34 12, 22 25, 18 30 C15 34, 23 35, 31 29 C40 22, 48 10, 54 8"/>
+            <path d="M70 32 C78 14, 88 4, 96 8 C102 12, 90 24, 84 30 C80 34, 88 38, 98 32 C110 25, 124 12, 134 8"/>
+          </g>
+        </svg>
+        <div style="border-top:0.8pt solid #35404d; margin-top:1px;"></div>
+        <span class="val"><b>{{ supervisor_name }}</b> — Traffic Division</span>
+      </td>
+      <td><span class="lbl">Badge / Serial</span><span class="val mono">#{{ supervisor_badge }}</span><br><br><span class="lbl">Approval Date</span><span class="val">{{ supervisor_approval_date }}</span></td>
+      <td colspan="2">
+        <span class="lbl">Records Division — Certified True Copy</span>
+        <div style="font-size:7pt; line-height:1.5; color:#1b2733; margin-top:3px;">
+          I certify that this is a true and correct copy of the record on file.<br>
+          Custodian: <b>{{ records_custodian }}</b><br>
+          Released: {{ records_release_date }} &nbsp;·&nbsp; Req. <span class="val mono">{{ records_request_number }}</span><br>
+          Pages released: {{ page_count }} of {{ page_count }}
+        </div>
+      </td>
+    </tr>
+  </table>
+
+  <div class="foot">
+    CASE {{ incident_number }} &nbsp;·&nbsp; SPECIMEN · SYNTHETIC TEST DATA · FICTITIOUS AGENCY &amp; PARTIES · NOT A GENUINE POLICE RECORD
+  </div>
+  <div style="position:absolute; right:0.45in; bottom:0.29in; font-size:6.2pt; color:#4a5563;">PAGE 3 OF {{ page_count }}</div>
+</div>
+
+</body>
+</html>

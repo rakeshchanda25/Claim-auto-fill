@@ -45,8 +45,27 @@ keep it consistent with `vehicle1`'s described driver.
 no other property damage is the modeled default) - do not assume every scenario populates a
 third vehicle just because the section exists in the template.
 
+Each of the 3 registered scenarios (rear_end_collision/intersection_accident/hit_and_run - the
+only ones this doc type is ever called with) additionally renders a dedicated "Details" section
+before the footer note (`scenario_facts_title` + `scenario_facts`, from `_auto_scenario_facts()`
+in synthetic_data.py); see `references/test-scenarios.md`.
+
+`vehicle1.damage_description`/`vehicle2.damage_description` (`_vehicle_damage_descriptions()`)
+match the collision type - e.g. rear_end_collision gives the state vehicle rear-end damage and
+the other vehicle front-end damage, not two independent random sentences.
+
 ## Legacy fields
 `insured_name`, `vehicle_info`, `driver_name`, `other_vehicle`, `other_driver_name`,
 `estimated_damage`, `at_fault`, `bodily_injury`, etc. are still generated (kept for
 backward-compat) but the current template does not render any of them - see
 `references/field-glossary.md` for what the template actually uses.
+
+## Document composition
+Like every doc type, this template is decomposed into named Jinja macros ("components") in
+`renderers/templates/auto_accident_report.html`, assembled by `renderers/components.py`'s
+`COMPONENT_COMPOSITION["auto-accident-report"]`. Unlike police-report (which has two structurally
+different shapes depending on scenario), every registered scenario for this doc type resolves
+to the SAME component list - a real state accident-report form doesn't restructure by scenario in the real
+world, only its content does (see the scenario-specific data-generation notes above). The
+mechanism exists uniformly across every doc type for architectural consistency, even where
+it isn't exercised to produce different shapes.

@@ -260,7 +260,6 @@
                 <div class="ai-mode-pills" id="ai-mode-pills">
                     <button class="ai-mode-pill active" data-mode="generate">🪄 Generate</button>
                     <button class="ai-mode-pill" data-mode="recreate">🔄 Recreate</button>
-                    <button class="ai-mode-pill" data-mode="fill">📝 Fill Form</button>
                     <button class="ai-mode-pill" data-mode="packet">📦 Build Packet</button>
                 </div>
 
@@ -276,7 +275,7 @@
                     <div class="ai-scenario-pills" id="ai-scenario-pills"></div>
                 </div>
 
-                <!-- Reference Upload (Recreate / Fill modes) -->
+                <!-- Reference Upload (Recreate mode) -->
                 <div id="ai-reference-section" class="hidden">
                     <h3>Reference Document</h3>
                     <div class="ai-ref-drop-zone" id="ai-ref-drop">
@@ -294,11 +293,12 @@
                     <div id="ai-analysis-result" class="hidden"></div>
                 </div>
 
-                <!-- Fill Prompt (Fill mode only) -->
-                <div id="ai-fill-prompt-section" class="hidden">
-                    <h3>What should be filled in?</h3>
-                    <textarea id="ai-fill-prompt" class="ai-fill-prompt-input" rows="3"
-                        placeholder="Describe what to fill in, e.g. &quot;Car accident claim in Mumbai for Priya Sharma, policy POL-2024-1183, loss date 12 Jan 2026&quot;. Leave blank to let the agent invent plausible synthetic data."></textarea>
+                <!-- Free-form user input (all modes): plain guidance text, and/or a Guidewire
+                     claim ID/number to pull real claim data for the fields it covers. -->
+                <div id="ai-user-input-section">
+                    <h3>User Input <span class="section-desc" style="display:inline; font-weight:400;">(optional)</span></h3>
+                    <textarea id="ai-user-input" class="ai-user-input-textarea"
+                        placeholder="Describe what you want, and/or paste a claim ID or number (e.g. 000-00-053109) to pull real claim data from Guidewire - any field it doesn't cover is still filled in automatically."></textarea>
                 </div>
 
                 <!-- Options Row -->

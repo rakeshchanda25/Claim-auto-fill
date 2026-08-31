@@ -20,55 +20,87 @@
 </style>
 </head>
 <body>
-<div class="header">
-  <div class="insurer">{{ insurer_name }}</div>
-  <div class="form-title">PROPERTY LOSS NOTICE</div>
-  <div style="font-size:9pt;color:#555;">Claim Number: {{ claim_number }}</div>
-</div>
 
+{% macro header(data) %}
+<div class="header">
+  <div class="insurer">{{ data.insurer_name }}</div>
+  <div class="form-title">PROPERTY LOSS NOTICE</div>
+  <div style="font-size:9pt;color:#555;">Claim Number: {{ data.claim_number }}</div>
+</div>
+{% endmacro %}
+
+{% macro insured_information(data) %}
 <h2>Insured Information</h2>
 <div class="grid2">
-  <div><span class="label">Insured Name:</span> {{ insured_name }}</div>
-  <div><span class="label">Policy Number:</span> {{ policy_number }}</div>
-  <div><span class="label">Phone:</span> {{ phone }}</div>
-  <div><span class="label">Loss Date:</span> {{ loss_date }}</div>
-  <div><span class="label">Coverage Type:</span> {{ coverage_type }}</div>
-  <div><span class="label">Deductible:</span> ${{ "%.2f"|format(deductible) }}</div>
+  <div><span class="label">Insured Name:</span> {{ data.insured_name }}</div>
+  <div><span class="label">Policy Number:</span> {{ data.policy_number }}</div>
+  <div><span class="label">Phone:</span> {{ data.phone }}</div>
+  <div><span class="label">Loss Date:</span> {{ data.loss_date }}</div>
+  <div><span class="label">Coverage Type:</span> {{ data.coverage_type }}</div>
+  <div><span class="label">Deductible:</span> ${{ "%.2f"|format(data.deductible) }}</div>
 </div>
+{% endmacro %}
 
+{% macro loss_information(data) %}
 <h2>Loss Information</h2>
 <div class="grid2">
-  <div><span class="label">Loss Location:</span> {{ loss_location }}</div>
-  <div><span class="label">Cause of Loss:</span> {{ cause_of_loss }}</div>
-  <div><span class="label">Property Description:</span> {{ property_description }}</div>
-  <div><span class="label">Estimated Loss:</span> ${{ "%.2f"|format(estimated_loss) }}</div>
+  <div><span class="label">Loss Location:</span> {{ data.loss_location }}</div>
+  <div><span class="label">Cause of Loss:</span> {{ data.cause_of_loss }}</div>
+  <div><span class="label">Property Description:</span> {{ data.property_description }}</div>
+  <div><span class="label">Estimated Loss:</span> ${{ "%.2f"|format(data.estimated_loss) }}</div>
 </div>
+{% endmacro %}
 
+{% macro scenario_details(data) %}
+{% if data.scenario_facts %}
+<h2>{{ data.scenario_facts_title }}</h2>
+<div class="grid2">
+  {% for fact in data.scenario_facts %}
+  <div><span class="label">{{ fact.label }}:</span> {{ fact.value }}</div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endmacro %}
+
+{% macro mortgage_lienholder(data) %}
 <h2>Mortgage / Lienholder</h2>
 <div class="grid2">
-  <div><span class="label">Mortgagee Name:</span> {{ mortgagee_name }}</div>
-  <div><span class="label">Loan Number:</span> {{ loan_number }}</div>
+  <div><span class="label">Mortgagee Name:</span> {{ data.mortgagee_name }}</div>
+  <div><span class="label">Loan Number:</span> {{ data.loan_number }}</div>
 </div>
+{% endmacro %}
 
+{% macro adjuster_assignment(data) %}
 <h2>Adjuster Assignment</h2>
 <div class="grid2">
-  <div><span class="label">Adjuster Name:</span> {{ adjuster_name }}</div>
-  <div><span class="label">Adjuster Phone:</span> {{ adjuster_phone }}</div>
+  <div><span class="label">Adjuster Name:</span> {{ data.adjuster_name }}</div>
+  <div><span class="label">Adjuster Phone:</span> {{ data.adjuster_phone }}</div>
 </div>
+{% endmacro %}
 
+{% macro signature(data) %}
 <div class="sig-block">
   <div class="grid2">
     <div>
       <div class="label">Insured Signature</div>
       <div class="sig-line"></div>
-      <div>{{ insured_name }}</div>
+      <div>{{ data.insured_name }}</div>
     </div>
     <div>
       <div class="label">Date</div>
       <div class="sig-line"></div>
-      <div>{{ loss_date }}</div>
+      <div>{{ data.loss_date }}</div>
     </div>
   </div>
 </div>
+{% endmacro %}
+
+{% set component_map = {
+  "header": header, "insured_information": insured_information, "loss_information": loss_information,
+  "scenario_details": scenario_details, "mortgage_lienholder": mortgage_lienholder,
+  "adjuster_assignment": adjuster_assignment, "signature": signature,
+} %}
+{% for c in components %}{{ component_map[c](data) }}{% endfor %}
+
 </body>
 </html>

@@ -137,38 +137,39 @@
 <body>
 <div class="sheet">
 
-  <!-- ===== Claim info box ===== -->
+{% macro claim_box(data) %}
   <div class="claim-box">
     <div class="claim-box-top">
-      <h1 class="doc-title">{{ document_title or 'Explanation of Health Care Benefits' }}</h1>
+      <h1 class="doc-title">{{ data.document_title or 'Explanation of Health Care Benefits' }}</h1>
       <div class="claim-info-block">
         <div class="claim-info-title">Claim Information</div>
-        <div class="claim-info-row"><span class="lbl">Subscriber Name</span><span class="val">{{ subscriber_name }}</span></div>
-        <div class="claim-info-row"><span class="lbl">Patient Name</span><span class="val">{{ patient_name }}</span></div>
+        <div class="claim-info-row"><span class="lbl">Subscriber Name</span><span class="val">{{ data.subscriber_name }}</span></div>
+        <div class="claim-info-row"><span class="lbl">Patient Name</span><span class="val">{{ data.patient_name }}</span></div>
       </div>
       <div class="claim-top-right">
-        {{ claim_ref_number }}<br>
-        {{ claim_ref_date }}
+        {{ data.claim_ref_number }}<br>
+        {{ data.claim_ref_date }}
       </div>
     </div>
 
     <div class="not-a-bill">
-      <b>THIS IS NOT A BILL.</b> {{ disclaimer_text or 'This is an explanation of the claim processed based on your plan benefits in effect when the service was performed. Please keep this form for your tax records.' }}
+      <b>THIS IS NOT A BILL.</b> {{ data.disclaimer_text or 'This is an explanation of the claim processed based on your plan benefits in effect when the service was performed. Please keep this form for your tax records.' }}
     </div>
 
     <div class="claim-meta-row">
-      <span><span class="lbl">Claim Number:</span> {{ claim_number }}</span>
-      <span><span class="lbl">Patient ID:</span> {{ patient_id }}</span>
-      <span><span class="lbl">Patient Control Number:</span> {{ patient_control_number }}</span>
-      <span><span class="lbl">Group Number:</span> {{ group_number }}</span>
+      <span><span class="lbl">Claim Number:</span> {{ data.claim_number }}</span>
+      <span><span class="lbl">Patient ID:</span> {{ data.patient_id }}</span>
+      <span><span class="lbl">Patient Control Number:</span> {{ data.patient_control_number }}</span>
+      <span><span class="lbl">Group Number:</span> {{ data.group_number }}</span>
     </div>
     <div class="claim-meta-lines">
-      <span class="lbl">Group Name:</span> {{ group_name }}<br>
-      <span class="lbl">Provider:</span> {{ provider_name }}
+      <span class="lbl">Group Name:</span> {{ data.group_name }}<br>
+      <span class="lbl">Provider:</span> {{ data.provider_name }}
     </div>
   </div>
+{% endmacro %}
 
-  <!-- ===== Claims table ===== -->
+{% macro claims_table(data) %}
   <table class="claims-table">
     <colgroup>
       <col style="width:17%"><col style="width:7%"><col style="width:8%"><col style="width:7%">
@@ -189,7 +190,7 @@
       <th>Amount You Owe</th>
       <th>Notes ID</th>
     </tr>
-    {% for c in claims %}
+    {% for c in data.claims %}
     <tr>
       <td class="desc-cell">{{ c.dates_of_service }}<br><br>{{ c.description }}</td>
       <td class="zebra">{{ '%.2f'|format(c.charges or 0) }}</td>
@@ -207,25 +208,26 @@
     {% endfor %}
     <tr class="total-row">
       <td class="desc-cell">Total</td>
-      <td>{{ '%.2f'|format(totals.charges or 0) }}</td>
-      <td>{{ '%.2f'|format(totals.provider_responsibility or 0) }}</td>
-      <td>{{ '%.2f'|format(totals.allowed_amount or 0) }}</td>
-      <td>{{ '%.2f'|format(totals.patient_noncovered or 0) }}</td>
-      <td>{{ '%.2f'|format(totals.paid_by_other_ins or 0) }}</td>
-      <td>{{ '%.2f'|format(totals.deductible or 0) }}</td>
-      <td>{{ '%.2f'|format(totals.copay or 0) }}</td>
-      <td>{{ '%.2f'|format(totals.coinsurance or 0) }}</td>
-      <td>{{ '%.2f'|format(totals.paid_amount or 0) }}</td>
-      <td>{{ '%.2f'|format(totals.amount_you_owe or 0) }}</td>
+      <td>{{ '%.2f'|format(data.totals.charges or 0) }}</td>
+      <td>{{ '%.2f'|format(data.totals.provider_responsibility or 0) }}</td>
+      <td>{{ '%.2f'|format(data.totals.allowed_amount or 0) }}</td>
+      <td>{{ '%.2f'|format(data.totals.patient_noncovered or 0) }}</td>
+      <td>{{ '%.2f'|format(data.totals.paid_by_other_ins or 0) }}</td>
+      <td>{{ '%.2f'|format(data.totals.deductible or 0) }}</td>
+      <td>{{ '%.2f'|format(data.totals.copay or 0) }}</td>
+      <td>{{ '%.2f'|format(data.totals.coinsurance or 0) }}</td>
+      <td>{{ '%.2f'|format(data.totals.paid_amount or 0) }}</td>
+      <td>{{ '%.2f'|format(data.totals.amount_you_owe or 0) }}</td>
       <td class="notes-cell">&nbsp;</td>
     </tr>
   </table>
+{% endmacro %}
 
-  <!-- ===== Notes legend ===== -->
+{% macro notes_legend(data) %}
   <div class="notes-legend">
     <div class="legend-title">Note</div>
     <table class="legend-table">
-      {% for n in notes %}
+      {% for n in data.notes %}
       <tr>
         <td class="code">{{ n.code }}</td>
         <td>{{ n.description }}</td>
@@ -233,19 +235,40 @@
       {% endfor %}
     </table>
   </div>
+{% endmacro %}
 
-  <!-- ===== Patient Benefit Summary ===== -->
+{% macro scenario_details(data) %}
+  {% if data.scenario_facts %}
+  <div class="benefit-box" style="margin-bottom:16px;">
+    <div class="benefit-header">{{ data.scenario_facts_title }}</div>
+    <div class="benefit-body">
+      {% for fact in data.scenario_facts %}
+      <p>{{ fact.label }}: {{ fact.value }}</p>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+{% endmacro %}
+
+{% macro benefit_summary(data) %}
   <div class="benefit-box">
     <div class="benefit-header">Patient Benefit Summary</div>
     <div class="benefit-body">
-      <p>Patient: {{ benefit_patient_name or patient_name }}</p>
-      <p>Benefit Period: {{ benefit_period_start }} - {{ benefit_period_end }}</p>
-      <p>You have satisfied ${{ '%.2f'|format(deductible_satisfied or 0) }} of your ${{ '%.2f'|format(deductible_limit or 0) }} individual deductible.</p>
-      <p>${{ '%.2f'|format(oop_applied or 0) }} has been applied to your ${{ '%.2f'|format(oop_limit or 0) }} individual out-of-pocket limit.</p>
+      <p>Patient: {{ data.benefit_patient_name or data.patient_name }}</p>
+      <p>Benefit Period: {{ data.benefit_period_start }} - {{ data.benefit_period_end }}</p>
+      <p>You have satisfied ${{ '%.2f'|format(data.deductible_satisfied or 0) }} of your ${{ '%.2f'|format(data.deductible_limit or 0) }} individual deductible.</p>
+      <p>${{ '%.2f'|format(data.oop_applied or 0) }} has been applied to your ${{ '%.2f'|format(data.oop_limit or 0) }} individual out-of-pocket limit.</p>
       <p>&nbsp;</p>
-      <p>{{ benefit_summary_note or 'Please refer to your benefit booklet or agreement for further information. Amount(s) shown may include totals from claims which are still being processed and for which you have not been notified.' }}</p>
+      <p>{{ data.benefit_summary_note or 'Please refer to your benefit booklet or agreement for further information. Amount(s) shown may include totals from claims which are still being processed and for which you have not been notified.' }}</p>
     </div>
   </div>
+{% endmacro %}
+
+{% set component_map = {
+  "claim_box": claim_box, "claims_table": claims_table, "notes_legend": notes_legend,
+  "scenario_details": scenario_details, "benefit_summary": benefit_summary,
+} %}
+{% for c in components %}{{ component_map[c](data) }}{% endfor %}
 
 </div>
 </body>

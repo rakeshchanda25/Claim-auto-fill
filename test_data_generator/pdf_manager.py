@@ -1,4 +1,4 @@
-import pymupdf
+import fitz
 import io
 
 def _normalize_font_name(raw_font: str) -> str:
@@ -39,11 +39,11 @@ def _normalize_font_name(raw_font: str) -> str:
         return 'helv'
 
 
-def _find_best_span(text_dict: dict, inst_rect: pymupdf.Rect):
+def _find_best_span(text_dict: dict, inst_rect: fitz.Rect):
     
     cx = (inst_rect.x0 + inst_rect.x1) / 2
     cy = (inst_rect.y0 + inst_rect.y1) / 2
-    centre = pymupdf.Point(cx, cy)
+    centre = fitz.Point(cx, cy)
 
     best_overlap = None
     best_overlap_area = 0.0
@@ -53,7 +53,7 @@ def _find_best_span(text_dict: dict, inst_rect: pymupdf.Rect):
             continue
         for line in block.get('lines', []):
             for span in line.get('spans', []):
-                span_rect = pymupdf.Rect(span['bbox'])
+                span_rect = fitz.Rect(span['bbox'])
 
                 if span_rect.contains(centre):
                     return span
@@ -72,7 +72,7 @@ def replace_text_in_pdf(pdf_bytes: bytes, replacements: dict) -> bytes:
     """ 
     Replaces text in a PDF by redacting the old text and inserting the new text.
     """
-    doc = pymupdf.open(stream=pdf_bytes, filetype="pdf")
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
 
     for page in doc:
         text_dict = page.get_text("dict")
@@ -83,7 +83,7 @@ def replace_text_in_pdf(pdf_bytes: bytes, replacements: dict) -> bytes:
                 continue
 
             for inst in page.search_for(old_text):
-                inst_rect = pymupdf.Rect(inst)
+                inst_rect = fitz.Rect(inst)
 
                 font_name  = "helv"
                 font_size  = (inst.y1 - inst.y0) * 0.8
@@ -114,12 +114,12 @@ def replace_text_in_pdf(pdf_bytes: bytes, replacements: dict) -> bytes:
                     "color":    text_color,
                 })
 
-        page.apply_redactions(images=pymupdf.PDF_REDACT_IMAGE_NONE)
+        page.apply_redactions(images=fitz.PDF_REDACT_IMAGE_NONE)
 
         for item in insertions:
         
             r = item["rect"]
-            insert_rect = pymupdf.Rect(r.x0, r.y0 - 2, r.x1 + 200, r.y1 + 4)
+            insert_rect = fitz.Rect(r.x0, r.y0 - 2, r.x1 + 200, r.y1 + 4)
             result = page.insert_textbox(
                 insert_rect,
                 item["text"],
@@ -131,7 +131,7 @@ def replace_text_in_pdf(pdf_bytes: bytes, replacements: dict) -> bytes:
            
             if result < 0:
                 page.insert_text(
-                    pymupdf.Point(r.x0, item["baseline_y"]),
+                    fitz.Point(r.x0, item["baseline_y"]),
                     item["text"],
                     fontname=item["fontname"],
                     fontsize=item["fontsize"],
@@ -167,10 +167,10 @@ def parse_page_spec(spec: str, total_pages: int) -> list[int]:
 
 def image_to_pdf_bytes(image_bytes: bytes) -> bytes:
     """Converts an image (PNG, JPG, BMP, TIFF) into a single-page PDF."""
-    pix = pymupdf.Pixmap(image_bytes)
+    pix = fitz.Pixmap(image_bytes)
     if pix.n > 4 or (pix.n == 4 and pix.alpha):
-        pix = pymupdf.Pixmap(pymupdf.csRGB, pix)
-    doc = pymupdf.open()
+        pix = fitz.Pixmap(fitz.csRGB, pix)
+    doc = fitz.open()
     
     img_w, img_h = pix.width, pix.height
     
@@ -188,7 +188,7 @@ def image_to_pdf_bytes(image_bytes: bytes) -> bytes:
     x_offset = (a4_w - new_w) / 2
     y_offset = (a4_h - new_h) / 2
     
-    target_rect = pymupdf.Rect(x_offset, y_offset, x_offset + new_w, y_offset + new_h)
+    target_rect = fitz.Rect(x_offset, y_offset, x_offset + new_w, y_offset + new_h)
     page.insert_image(target_rect, pixmap=pix)
     
     out_bytes = doc.write(garbage=4, deflate=True)
@@ -215,7 +215,7 @@ def combine_pdfs(
     if file_types is None or len(file_types) != n_files:
         file_types = ["pdf"] * n_files
 
-    out_pdf = pymupdf.open()
+    out_pdf = fitz.open()
 
     for position, idx in enumerate(file_order):
         raw_bytes = pdf_bytes_list[idx]
@@ -224,11 +224,11 @@ def combine_pdfs(
 
         if ftype == "image":
             img_pdf_bytes = image_to_pdf_bytes(raw_bytes)
-            doc = pymupdf.open(stream=img_pdf_bytes, filetype="pdf")
+            doc = fitz.open(stream=img_pdf_bytes, filetype="pdf")
             out_pdf.insert_pdf(doc, from_page=0, to_page=0)
             doc.close()
         else:
-            doc = pymupdf.open(stream=raw_bytes, filetype="pdf")
+            doc = fitz.open(stream=raw_bytes, filetype="pdf")
             total = doc.page_count
             pages = parse_page_spec(spec, total)
             for page_num in pages:
