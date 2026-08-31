@@ -3,9 +3,11 @@ from fastapi.responses import Response, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import json
+import os
+import re
 import uvicorn
 from pathlib import Path
-from typing import List,Optional
+from typing import List, Optional
 from pdf_manager import replace_text_in_pdf, combine_pdfs
 from scanner_simulator import simulate_scan
 from starlette.concurrency import run_in_threadpool
@@ -16,9 +18,100 @@ import zipfile
 from ai_doc_generator.config import GenerationRequest
 from ai_doc_generator.prompt_builder import build_generation_prompt
 from ai_doc_generator.packets import PACKET_REGISTRY, SCENARIO_REGISTRY
-from guidewire_lookup import extract_claim_id, fetch_claim_facts
+from guidewire import GuidewireClient
 
 app = FastAPI(title="PDF Test Data Generator API")
+
+# ============================================================
+# Guidewire claim lookup (used by /api/ai-generate below)
+#
+# A claim ID/number typed into the frontend's free-text "User Input" box
+# pulls live claim data from Guidewire via GuidewireClient (guidewire.py) -
+# the same client main.py's now-removed standalone /claims/{claim_id}
+# endpoint used, called in-process here instead of over HTTP to a second
+# server. The returned facts are merged into custom_fields, which the LLM
+# already treats as authoritative-but-partial (see prompt_builder.py's
+# _custom_fields_block: "use verbatim wherever it fits, only invent the
+# rest") - so any field Guidewire doesn't have still gets Faker-generated
+# exactly as it does today.
+# ============================================================
+
+_GUIDEWIRE_BASE_URL = os.getenv(
+    "GUIDEWIRE_BASE_URL",
+    "https://cc-dev-gwcpdev.valuemom.zeta1-andromeda.guidewire.net:443",
+)
+_GUIDEWIRE_USERNAME = os.getenv("GUIDEWIRE_USERNAME", "su")
+_GUIDEWIRE_PASSWORD = os.getenv("GUIDEWIRE_PASSWORD", "gw")
+_GUIDEWIRE_TIMEOUT = int(os.getenv("GUIDEWIRE_TIMEOUT", "60"))
+
+_guidewire_client = GuidewireClient(
+    base_url=_GUIDEWIRE_BASE_URL,
+    username=_GUIDEWIRE_USERNAME,
+    password=_GUIDEWIRE_PASSWORD,
+    timeout_seconds=_GUIDEWIRE_TIMEOUT,
+)
+
+# Checked in this order so an explicit Guidewire public ID or a labelled
+# "claim id/number: X" is never shadowed by some other digit run in the text.
+# The bare-number pattern matches the shape Guidewire's own claim_number
+# field uses (see response.json: "000-00-053109").
+_CLAIM_PUBLIC_ID_RE = re.compile(r"\bcc:[A-Za-z0-9_-]+\b")
+_CLAIM_LABELLED_RE = re.compile(
+    r"claim\s*(?:id|number|#)?\s*[:\-]?\s*([A-Za-z0-9][A-Za-z0-9:_\-]{4,})", re.IGNORECASE
+)
+_CLAIM_BARE_NUMBER_RE = re.compile(r"\b\d{3}-\d{2}-\d{6}\b")
+
+
+def extract_claim_id(text: str) -> Optional[str]:
+    """Best-effort claim ID/number pulled out of free-form user text."""
+    if not text:
+        return None
+    for pattern in (_CLAIM_PUBLIC_ID_RE, _CLAIM_LABELLED_RE, _CLAIM_BARE_NUMBER_RE):
+        m = pattern.search(text)
+        if m:
+            return (m.group(1) if m.groups() else m.group(0)).strip().rstrip(".,;")
+    return None
+
+
+def fetch_claim_facts(claim_id_or_number: str) -> dict:
+    """Fetches the claim from Guidewire and flattens it into claim-level facts.
+    Field names are picked to match what these documents' skills already call
+    fields by (claim_number, policy_number, loss_date, etc.) so the LLM can map
+    them the same way it already maps custom_fields/carried_values - it is not
+    a per-doc-type mapping table, because doc types vary too much for a static
+    map to stay correct (see prompt_builder.py's _custom_fields_block).
+
+    Raises on failure - the caller decides whether that should block generation
+    or just log a warning and fall back to pure Faker generation (see
+    ai_generate_document below, which does the latter)."""
+    resolved_id = _guidewire_client.resolve_claim_id_by_number(claim_id_or_number)
+    data = _guidewire_client.get_claim_background_context(resolved_id)
+
+    if isinstance(data, dict) and data.get("error"):
+        raise RuntimeError(f"Guidewire lookup failed: {data}")
+
+    claim = data.get("claim_details", {}) if isinstance(data, dict) else {}
+    policy = data.get("policy_details", {}) if isinstance(data, dict) else {}
+
+    facts = {
+        "claim_number": claim.get("claim_number"),
+        "policy_number": claim.get("policy_number") or policy.get("policy_number"),
+        "claim_status": claim.get("status"),
+        "loss_type": claim.get("loss_type"),
+        "loss_cause": claim.get("loss_cause"),
+        "loss_date": claim.get("loss_date"),
+        "insured_name": claim.get("insured"),
+        "reporter_name": claim.get("reporter"),
+        "adjuster_name": claim.get("assigned_adjuster"),
+        "jurisdiction": claim.get("jurisdiction"),
+        "line_of_business": claim.get("line_of_business"),
+        "loss_location": claim.get("loss_location"),
+        "policy_address": claim.get("policy_address"),
+        "policy_type": policy.get("policy_type"),
+        "policy_effective_date": policy.get("policy_effective_date"),
+        "policy_expiration_date": policy.get("policy_expiration_date"),
+    }
+    return {k: v for k, v in facts.items() if v not in (None, "")}
 
 app.add_middleware(
     CORSMiddleware,
@@ -203,7 +296,6 @@ async def ai_generate_document(
     )
 
     def _run():
-        import re
         from ai_doc_generator.agent_factory import get_shared_agent, run_with_reference
 
         agent = get_shared_agent()
@@ -368,10 +460,6 @@ class NoCacheStaticFiles(StaticFiles):
         return response
 
 app.mount("/", NoCacheStaticFiles(directory="frontend", html=True), name="frontend")
-
-FRONTEND_DIR = Path(__file__).resolve().parent / "frontend"
-
-app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
 
 if __name__ == "__main__":
     uvicorn.run("app:app", host="127.0.0.1", port=8015, reload=True)
