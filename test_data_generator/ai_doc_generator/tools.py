@@ -321,45 +321,22 @@ _SHARED_NAME_FIELDS = ("patient_name", "insured_name", "claimant_name", "plainti
 _SHARED_LOCATION_FIELDS = ("location", "accident_location", "loss_location")
 _SHARED_DATE_FIELDS = ("incident_date",)
 
-# Which document_searches categories (Guidewire's own keyword-matched pattern
-# strings, e.g. "police report|accident report" - see response.json) are
-# actually relevant to each packet component's doc_type. A packet has no LLM
-# step to read the full set of claim-attached-document excerpts and judge
-# relevance itself (unlike generate/recreate mode, which gets the same
-# material as prose via user_input and decides there) - this is that
-# judgment made deterministically instead: an auto-accident-report or
-# police-report gets the real accident-report excerpt, a medical-record gets
-# the real injury/ER excerpt, and so on. Doc types with no entry here (e.g.
-# acord-25, cms-1500) get none - a certificate of insurance or claim form has
-# no narrative section to place one in anyway.
-_RELEVANT_EXCERPT_CATEGORIES = {
-    "police-report": ("police report", "accident report", "tow"),
-    "auto-accident-report": ("police report", "accident report", "tow"),
-    "medical-record": ("injury", "medical", "bodily injury"),
-    "medical-bill": ("injury", "medical", "bodily injury", "payment", "settlement"),
-    "discharge-summary": ("injury", "medical", "bodily injury"),
-    "property-loss-notice": ("estimate", "appraisal", "photo", "inspection", "total loss", "salvage", "title"),
-    "eob-explanation": ("payment", "settlement", "injury", "medical"),
-    "demand-letter": ("police report", "accident report", "injury", "medical"),
-    "litigation-document": ("police report", "accident report", "injury", "medical"),
-    "ub-04": ("injury", "medical", "payment"),
-    "pharmacy-invoice": ("injury", "medical"),
-}
-
 
 def _sync_packet_component(data: dict, *, name: str = None, location: str = None,
-                            incident_date: str = None, custom_fields: dict = None,
-                            scenario_facts: list = None, excerpts: list = None, doc_type: str = None) -> None:
+                            incident_date: str = None, custom_fields: dict = None) -> None:
     """Applies the packet's one shared identity/location/date onto whichever
     of THIS component's own field names actually carry that concept, plus any
     remaining custom_fields that match a literal key (claim_number,
-    policy_number, etc. - see _overlay_values), plus claim-level narrative
-    material (loss cause/type, claim description, and document_searches
-    excerpts relevant to THIS doc_type) appended to the component's own
-    scenario_facts list - the same "extra scenario detail" section every doc
-    type's template already renders (see synthetic_data.py's
-    _medical_scenario_facts/_property_scenario_facts/_auto_scenario_facts),
-    so no new template section is needed to surface it."""
+    policy_number, etc. - see _overlay_values). Deliberately narrow: only
+    real fields the template actually renders get touched - no extra
+    "claim summary" section gets appended anywhere. A prior version of this
+    also injected loss-cause/claim-status/adjuster-name/claim-description
+    scenario_facts and document excerpts into every component regardless of
+    whether that component's template even shows a scenario_facts section -
+    that was removed per explicit direction: don't dump claim details into
+    every document, and never surface a claim/document summary at all -
+    Guidewire data should land only on the fields a document actually needs,
+    Faker fills the rest exactly as it always did."""
     if custom_fields:
         _overlay_values(data, custom_fields)
     if name:
@@ -375,6 +352,18 @@ def _sync_packet_component(data: dict, *, name: str = None, location: str = None
             # Guidewire's claim data describes the insured, not whoever they
             # were in an incident with.
             parties[0]["name"] = name
+        employee = data.get("employee")
+        if isinstance(employee, dict):
+            # auto-accident-report's "STATE EMPLOYEE" section - the reporting/
+            # insured driver, as distinct from vehicle2 (the other driver,
+            # left untouched). Nested under 'employee', not a flat key, so
+            # _SHARED_NAME_FIELDS' plain data[field]=name above never reached
+            # it - confirmed the actual bug behind "I can't see the claim
+            # owner's name, only the other driver's": the template only ever
+            # rendered data.vehicle2.driver_name, never anyone from the
+            # employee/claimant side, until employee.name was added to both
+            # the data model and the template.
+            employee["name"] = name
     if location:
         for field in _SHARED_LOCATION_FIELDS:
             if field in data:
@@ -383,19 +372,6 @@ def _sync_packet_component(data: dict, *, name: str = None, location: str = None
         for field in _SHARED_DATE_FIELDS:
             if field in data:
                 data[field] = incident_date
-
-    extra_facts = list(scenario_facts or [])
-    if excerpts and doc_type:
-        keywords = _RELEVANT_EXCERPT_CATEGORIES.get(doc_type, ())
-        for ex in excerpts:
-            if keywords and not any(kw in ex.get("category", "") for kw in keywords):
-                continue
-            extra_facts.append({"label": f"Claim File Excerpt ({ex.get('source', 'attached document')})",
-                                 "value": ex.get("text", "")})
-    if extra_facts and isinstance(data.get("scenario_facts"), list):
-        data["scenario_facts"] = data["scenario_facts"] + extra_facts
-        if not data.get("scenario_facts_title"):
-            data["scenario_facts_title"] = "Claim File Details"
 
 _staged_packet_plan: list[dict] | None = None
 
@@ -422,13 +398,7 @@ def build_packet(packet_name: str, scenario: str = "general", seed: int = None, 
     all, silently dropping any custom_fields the prompt mentioned for packet
     requests. A 'loss_date' key, if present, also anchors every component's
     generated dates (see build_synthetic_data's anchor_date) - fully
-    automatic, no per-component step needed for that either. Two reserved
-    keys - '_guidewire_scenario_facts' (list of {label, value}) and
-    '_guidewire_document_excerpts' (list of {category, source, text}) - carry
-    the claim's narrative material (loss cause, claim description, and real
-    excerpts from documents already on the claim); see app.py's
-    fetch_claim_facts for how these get built, and _sync_packet_component for
-    how each component picks what's relevant to ITS doc_type."""
+    automatic, no per-component step needed for that either."""
 
     global _staged_packet_plan
     spec = PACKET_REGISTRY.get(packet_name)
@@ -441,8 +411,6 @@ def build_packet(packet_name: str, scenario: str = "general", seed: int = None, 
         random.seed(seed)
 
     custom_fields = dict(custom_fields or {})
-    guidewire_scenario_facts = custom_fields.pop("_guidewire_scenario_facts", None)
-    guidewire_excerpts = custom_fields.pop("_guidewire_document_excerpts", None)
     anchor_date = custom_fields.get("loss_date")
 
     first = build_synthetic_data(components[0]["doc_type"], scenario, anchor_date=anchor_date)
@@ -457,8 +425,6 @@ def build_packet(packet_name: str, scenario: str = "general", seed: int = None, 
     _sync_packet_component(
         first, name=shared_name, location=shared_location,
         incident_date=shared_incident_date, custom_fields=custom_fields,
-        scenario_facts=guidewire_scenario_facts, excerpts=guidewire_excerpts,
-        doc_type=components[0]["doc_type"],
     )
     shared = {k: first[k] for k in _PACKET_SHARED_FIELDS if k in first}
 
@@ -470,8 +436,6 @@ def build_packet(packet_name: str, scenario: str = "general", seed: int = None, 
             _sync_packet_component(
                 data, name=shared_name, location=shared_location,
                 incident_date=shared_incident_date, custom_fields=custom_fields,
-                scenario_facts=guidewire_scenario_facts, excerpts=guidewire_excerpts,
-                doc_type=comp["doc_type"],
             )
         plan.append({
             "label": comp["label"],

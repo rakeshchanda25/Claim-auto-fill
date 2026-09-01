@@ -1800,6 +1800,7 @@ def build_synthetic_data(doc_type: str, scenario: str = "general", anchor_date=N
             "accident_time": f"{random.randint(0,23):02d}:{random.randint(0,59):02d}",
             "accident_time_ampm": random.choice(["AM", "PM"]),
             "employee": {
+                "name": patient["patient_name"],
                 "business_address": _fake.street_address(),
                 "zip": _fake.zipcode(),
                 "business_phone": _fake.phone_number(),
