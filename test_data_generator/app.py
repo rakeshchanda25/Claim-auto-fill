@@ -73,13 +73,29 @@ def extract_claim_id(text: str) -> Optional[str]:
     return None
 
 
-def fetch_claim_facts(claim_id_or_number: str) -> dict:
-    """Fetches the claim from Guidewire and flattens it into claim-level facts.
-    Field names are picked to match what these documents' skills already call
-    fields by (claim_number, policy_number, loss_date, etc.) so the LLM can map
-    them the same way it already maps custom_fields/carried_values - it is not
-    a per-doc-type mapping table, because doc types vary too much for a static
-    map to stay correct (see prompt_builder.py's _custom_fields_block).
+def fetch_claim_facts(claim_id_or_number: str) -> tuple[dict, str]:
+    """Fetches the claim from Guidewire and returns (facts, context_text).
+
+    facts: flat claim-level field:value pairs (claim_number, policy_number,
+    loss_date, etc.), named to match what these documents' skills already
+    call fields by, so the LLM can map them the same way it already maps
+    custom_fields/carried_values - not a per-doc-type mapping table, because
+    doc types vary too much for a static map to stay correct (see
+    prompt_builder.py's _custom_fields_block). The caller merges this into
+    custom_fields.
+
+    context_text: the free-text, narrative-shaped material Guidewire holds
+    that isn't a "field value" in that sense - adjuster notes describing what
+    actually happened (the closest thing Guidewire has to an incident/claim
+    description), and excerpts from documents ALREADY attached to this claim
+    (a real police report narrative, a real ER discharge summary, etc. -
+    see response.json's document_searches, which Guidewire itself already
+    keyword-matched against category, e.g. "police report|accident report" or
+    "injury|medical|bodily injury"). Plus vehicles/activities/financials when
+    the claim has any. Returned as prose because it's meant to inform the
+    generated document's narrative content, not be inserted verbatim into a
+    field - the caller appends it to user_input, not custom_fields (see
+    prompt_builder.py's _user_input_block: "incorporate what's relevant").
 
     Raises on failure - the caller decides whether that should block generation
     or just log a warning and fall back to pure Faker generation (see
@@ -89,9 +105,11 @@ def fetch_claim_facts(claim_id_or_number: str) -> dict:
 
     if isinstance(data, dict) and data.get("error"):
         raise RuntimeError(f"Guidewire lookup failed: {data}")
+    if not isinstance(data, dict):
+        data = {}
 
-    claim = data.get("claim_details", {}) if isinstance(data, dict) else {}
-    policy = data.get("policy_details", {}) if isinstance(data, dict) else {}
+    claim = data.get("claim_details", {}) or {}
+    policy = data.get("policy_details", {}) or {}
 
     facts = {
         "claim_number": claim.get("claim_number"),
@@ -102,16 +120,69 @@ def fetch_claim_facts(claim_id_or_number: str) -> dict:
         "loss_date": claim.get("loss_date"),
         "insured_name": claim.get("insured"),
         "reporter_name": claim.get("reporter"),
+        "main_contact": claim.get("main_contact"),
+        "how_reported": claim.get("how_reported"),
+        "reported_date": claim.get("reported_date"),
         "adjuster_name": claim.get("assigned_adjuster"),
         "jurisdiction": claim.get("jurisdiction"),
         "line_of_business": claim.get("line_of_business"),
         "loss_location": claim.get("loss_location"),
         "policy_address": claim.get("policy_address"),
         "policy_type": policy.get("policy_type"),
+        "policy_currency": policy.get("currency"),
         "policy_effective_date": policy.get("policy_effective_date"),
         "policy_expiration_date": policy.get("policy_expiration_date"),
     }
-    return {k: v for k, v in facts.items() if v not in (None, "")}
+    facts = {k: v for k, v in facts.items() if v not in (None, "")}
+
+    context_text = _build_claim_context(data, claim.get("claim_number"))
+    return facts, context_text
+
+
+def _build_claim_context(data: dict, claim_number) -> str:
+    sections = []
+
+    notes = [n.get("body_summary") for n in (data.get("notes", {}) or {}).get("notes", []) if n.get("body_summary")]
+    if notes:
+        sections.append("Adjuster notes / claim description:\n- " + "\n- ".join(notes))
+
+    excerpts = []
+    for result in (data.get("document_searches", {}) or {}).get("results", []):
+        if result.get("no_matches") or not result.get("matches"):
+            continue
+        category = result.get("pattern", "")
+        for match in result["matches"]:
+            name = match.get("name", "an attached document")
+            for snippet in match.get("snippets", []):
+                excerpts.append(f'[{category}] {name}: "{snippet}"')
+    if excerpts:
+        sections.append(
+            "Excerpts from documents already attached to this claim (real incident/injury detail - "
+            "reword to fit the document being generated rather than copying headers/labels verbatim):\n- "
+            + "\n- ".join(excerpts)
+        )
+
+    vehicles = (data.get("vehicle_incidents", {}) or {}).get("vehicle_incidents", [])
+    if vehicles:
+        sections.append(f"Vehicles involved ({len(vehicles)}): {vehicles}")
+
+    activities = [
+        f"{a.get('subject')} ({a.get('status')})"
+        for a in (data.get("activities", {}) or {}).get("activities", [])
+        if a.get("subject")
+    ]
+    if activities:
+        sections.append("Claim activities on file:\n- " + "\n- ".join(activities))
+
+    for key, label in (("reserves", "Reserves"), ("payments", "Payments"), ("checks", "Checks")):
+        items = (data.get(key, {}) or {}).get(key, [])
+        if items:
+            sections.append(f"{label} on file ({len(items)}): {items}")
+
+    if not sections:
+        return ""
+    header = f"GUIDEWIRE CLAIM CONTEXT (claim {claim_number}):" if claim_number else "GUIDEWIRE CLAIM CONTEXT:"
+    return header + "\n\n" + "\n\n".join(sections)
 
 app.add_middleware(
     CORSMiddleware,
@@ -277,9 +348,14 @@ async def ai_generate_document(
     if claim_id:
         logger.info(f"[1/6] detected claim id/number {claim_id!r} in user input - looking up Guidewire")
         try:
-            claim_facts = await run_in_threadpool(fetch_claim_facts, claim_id)
-            logger.info(f"[1/6] Guidewire lookup ok: {len(claim_facts)} claim fact(s) retrieved")
+            claim_facts, claim_context = await run_in_threadpool(fetch_claim_facts, claim_id)
+            logger.info(
+                f"[1/6] Guidewire lookup ok: {len(claim_facts)} claim fact(s), "
+                f"{len(claim_context)} chars of claim context retrieved"
+            )
             custom_fields_dict = {**claim_facts, **custom_fields_dict}
+            if claim_context:
+                user_input = f"{user_input}\n\n{claim_context}" if user_input else claim_context
         except Exception as exc:
             logger.warning(f"[1/6] Guidewire lookup for {claim_id!r} failed, continuing without it: {exc}")
 
