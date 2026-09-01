@@ -14,6 +14,20 @@ def _custom_fields_block(req: GenerationRequest) -> str:
     )
 
 
+def _custom_fields_arg(req: GenerationRequest) -> str:
+    """A `, custom_fields=<dict>` kwarg fragment - the literal dict embedded
+    directly, same trick as packet mode's build_packet(..., custom_fields=...)
+    below. Without this, custom_fields (USER-SUPPLIED VALUES, e.g. a live
+    Guidewire claim) only ever reached the model as prose it had to notice
+    and manually re-apply via revise_document_data/carried_values, correctly
+    guessing which of ITS OWN field names each value belonged to - which is
+    exactly the failure mode reported as "Guidewire info is not used" in
+    Generate/Recreate mode. generate_synthetic_data/recreate_document_data
+    now apply this automatically (see tools.py's _apply_claim_facts), so it
+    no longer depends on the model doing that translation correctly."""
+    return f", custom_fields={req.custom_fields!r}" if req.custom_fields else ""
+
+
 def _anchor_date_arg(req: GenerationRequest) -> str:
     """A `, anchor_date=<value>` kwarg fragment, present only when
     custom_fields carries a 'loss_date' (from a live Guidewire lookup - see
@@ -53,11 +67,10 @@ def build_generation_prompt(req: GenerationRequest) -> str:
         # where it could otherwise apply these (see build_packet's own docstring:
         # it previously had no parameter for this at all, so a packet request
         # carrying Guidewire/custom_fields data silently ignored it entirely).
-        custom_fields_arg = f", custom_fields={req.custom_fields!r}" if req.custom_fields else ""
         return (
             f"Generate a '{req.doc_type}' document packet for scenario '{req.scenario}'.\n"
             f"1. Call build_packet(packet_name='{req.doc_type}', scenario='{req.scenario}'"
-            + (f", seed={req.seed}" if req.seed is not None else "") + custom_fields_arg + ").\n"
+            + (f", seed={req.seed}" if req.seed is not None else "") + _custom_fields_arg(req) + ").\n"
             "2. Call render_packet(). That renders every component in one go.\n"
             "That is the whole job - there is no per-component step to run, and you never see, "
             "handle or encode any component's data or bytes. build_packet already gave every "
@@ -85,7 +98,8 @@ def build_generation_prompt(req: GenerationRequest) -> str:
             f"Generate a single '{req.doc_type}' document for scenario '{req.scenario}'.\n"
             f"1. Load the skill: load_skill('{resolve_doc_type(req.doc_type)}').\n"
             f"2. Call generate_synthetic_data(doc_type='{req.doc_type}', scenario='{req.scenario}'"
-            + (f", seed={req.seed}" if req.seed is not None else "") + _anchor_date_arg(req) + ").\n"
+            + (f", seed={req.seed}" if req.seed is not None else "") + _anchor_date_arg(req)
+            + _custom_fields_arg(req) + ").\n"
             f"3. Call validate_document_structure(doc_type='{req.doc_type}').\n"
             "4. Fix anything it reports missing with revise_document_data({...}), passing ONLY the "
             "fields that change.\n"
@@ -123,7 +137,8 @@ def build_generation_prompt(req: GenerationRequest) -> str:
             "(reported back in 'unmapped_keys'), not silently applied - it would otherwise replace "
             "the structured value and break every part of the document that reads a sub-field.\n"
             f"4. Call recreate_document_data(doc_type='{req.doc_type}', scenario='{req.scenario}', "
-            f"carried_values=<that dict>{_anchor_date_arg(req)}). It generates fresh data for the new scenario, overlays "
+            f"carried_values=<that dict>{_anchor_date_arg(req)}{_custom_fields_arg(req)}). "
+            "It generates fresh data for the new scenario, overlays "
             "your carried values on top, and stages the result for rendering. If the result's "
             "'unmapped_keys' is non-empty, those names either do not exist for this document type or "
             "were rejected for a shape mismatch (see step 3) - re-check them against the skill's "

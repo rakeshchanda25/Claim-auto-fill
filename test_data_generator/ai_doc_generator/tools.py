@@ -163,7 +163,8 @@ def _overlay_values(dst: dict, src: dict, path: str = "", unmapped: list | None 
 
 @tool
 @_log_exceptions
-def generate_synthetic_data(doc_type: str, scenario: str = "general", seed: int = None, anchor_date: str = None) -> dict:
+def generate_synthetic_data(doc_type: str, scenario: str = "general", seed: int = None,
+                             anchor_date: str = None, custom_fields: dict = None) -> dict:
     """Generate and stage synthetic insurance claim data.
 
     anchor_date: pass this whenever the prompt's USER-SUPPLIED VALUES include
@@ -172,13 +173,22 @@ def generate_synthetic_data(doc_type: str, scenario: str = "general", seed: int 
     one, so report_date/dos/etc. can't land in a different year than the
     real incident. Omit it otherwise.
 
+    custom_fields: the same USER-SUPPLIED VALUES dict, applied automatically
+    here instead of left for you to notice in the prompt and separately call
+    revise_document_data - do NOT re-apply the same values yourself
+    afterward, that only risks a mismatch with what this already did. See
+    _apply_claim_facts for how a value lands on the right field even when
+    this document type names it differently (e.g. 'insured_name' becomes
+    whichever of patient_name/claimant_name/plaintiff_name/driver_name/a
+    nested party this doc type actually has).
+
     Returns field names only; data is stored server-side for
-    render_document_to_pdf. Use revise_document_data to change specific
-    fields instead of restating the full document."""
+    render_document_to_pdf. Use revise_document_data to change anything else."""
     if seed is not None:
         Faker.seed(seed)
         random.seed(seed)
     data = build_synthetic_data(doc_type, scenario, anchor_date=anchor_date)
+    _apply_claim_facts(data, custom_fields)
     return _stage_doc_data(data, doc_type, scenario)
 
 
@@ -257,7 +267,8 @@ def analyze_uploaded_reference(file_type: str) -> dict:
 
 @tool
 @_log_exceptions
-def recreate_document_data(doc_type: str, scenario: str, carried_values: dict, anchor_date: str = None) -> dict:
+def recreate_document_data(doc_type: str, scenario: str, carried_values: dict, anchor_date: str = None,
+                            custom_fields: dict = None) -> dict:
     """Generate fresh data for `scenario`, preserve selected reference values,
     and stage the result. Pass only identity/identifier fields in
     `carried_values`; scenario-specific fields stay newly generated.
@@ -266,10 +277,18 @@ def recreate_document_data(doc_type: str, scenario: str, carried_values: dict, a
 
     anchor_date: pass this whenever a 'loss_date' is available (from
     USER-SUPPLIED VALUES or the reference document) - see
-    generate_synthetic_data's anchor_date for why."""
+    generate_synthetic_data's anchor_date for why.
+
+    custom_fields: the USER-SUPPLIED VALUES dict (e.g. from a live Guidewire
+    claim), applied automatically before carried_values - so carried_values
+    (what you actually read off the uploaded reference document) wins on any
+    conflict, matching what "recreate" means: the SAME people/identifiers as
+    the upload, not a different real claim's. Do not re-apply these
+    yourself; see generate_synthetic_data's custom_fields for the mechanism."""
 
     resolved = resolve_doc_type(doc_type)
     data = build_synthetic_data(resolved, scenario, anchor_date=anchor_date)
+    _apply_claim_facts(data, custom_fields)
     unmapped = _overlay_values(data, carried_values or {})
 
     carried_ok = sum(1 for k in (carried_values or {}) if k not in unmapped)
@@ -311,52 +330,85 @@ _SHARED_LOCATION_FIELDS = ("location", "accident_location", "loss_location")
 _SHARED_DATE_FIELDS = ("incident_date",)
 
 
+def _apply_name_aliases(data: dict, name: str) -> None:
+    """Applies `name` onto whichever of THIS document's own field names/
+    structures actually carry the claimant/insured concept - the same
+    concept is named differently per doc type: a medical form's
+    patient_name is a demand-letter's claimant_name is a litigation-
+    document's plaintiff_name is an auto-accident-report's insured_name/
+    driver_name is police-report's parties_involved[0]['name'] is auto-
+    accident-report's nested employee['name']. Shared by both
+    _apply_claim_facts (single generate/recreate document) and
+    _sync_packet_component (every packet component)."""
+    for field in _SHARED_NAME_FIELDS:
+        if field in data:
+            data[field] = name
+    parties = data.get("parties_involved")
+    if isinstance(parties, list) and parties:
+        # parties_involved[0] is always the non-at-fault/reporting party
+        # (see synthetic_data.py's police-report branch: party1 = _party(
+        # "Driver 1", at_fault=False, ...)) - the claimant/insured, not
+        # the other party, which stays independently generated since
+        # Guidewire's claim data describes the insured, not whoever they
+        # were in an incident with.
+        parties[0]["name"] = name
+    employee = data.get("employee")
+    if isinstance(employee, dict):
+        # auto-accident-report's "STATE EMPLOYEE" section - the reporting/
+        # insured driver, as distinct from vehicle2 (the other driver, left
+        # untouched). Nested under 'employee', not a flat key, so the plain
+        # data[field]=name loop above never reached it - this was the actual
+        # bug behind "I can't see the claim owner's name, only the other
+        # driver's": the template only ever rendered data.vehicle2.driver_name,
+        # never anyone from the employee/claimant side, until employee.name
+        # was added to both the data model and the template.
+        employee["name"] = name
+
+
+def _apply_location_aliases(data: dict, location: str) -> None:
+    for field in _SHARED_LOCATION_FIELDS:
+        if field in data:
+            data[field] = location
+
+
+def _apply_claim_facts(data: dict, custom_fields: dict = None) -> None:
+    """Applies a USER-SUPPLIED VALUES dict (typically live Guidewire claim
+    facts) onto ONE document's data: a literal field-name overlay
+    (claim_number, policy_number, etc. - see _overlay_values) plus name/
+    location aliasing for whichever of insured_name/loss_location this doc
+    type actually has a place for. Called automatically from
+    generate_synthetic_data and recreate_document_data - deterministic, not
+    left for the model to notice in the prompt's USER-SUPPLIED VALUES prose
+    and separately call revise_document_data with the right field names
+    guessed correctly; that was the actual gap behind Guidewire data simply
+    not showing up in Generate/Recreate mode's output. Deliberately narrow:
+    only real fields a document actually has get touched - no extra "claim
+    summary" content gets added anywhere (see _sync_packet_component's
+    docstring for why that was removed)."""
+    if not custom_fields:
+        return
+    _overlay_values(data, custom_fields)
+    name = custom_fields.get("insured_name")
+    if name:
+        _apply_name_aliases(data, name)
+    location = custom_fields.get("loss_location")
+    if location:
+        _apply_location_aliases(data, location)
+
+
 def _sync_packet_component(data: dict, *, name: str = None, location: str = None,
                             incident_date: str = None, custom_fields: dict = None) -> None:
-    """Applies the packet's one shared identity/location/date onto whichever
-    of THIS component's own field names actually carry that concept, plus any
-    remaining custom_fields that match a literal key (claim_number,
-    policy_number, etc. - see _overlay_values). Deliberately narrow: only
-    real fields the template actually renders get touched - no extra
-    "claim summary" section gets appended anywhere. A prior version of this
-    also injected loss-cause/claim-status/adjuster-name/claim-description
-    scenario_facts and document excerpts into every component regardless of
-    whether that component's template even shows a scenario_facts section -
-    that was removed per explicit direction: don't dump claim details into
-    every document, and never surface a claim/document summary at all -
-    Guidewire data should land only on the fields a document actually needs,
-    Faker fills the rest exactly as it always did."""
+    """Packet-specific: applies the packet's one shared identity/location/
+    date - which may come from the FIRST component's own generated values
+    rather than custom_fields, on a pure-Faker packet with no Guidewire data
+    at all (see build_packet) - onto THIS component, plus any custom_fields
+    via the same overlay _apply_claim_facts uses."""
     if custom_fields:
         _overlay_values(data, custom_fields)
     if name:
-        for field in _SHARED_NAME_FIELDS:
-            if field in data:
-                data[field] = name
-        parties = data.get("parties_involved")
-        if isinstance(parties, list) and parties:
-            # parties_involved[0] is always the non-at-fault/reporting party
-            # (see synthetic_data.py's police-report branch: party1 = _party(
-            # "Driver 1", at_fault=False, ...)) - the claimant/insured, not
-            # the other party, which stays independently generated since
-            # Guidewire's claim data describes the insured, not whoever they
-            # were in an incident with.
-            parties[0]["name"] = name
-        employee = data.get("employee")
-        if isinstance(employee, dict):
-            # auto-accident-report's "STATE EMPLOYEE" section - the reporting/
-            # insured driver, as distinct from vehicle2 (the other driver,
-            # left untouched). Nested under 'employee', not a flat key, so
-            # _SHARED_NAME_FIELDS' plain data[field]=name above never reached
-            # it - confirmed the actual bug behind "I can't see the claim
-            # owner's name, only the other driver's": the template only ever
-            # rendered data.vehicle2.driver_name, never anyone from the
-            # employee/claimant side, until employee.name was added to both
-            # the data model and the template.
-            employee["name"] = name
+        _apply_name_aliases(data, name)
     if location:
-        for field in _SHARED_LOCATION_FIELDS:
-            if field in data:
-                data[field] = location
+        _apply_location_aliases(data, location)
     if incident_date:
         for field in _SHARED_DATE_FIELDS:
             if field in data:
