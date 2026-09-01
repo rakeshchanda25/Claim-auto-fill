@@ -74,6 +74,32 @@ def _require_reference_bytes() -> bytes:
     return _reference_bytes
 
 
+# Guidewire claim facts (custom_fields) and the anchor date derived from them
+# used to reach generate_synthetic_data/recreate_document_data only as tool
+# arguments embedded as literal text in the prompt, which the model had to
+# faithfully copy into its actual tool call - unlike a real function call,
+# a prompt is natural-language text the model INTERPRETS, not code it
+# executes, so a large embedded dict could be dropped, truncated, or simply
+# not passed. That was the real reason "Guidewire data isn't used" persisted
+# even after generate_synthetic_data/recreate_document_data knew how to
+# apply it correctly - the model was never guaranteed to hand it back.
+# Staging these here, exactly like set_reference_document already does for
+# the uploaded file's bytes, removes that dependency entirely: the tools
+# below read this directly, with no argument the model needs to supply.
+_staged_custom_fields: dict | None = None
+_staged_anchor_date: str | None = None
+
+
+def set_claim_context(custom_fields: dict | None, anchor_date: str | None) -> None:
+    global _staged_custom_fields, _staged_anchor_date
+    _staged_custom_fields = custom_fields
+    _staged_anchor_date = anchor_date
+
+
+def _get_claim_context() -> tuple[dict | None, str | None]:
+    return _staged_custom_fields, _staged_anchor_date
+
+
 _staged_artifact_bytes: bytes | None = None
 _staged_artifact_kind: str | None = None
 
@@ -167,28 +193,26 @@ def generate_synthetic_data(doc_type: str, scenario: str = "general", seed: int 
                              anchor_date: str = None, custom_fields: dict = None) -> dict:
     """Generate and stage synthetic insurance claim data.
 
-    anchor_date: pass this whenever the prompt's USER-SUPPLIED VALUES include
-    a 'loss_date' (e.g. from a live Guidewire claim) - it anchors every
-    generated date field to that real date instead of an independent random
-    one, so report_date/dos/etc. can't land in a different year than the
-    real incident. Omit it otherwise.
-
-    custom_fields: the same USER-SUPPLIED VALUES dict, applied automatically
-    here instead of left for you to notice in the prompt and separately call
-    revise_document_data - do NOT re-apply the same values yourself
-    afterward, that only risks a mismatch with what this already did. See
-    _apply_claim_facts for how a value lands on the right field even when
-    this document type names it differently (e.g. 'insured_name' becomes
-    whichever of patient_name/claimant_name/plaintiff_name/driver_name/a
-    nested party this doc type actually has).
+    If USER-SUPPLIED VALUES in the prompt came from a live Guidewire claim,
+    pass its 'loss_date' as anchor_date and the whole dict as custom_fields -
+    both are ALSO staged server-side automatically (see set_claim_context) as
+    the reliable primary path, so passing them here is a second, additive
+    safety net, not something that has to succeed for the data to apply: if
+    you omit either, the staged copy is used instead. Passing them explicitly
+    still helps when you have something the staged copy doesn't - anything
+    you add here merges on top of (and overrides on conflict with) the
+    staged values. Never re-apply the same values afterward via
+    revise_document_data, only what you're adding beyond what's already here.
 
     Returns field names only; data is stored server-side for
     render_document_to_pdf. Use revise_document_data to change anything else."""
     if seed is not None:
         Faker.seed(seed)
         random.seed(seed)
-    data = build_synthetic_data(doc_type, scenario, anchor_date=anchor_date)
-    _apply_claim_facts(data, custom_fields)
+    staged_fields, staged_anchor = _get_claim_context()
+    merged_fields = {**(staged_fields or {}), **(custom_fields or {})}
+    data = build_synthetic_data(doc_type, scenario, anchor_date=anchor_date or staged_anchor)
+    _apply_claim_facts(data, merged_fields)
     return _stage_doc_data(data, doc_type, scenario)
 
 
@@ -267,28 +291,30 @@ def analyze_uploaded_reference(file_type: str) -> dict:
 
 @tool
 @_log_exceptions
-def recreate_document_data(doc_type: str, scenario: str, carried_values: dict, anchor_date: str = None,
-                            custom_fields: dict = None) -> dict:
+def recreate_document_data(doc_type: str, scenario: str, carried_values: dict,
+                            anchor_date: str = None, custom_fields: dict = None) -> dict:
     """Generate fresh data for `scenario`, preserve selected reference values,
     and stage the result. Pass only identity/identifier fields in
     `carried_values`; scenario-specific fields stay newly generated.
     Nested dicts merge key-by-key. Returns a field summary plus carried and
     unmapped key counts.
 
-    anchor_date: pass this whenever a 'loss_date' is available (from
-    USER-SUPPLIED VALUES or the reference document) - see
-    generate_synthetic_data's anchor_date for why.
-
-    custom_fields: the USER-SUPPLIED VALUES dict (e.g. from a live Guidewire
-    claim), applied automatically before carried_values - so carried_values
-    (what you actually read off the uploaded reference document) wins on any
-    conflict, matching what "recreate" means: the SAME people/identifiers as
-    the upload, not a different real claim's. Do not re-apply these
-    yourself; see generate_synthetic_data's custom_fields for the mechanism."""
+    If USER-SUPPLIED VALUES in the prompt came from a live Guidewire claim,
+    pass its 'loss_date' as anchor_date and the whole dict as custom_fields -
+    both are ALSO staged server-side automatically as the reliable primary
+    path (see generate_synthetic_data's anchor_date/custom_fields for why
+    passing them explicitly is a second, additive safety net rather than a
+    requirement). Either way, claim values (staged or passed) are applied
+    BEFORE carried_values, so carried_values (what you read off the uploaded
+    reference document) wins on any conflict, matching what "recreate"
+    means: the SAME people/identifiers as the upload, not a different real
+    claim's."""
 
     resolved = resolve_doc_type(doc_type)
-    data = build_synthetic_data(resolved, scenario, anchor_date=anchor_date)
-    _apply_claim_facts(data, custom_fields)
+    staged_fields, staged_anchor = _get_claim_context()
+    merged_fields = {**(staged_fields or {}), **(custom_fields or {})}
+    data = build_synthetic_data(resolved, scenario, anchor_date=anchor_date or staged_anchor)
+    _apply_claim_facts(data, merged_fields)
     unmapped = _overlay_values(data, carried_values or {})
 
     carried_ok = sum(1 for k in (carried_values or {}) if k not in unmapped)
@@ -396,13 +422,54 @@ def _apply_claim_facts(data: dict, custom_fields: dict = None) -> None:
         _apply_location_aliases(data, location)
 
 
+# Which document_searches categories (Guidewire's own keyword-matched pattern
+# strings, e.g. "police report|accident report" - see response.json) are
+# actually relevant to each packet component's doc_type. A packet has no LLM
+# step to read every claim-attached-document excerpt and judge relevance
+# itself (unlike generate/recreate mode, which gets the same material as
+# free text via user_input and decides there) - this is that judgment made
+# deterministically instead: an auto-accident-report or police-report gets
+# the real accident-report excerpt, a medical-record gets the real injury/ER
+# excerpt, and so on. Doc types with no entry here (e.g. acord-25, cms-1500)
+# get none - a certificate of insurance or claim form has no narrative
+# section to place one in anyway, and _sync_packet_component only writes to
+# scenario_facts when the doc type already has that list, so this stays
+# targeted rather than a blanket dump onto every component.
+_RELEVANT_EXCERPT_CATEGORIES = {
+    "police-report": ("police report", "accident report", "tow"),
+    "auto-accident-report": ("police report", "accident report", "tow"),
+    "medical-record": ("injury", "medical", "bodily injury"),
+    "medical-bill": ("injury", "medical", "bodily injury", "payment", "settlement"),
+    "discharge-summary": ("injury", "medical", "bodily injury"),
+    "property-loss-notice": ("estimate", "appraisal", "photo", "inspection", "total loss", "salvage", "title"),
+    "eob-explanation": ("payment", "settlement", "injury", "medical"),
+    "demand-letter": ("police report", "accident report", "injury", "medical"),
+    "litigation-document": ("police report", "accident report", "injury", "medical"),
+    "ub-04": ("injury", "medical", "payment"),
+    "pharmacy-invoice": ("injury", "medical"),
+}
+
+
 def _sync_packet_component(data: dict, *, name: str = None, location: str = None,
-                            incident_date: str = None, custom_fields: dict = None) -> None:
+                            incident_date: str = None, custom_fields: dict = None,
+                            claim_description: str = None, excerpts: list = None,
+                            doc_type: str = None) -> None:
     """Packet-specific: applies the packet's one shared identity/location/
     date - which may come from the FIRST component's own generated values
     rather than custom_fields, on a pure-Faker packet with no Guidewire data
     at all (see build_packet) - onto THIS component, plus any custom_fields
-    via the same overlay _apply_claim_facts uses."""
+    via the same overlay _apply_claim_facts uses.
+
+    claim_description/excerpts: notes/document-excerpt material (see app.py's
+    fetch_claim_facts). Added ONLY to scenario_facts - the one place every
+    doc type's own template already has for "extra detail" (see
+    synthetic_data.py's _medical_scenario_facts/_property_scenario_facts/
+    _auto_scenario_facts) - and ONLY when this component's doc_type actually
+    has that list AND (for excerpts) is in _RELEVANT_EXCERPT_CATEGORIES for
+    it. Doc types with neither get nothing added: this is deliberately
+    narrower than an earlier version that appended a fixed block of claim
+    facts and every excerpt to every component regardless of relevance,
+    which is exactly the "aggressive dump" that was reverted."""
     if custom_fields:
         _overlay_values(data, custom_fields)
     if name:
@@ -414,6 +481,22 @@ def _sync_packet_component(data: dict, *, name: str = None, location: str = None
             if field in data:
                 data[field] = incident_date
 
+    if not isinstance(data.get("scenario_facts"), list):
+        return
+    extra_facts = []
+    if claim_description:
+        extra_facts.append({"label": "Claim Description", "value": claim_description})
+    if excerpts and doc_type in _RELEVANT_EXCERPT_CATEGORIES:
+        keywords = _RELEVANT_EXCERPT_CATEGORIES[doc_type]
+        for ex in excerpts:
+            if any(kw in ex.get("category", "") for kw in keywords):
+                extra_facts.append({"label": f"Claim File Excerpt ({ex.get('source', 'attached document')})",
+                                     "value": ex.get("text", "")})
+    if extra_facts:
+        data["scenario_facts"] = data["scenario_facts"] + extra_facts
+        if not data.get("scenario_facts_title"):
+            data["scenario_facts_title"] = "Claim File Details"
+
 _staged_packet_plan: list[dict] | None = None
 
 
@@ -424,19 +507,20 @@ def clear_staged_packet_plan() -> None:
 
 @tool
 @_log_exceptions
-def build_packet(packet_name: str, scenario: str = "general", seed: int = None, custom_fields: dict = None) -> dict:
+def build_packet(packet_name: str, scenario: str = "general", seed: int = None,
+                  custom_fields: dict = None) -> dict:
     """Generate all components of a named document packet and return list of {label, template, data} dicts.
 
-    custom_fields: claim-level values (e.g. from a live Guidewire lookup) to
-    apply to EVERY component - not just the ones already in
-    _PACKET_SHARED_FIELDS. Unlike generate/recreate mode, a packet has no
-    per-component step where the caller could otherwise apply these (the
-    prompt explicitly tells the model there is none), so this is the only
-    place they can land; previously build_packet had no such parameter at
-    all, silently dropping any custom_fields the prompt mentioned for packet
-    requests. A 'loss_date' key, if present, also anchors every component's
-    generated dates (see build_synthetic_data's anchor_date) - fully
-    automatic, no per-component step needed for that either."""
+    If USER-SUPPLIED VALUES in the prompt came from a live Guidewire claim,
+    pass the whole dict as custom_fields - it's ALSO staged server-side
+    automatically as the reliable primary path (see generate_synthetic_data's
+    custom_fields for why passing it explicitly is a second, additive safety
+    net), applied to EVERY component here, not just the fields already in
+    _PACKET_SHARED_FIELDS. A packet has no per-component step where you could
+    otherwise apply these (there is no per-component step at all - see
+    render_packet), so this is the only place they land. Its 'loss_date',
+    if any, also anchors every component's generated dates (see
+    build_synthetic_data's anchor_date)."""
 
     global _staged_packet_plan
     spec = PACKET_REGISTRY.get(packet_name)
@@ -448,8 +532,11 @@ def build_packet(packet_name: str, scenario: str = "general", seed: int = None, 
         Faker.seed(seed)
         random.seed(seed)
 
-    custom_fields = dict(custom_fields or {})
-    anchor_date = custom_fields.get("loss_date")
+    staged_fields, staged_anchor_date = _get_claim_context()
+    custom_fields = {**(staged_fields or {}), **(custom_fields or {})}
+    claim_description = custom_fields.pop("_guidewire_claim_description", None)
+    excerpts = custom_fields.pop("_guidewire_document_excerpts", None)
+    anchor_date = custom_fields.get("loss_date") or staged_anchor_date
 
     first = build_synthetic_data(components[0]["doc_type"], scenario, anchor_date=anchor_date)
     # The shared name/location/incident_date come from custom_fields (Guidewire)
@@ -463,6 +550,7 @@ def build_packet(packet_name: str, scenario: str = "general", seed: int = None, 
     _sync_packet_component(
         first, name=shared_name, location=shared_location,
         incident_date=shared_incident_date, custom_fields=custom_fields,
+        claim_description=claim_description, excerpts=excerpts, doc_type=components[0]["doc_type"],
     )
     shared = {k: first[k] for k in _PACKET_SHARED_FIELDS if k in first}
 
@@ -474,6 +562,7 @@ def build_packet(packet_name: str, scenario: str = "general", seed: int = None, 
             _sync_packet_component(
                 data, name=shared_name, location=shared_location,
                 incident_date=shared_incident_date, custom_fields=custom_fields,
+                claim_description=claim_description, excerpts=excerpts, doc_type=comp["doc_type"],
             )
         plan.append({
             "label": comp["label"],

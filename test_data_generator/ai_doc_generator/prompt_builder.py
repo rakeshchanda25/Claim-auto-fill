@@ -4,39 +4,46 @@ from .config import GenerationRequest
 
 
 def _custom_fields_block(req: GenerationRequest) -> str:
-    """ User supplied values passing to LLM so they can be used for filling or recreating the a form
-    """
+    """Shown so the model's own free-text reasoning (e.g. picking a
+    scenario-consistent narrative) is aware of the real claim facts, AND as
+    the source for the literal custom_fields=/anchor_date= kwargs embedded
+    into the tool-call instructions below (_custom_fields_arg/_anchor_date_arg).
+
+    Both paths are intentionally live at once: generate_synthetic_data/
+    recreate_document_data/build_packet ALSO have this same data staged
+    server-side (see agent_factory.py's run_with_reference -> tools.
+    set_claim_context) and apply it automatically even if the model's tool
+    call omits these arguments - that's the reliable primary path, since a
+    prompt is text the model interprets, not code it executes, and a model
+    can drop or truncate a large embedded dict. Passing them explicitly too
+    is a second, additive safety net: anything the model adds there merges
+    on top of the staged values rather than being required for them to
+    apply at all."""
     if not req.custom_fields:
         return ""
     return (
-        f"\n\nUSER-SUPPLIED VALUES (authoritative - use each of these verbatim wherever "
-        f"it fits a field, and only invent the remaining values):\n{req.custom_fields}"
+        f"\n\nUSER-SUPPLIED VALUES (from a live claim, where applicable - already staged and applied "
+        f"automatically to the fields that exist; pass the same dict as custom_fields= on the tool call "
+        f"below too if you have anything to add on top, but do not restate them afterward via "
+        f"revise_document_data):\n{req.custom_fields}"
     )
 
 
 def _custom_fields_arg(req: GenerationRequest) -> str:
     """A `, custom_fields=<dict>` kwarg fragment - the literal dict embedded
-    directly, same trick as packet mode's build_packet(..., custom_fields=...)
-    below. Without this, custom_fields (USER-SUPPLIED VALUES, e.g. a live
-    Guidewire claim) only ever reached the model as prose it had to notice
-    and manually re-apply via revise_document_data/carried_values, correctly
-    guessing which of ITS OWN field names each value belonged to - which is
-    exactly the failure mode reported as "Guidewire info is not used" in
-    Generate/Recreate mode. generate_synthetic_data/recreate_document_data
-    now apply this automatically (see tools.py's _apply_claim_facts), so it
-    no longer depends on the model doing that translation correctly."""
+    directly so the model can pass it straight through rather than retype
+    it. See _custom_fields_block for why this exists alongside (not instead
+    of) automatic server-side staging."""
     return f", custom_fields={req.custom_fields!r}" if req.custom_fields else ""
 
 
 def _anchor_date_arg(req: GenerationRequest) -> str:
     """A `, anchor_date=<value>` kwarg fragment, present only when
     custom_fields carries a 'loss_date' (from a live Guidewire lookup - see
-    app.py's fetch_claim_facts). Embedding the literal value here (not just
-    describing it in prose and trusting the model to notice and pass it) is
-    what makes every generated date field - report_date, dos, an incident's
-    embedded case-number year, etc. - actually anchor to the real loss date
-    instead of an independently random one; see build_synthetic_data's
-    anchor_date parameter for the mechanism."""
+    app.py's fetch_claim_facts). Anchors every generated date field -
+    report_date, dos, an incident's embedded case-number year, etc. - to the
+    real loss date instead of an independently random one; see
+    build_synthetic_data's anchor_date parameter for the mechanism."""
     loss_date = (req.custom_fields or {}).get("loss_date")
     return f", anchor_date={loss_date!r}" if loss_date else ""
 
@@ -61,12 +68,6 @@ def build_generation_prompt(req: GenerationRequest) -> str:
     )
 
     if is_packet:
-        # custom_fields is embedded directly as a literal kwarg, not left for the
-        # model to notice in the USER-SUPPLIED VALUES prose and retype - the
-        # packet prompt explicitly tells the model there is no per-component step
-        # where it could otherwise apply these (see build_packet's own docstring:
-        # it previously had no parameter for this at all, so a packet request
-        # carrying Guidewire/custom_fields data silently ignored it entirely).
         return (
             f"Generate a '{req.doc_type}' document packet for scenario '{req.scenario}'.\n"
             f"1. Call build_packet(packet_name='{req.doc_type}', scenario='{req.scenario}'"
@@ -138,11 +139,13 @@ def build_generation_prompt(req: GenerationRequest) -> str:
             "the structured value and break every part of the document that reads a sub-field.\n"
             f"4. Call recreate_document_data(doc_type='{req.doc_type}', scenario='{req.scenario}', "
             f"carried_values=<that dict>{_anchor_date_arg(req)}{_custom_fields_arg(req)}). "
-            "It generates fresh data for the new scenario, overlays "
-            "your carried values on top, and stages the result for rendering. If the result's "
-            "'unmapped_keys' is non-empty, those names either do not exist for this document type or "
-            "were rejected for a shape mismatch (see step 3) - re-check them against the skill's "
-            "field list and call it once more with the corrected names/shapes.\n"
+            "It generates fresh data for the new scenario - claim values (staged and/or passed here) "
+            "are applied first, then your carried_values on top, so carried_values (the actual "
+            "uploaded document's own values) wins on any conflict - and stages the result for "
+            "rendering. If the result's 'unmapped_keys' is non-empty, those names either do not "
+            "exist for this document type or were rejected for a shape mismatch (see step 3) - "
+            "re-check them against the skill's field list and call it once more with the corrected "
+            "names/shapes.\n"
             f"5. Call render_document_to_pdf(template_name='{req.doc_type.replace('-', '_')}')."
             + staged_footer
             + _custom_fields_block(req)

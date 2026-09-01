@@ -309,7 +309,8 @@ def _extract_final_text(messages: list) -> tuple[str | list | None, str]:
     return None, f"NO AIMessage had text content among {len(messages)} messages - roles were: {roles}"
 
 
-def run_with_reference(agent, prompt: str, reference_bytes: bytes | None):
+def run_with_reference(agent, prompt: str, reference_bytes: bytes | None,
+                        custom_fields: dict | None = None, anchor_date: str | None = None):
 
     from langchain_core.messages import HumanMessage
 
@@ -320,6 +321,13 @@ def run_with_reference(agent, prompt: str, reference_bytes: bytes | None):
         tools.set_reference_document(reference_bytes)
         if reference_bytes is not None:
             logger.info(f"staged reference document: {len(reference_bytes)} bytes")
+        # custom_fields/anchor_date (live Guidewire claim data) staged the same way -
+        # generate_synthetic_data/recreate_document_data/build_packet read this
+        # directly instead of relying on the model to correctly copy a large dict
+        # out of the prompt's USER-SUPPLIED VALUES text into its own tool call.
+        tools.set_claim_context(custom_fields, anchor_date)
+        if custom_fields:
+            logger.info(f"staged claim context: {len(custom_fields)} field(s), anchor_date={anchor_date!r}")
         tools.clear_staged_artifact()
         tools.clear_staged_packet()
         tools.clear_staged_packet_plan()
@@ -365,4 +373,5 @@ def run_with_reference(agent, prompt: str, reference_bytes: bytes | None):
             return final, artifact_bytes, artifact_kind, packet_components
         finally:
             tools.set_reference_document(None)
+            tools.set_claim_context(None, None)
             logger.info("released reference_lock")

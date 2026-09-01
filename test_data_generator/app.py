@@ -73,17 +73,27 @@ def extract_claim_id(text: str) -> Optional[str]:
     return None
 
 
-def fetch_claim_facts(claim_id_or_number: str) -> dict:
-    """Fetches the claim from Guidewire and returns flat claim-level
-    field:value pairs (claim_number, policy_number, insured_name, loss_date,
-    etc.), named to match what these documents' skills already call fields
-    by, so the value lands on the field it actually belongs to - never a
-    generic "claim summary"/"claim description"/document-excerpt dump into
-    every document regardless of whether it's relevant or even has a place
-    to put it. Guidewire data takes priority wherever a document has a
+def fetch_claim_facts(claim_id_or_number: str) -> tuple[dict, dict]:
+    """Fetches the claim from Guidewire and returns (facts, notes_context).
+
+    facts: flat claim-level field:value pairs (claim_number, policy_number,
+    insured_name, loss_date, etc.), named to match what these documents'
+    skills already call fields by, so a value lands on the field it actually
+    belongs to. Guidewire data takes priority wherever a document has a
     matching field; anything Guidewire doesn't have still gets Faker-
     generated exactly as it always did (see prompt_builder.py's
     _custom_fields_block and tools.py's build_packet/_sync_packet_component).
+
+    notes_context: {"claim_description": str|None, "document_excerpts": [...]}
+    - the adjuster's own notes and real excerpts from documents already
+    attached to the claim (see response.json's notes/document_searches).
+    Unlike `facts`, these aren't field values - they're prose. The caller
+    (ai_generate_document below) feeds them to generate/recreate mode as
+    free-text context the LLM reads and applies with its own judgment (see
+    prompt_builder.py's _user_input_block), and to packet mode as a narrow,
+    doc-type-filtered addition (see tools.py's build_packet/
+    _RELEVANT_EXCERPT_CATEGORIES) rather than a blanket dump onto every
+    component regardless of whether it's relevant or has anywhere to put it.
 
     Raises on failure - the caller decides whether that should block generation
     or just log a warning and fall back to pure Faker generation (see
@@ -128,7 +138,42 @@ def fetch_claim_facts(claim_id_or_number: str) -> dict:
         # through to Faker exactly like any other field Guidewire doesn't have.
         "producer_name": _find_contact_name(data, role="Agent"),
     }
-    return {k: v for k, v in facts.items() if v not in (None, "")}
+    facts = {k: v for k, v in facts.items() if v not in (None, "")}
+
+    notes_context = {
+        "claim_description": _extract_claim_description(data),
+        "document_excerpts": _extract_document_excerpts(data),
+    }
+    return facts, notes_context
+
+
+def _extract_claim_description(data: dict) -> str | None:
+    """The adjuster's own written account of the claim (notes[].body_summary)
+    - the closest thing Guidewire has to a "what actually happened"
+    description, as opposed to `facts`' structured field values."""
+    notes = [n.get("body_summary") for n in (data.get("notes", {}) or {}).get("notes", []) if n.get("body_summary")]
+    return " ".join(notes) if notes else None
+
+
+def _extract_document_excerpts(data: dict) -> list:
+    """Real excerpts from documents already attached to this claim (a real
+    police report narrative, a real ER discharge summary, etc.) - Guidewire
+    itself already keyword-matched these by category (see response.json's
+    document_searches, e.g. pattern "police report|accident report"). Each
+    excerpt keeps its category so a consumer can pick only what's relevant
+    to the specific document being generated, rather than surfacing every
+    excerpt regardless of subject (see tools.py's _RELEVANT_EXCERPT_CATEGORIES)."""
+    excerpts = []
+    for result in (data.get("document_searches", {}) or {}).get("results", []):
+        if result.get("no_matches") or not result.get("matches"):
+            continue
+        category = result.get("pattern", "")
+        for match in result["matches"]:
+            name = match.get("name", "an attached document")
+            for snippet in match.get("snippets", []):
+                if len(snippet) > 40:  # skip header/label-only fragments (e.g. a doc title line alone)
+                    excerpts.append({"category": category, "source": name, "text": snippet})
+    return excerpts
 
 
 def _find_contact_name(data: dict, *, role: str) -> str | None:
@@ -305,9 +350,36 @@ async def ai_generate_document(
     if claim_id:
         logger.info(f"[1/6] detected claim id/number {claim_id!r} in user input - looking up Guidewire")
         try:
-            claim_facts = await run_in_threadpool(fetch_claim_facts, claim_id)
-            logger.info(f"[1/6] Guidewire lookup ok: {len(claim_facts)} claim fact(s) retrieved")
+            claim_facts, notes_context = await run_in_threadpool(fetch_claim_facts, claim_id)
+            logger.info(
+                f"[1/6] Guidewire lookup ok: {len(claim_facts)} claim fact(s), "
+                f"claim_description={'yes' if notes_context['claim_description'] else 'no'}, "
+                f"{len(notes_context['document_excerpts'])} document excerpt(s)"
+            )
             custom_fields_dict = {**claim_facts, **custom_fields_dict}
+
+            # generate/recreate mode: free text the LLM reads and applies with its own
+            # judgment (which paragraph this belongs in, how to reword it) - the same
+            # path user_input already uses (see prompt_builder.py's _user_input_block).
+            context_lines = []
+            if notes_context["claim_description"]:
+                context_lines.append(f"Adjuster's claim description: {notes_context['claim_description']}")
+            if notes_context["document_excerpts"]:
+                context_lines.append("Excerpts from documents already attached to this claim:")
+                for ex in notes_context["document_excerpts"]:
+                    context_lines.append(f"- [{ex['category']}] {ex['source']}: \"{ex['text']}\"")
+            if context_lines:
+                context_text = "\n".join(context_lines)
+                user_input = f"{user_input}\n\n{context_text}" if user_input else context_text
+
+            # packet mode: no LLM step per component to judge relevance, so this rides
+            # along inside custom_fields under reserved keys build_packet pops off and
+            # applies narrowly - only to the doc types with a genuine narrative home
+            # for it (see tools.py's _RELEVANT_EXCERPT_CATEGORIES), not every component.
+            if notes_context["claim_description"]:
+                custom_fields_dict["_guidewire_claim_description"] = notes_context["claim_description"]
+            if notes_context["document_excerpts"]:
+                custom_fields_dict["_guidewire_document_excerpts"] = notes_context["document_excerpts"]
         except Exception as exc:
             logger.warning(f"[1/6] Guidewire lookup for {claim_id!r} failed, continuing without it: {exc}")
 
@@ -331,7 +403,8 @@ async def ai_generate_document(
         logger.info(f"[2/6] prompt built ({len(prompt)} chars) - handing off to agent")
 
         result_str, artifact_bytes, artifact_kind, packet_components = run_with_reference(
-            agent, prompt, req.reference_bytes
+            agent, prompt, req.reference_bytes,
+            custom_fields=req.custom_fields, anchor_date=(req.custom_fields or {}).get("loss_date"),
         )
         if hasattr(result_str, "content"):
             result_str = result_str.content
