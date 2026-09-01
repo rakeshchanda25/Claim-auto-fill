@@ -174,8 +174,14 @@ def _overlay_values(dst: dict, src: dict, path: str = "", unmapped: list | None 
 
 @tool
 @_log_exceptions
-def generate_synthetic_data(doc_type: str, scenario: str = "general", seed: int = None) -> dict:
+def generate_synthetic_data(doc_type: str, scenario: str = "general", seed: int = None, anchor_date: str = None) -> dict:
     """Generate and stage synthetic insurance claim data.
+
+    anchor_date: pass this whenever the prompt's USER-SUPPLIED VALUES include
+    a 'loss_date' (e.g. from a live Guidewire claim) - it anchors every
+    generated date field to that real date instead of an independent random
+    one, so report_date/dos/etc. can't land in a different year than the
+    real incident. Omit it otherwise.
 
     Returns field names only; data is stored server-side for
     render_document_to_pdf. Use revise_document_data to change specific
@@ -183,7 +189,7 @@ def generate_synthetic_data(doc_type: str, scenario: str = "general", seed: int 
     if seed is not None:
         Faker.seed(seed)
         random.seed(seed)
-    data = build_synthetic_data(doc_type, scenario)
+    data = build_synthetic_data(doc_type, scenario, anchor_date=anchor_date)
     return _stage_doc_data(data, doc_type, scenario)
 
 
@@ -262,15 +268,19 @@ def analyze_uploaded_reference(file_type: str) -> dict:
 
 @tool
 @_log_exceptions
-def recreate_document_data(doc_type: str, scenario: str, carried_values: dict) -> dict:
+def recreate_document_data(doc_type: str, scenario: str, carried_values: dict, anchor_date: str = None) -> dict:
     """Generate fresh data for `scenario`, preserve selected reference values,
     and stage the result. Pass only identity/identifier fields in
     `carried_values`; scenario-specific fields stay newly generated.
     Nested dicts merge key-by-key. Returns a field summary plus carried and
-    unmapped key counts."""
+    unmapped key counts.
+
+    anchor_date: pass this whenever a 'loss_date' is available (from
+    USER-SUPPLIED VALUES or the reference document) - see
+    generate_synthetic_data's anchor_date for why."""
 
     resolved = resolve_doc_type(doc_type)
-    data = build_synthetic_data(resolved, scenario)
+    data = build_synthetic_data(resolved, scenario, anchor_date=anchor_date)
     unmapped = _overlay_values(data, carried_values or {})
 
     carried_ok = sum(1 for k in (carried_values or {}) if k not in unmapped)
@@ -307,8 +317,19 @@ def clear_staged_packet_plan() -> None:
 
 @tool
 @_log_exceptions
-def build_packet(packet_name: str, scenario: str = "general", seed: int = None) -> dict:
-    """Generate all components of a named document packet and return list of {label, template, data} dicts."""
+def build_packet(packet_name: str, scenario: str = "general", seed: int = None, custom_fields: dict = None) -> dict:
+    """Generate all components of a named document packet and return list of {label, template, data} dicts.
+
+    custom_fields: claim-level values (e.g. from a live Guidewire lookup) to
+    apply to EVERY component - not just the ones already in
+    _PACKET_SHARED_FIELDS. Unlike generate/recreate mode, a packet has no
+    per-component step where the caller could otherwise apply these (the
+    prompt explicitly tells the model there is none), so this is the only
+    place they can land; previously build_packet had no such parameter at
+    all, silently dropping any custom_fields the prompt mentioned for packet
+    requests. A 'loss_date' key, if present, also anchors every component's
+    generated dates (see build_synthetic_data's anchor_date) - fully
+    automatic, no per-component step needed for that either."""
 
     global _staged_packet_plan
     spec = PACKET_REGISTRY.get(packet_name)
@@ -320,14 +341,20 @@ def build_packet(packet_name: str, scenario: str = "general", seed: int = None) 
         Faker.seed(seed)
         random.seed(seed)
 
-    first = build_synthetic_data(components[0]["doc_type"], scenario)
+    anchor_date = (custom_fields or {}).get("loss_date")
+
+    first = build_synthetic_data(components[0]["doc_type"], scenario, anchor_date=anchor_date)
+    if custom_fields:
+        _overlay_values(first, custom_fields)
     shared = {k: first[k] for k in _PACKET_SHARED_FIELDS if k in first}
 
     plan = []
     for comp in components:
-        data = first if comp is components[0] else build_synthetic_data(comp["doc_type"], scenario)
+        data = first if comp is components[0] else build_synthetic_data(comp["doc_type"], scenario, anchor_date=anchor_date)
         if data is not first:
             _overlay_values(data, shared)
+            if custom_fields:
+                _overlay_values(data, custom_fields)
         plan.append({
             "label": comp["label"],
             "doc_type": comp["doc_type"],

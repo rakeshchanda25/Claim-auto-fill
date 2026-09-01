@@ -14,6 +14,19 @@ def _custom_fields_block(req: GenerationRequest) -> str:
     )
 
 
+def _anchor_date_arg(req: GenerationRequest) -> str:
+    """A `, anchor_date=<value>` kwarg fragment, present only when
+    custom_fields carries a 'loss_date' (from a live Guidewire lookup - see
+    app.py's fetch_claim_facts). Embedding the literal value here (not just
+    describing it in prose and trusting the model to notice and pass it) is
+    what makes every generated date field - report_date, dos, an incident's
+    embedded case-number year, etc. - actually anchor to the real loss date
+    instead of an independently random one; see build_synthetic_data's
+    anchor_date parameter for the mechanism."""
+    loss_date = (req.custom_fields or {}).get("loss_date")
+    return f", anchor_date={loss_date!r}" if loss_date else ""
+
+
 def _user_input_block(req: GenerationRequest) -> str:
     """Free-form text typed in the frontend's "User Input" box. Distinct from
     custom_fields (structured field:value overrides, including any facts a
@@ -34,10 +47,17 @@ def build_generation_prompt(req: GenerationRequest) -> str:
     )
 
     if is_packet:
+        # custom_fields is embedded directly as a literal kwarg, not left for the
+        # model to notice in the USER-SUPPLIED VALUES prose and retype - the
+        # packet prompt explicitly tells the model there is no per-component step
+        # where it could otherwise apply these (see build_packet's own docstring:
+        # it previously had no parameter for this at all, so a packet request
+        # carrying Guidewire/custom_fields data silently ignored it entirely).
+        custom_fields_arg = f", custom_fields={req.custom_fields!r}" if req.custom_fields else ""
         return (
             f"Generate a '{req.doc_type}' document packet for scenario '{req.scenario}'.\n"
             f"1. Call build_packet(packet_name='{req.doc_type}', scenario='{req.scenario}'"
-            + (f", seed={req.seed}" if req.seed is not None else "") + ").\n"
+            + (f", seed={req.seed}" if req.seed is not None else "") + custom_fields_arg + ").\n"
             "2. Call render_packet(). That renders every component in one go.\n"
             "That is the whole job - there is no per-component step to run, and you never see, "
             "handle or encode any component's data or bytes. build_packet already gave every "
@@ -65,7 +85,7 @@ def build_generation_prompt(req: GenerationRequest) -> str:
             f"Generate a single '{req.doc_type}' document for scenario '{req.scenario}'.\n"
             f"1. Load the skill: load_skill('{resolve_doc_type(req.doc_type)}').\n"
             f"2. Call generate_synthetic_data(doc_type='{req.doc_type}', scenario='{req.scenario}'"
-            + (f", seed={req.seed}" if req.seed is not None else "") + ").\n"
+            + (f", seed={req.seed}" if req.seed is not None else "") + _anchor_date_arg(req) + ").\n"
             f"3. Call validate_document_structure(doc_type='{req.doc_type}').\n"
             "4. Fix anything it reports missing with revise_document_data({...}), passing ONLY the "
             "fields that change.\n"
@@ -103,7 +123,7 @@ def build_generation_prompt(req: GenerationRequest) -> str:
             "(reported back in 'unmapped_keys'), not silently applied - it would otherwise replace "
             "the structured value and break every part of the document that reads a sub-field.\n"
             f"4. Call recreate_document_data(doc_type='{req.doc_type}', scenario='{req.scenario}', "
-            "carried_values=<that dict>). It generates fresh data for the new scenario, overlays "
+            f"carried_values=<that dict>{_anchor_date_arg(req)}). It generates fresh data for the new scenario, overlays "
             "your carried values on top, and stages the result for rendering. If the result's "
             "'unmapped_keys' is non-empty, those names either do not exist for this document type or "
             "were rejected for a shape mismatch (see step 3) - re-check them against the skill's "

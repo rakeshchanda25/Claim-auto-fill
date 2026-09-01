@@ -1,6 +1,6 @@
 import random
 import string
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from faker import Faker
 
 from renderers.components import get_components
@@ -125,6 +125,36 @@ def _gstin() -> str:
 def _rand_date_recent(years_back=2) -> date:
     start = date.today() - timedelta(days=years_back * 365)
     return start + timedelta(days=random.randint(0, years_back * 365))
+
+
+def _parse_anchor_date(value) -> date | None:
+    """Parses an external authoritative date (Guidewire's loss_date, e.g.
+    "2026-08-01T04:01:00.000Z") into the `date` build_synthetic_data anchors
+    every other date field to. Accepts a few shapes since this can come from
+    a live API (ISO datetime), a hand-typed custom_fields value (MM/DD/YYYY),
+    or already be a date/datetime object. Returns None (falls back to
+    _rand_date_recent()) rather than raising on anything unparseable - a
+    malformed anchor should degrade to today's normal random-date behavior,
+    not break generation."""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    if not isinstance(value, str) or not value.strip():
+        return None
+    text = value.strip()
+    for parser in (
+        lambda s: datetime.fromisoformat(s.replace("Z", "+00:00")).date(),
+        lambda s: datetime.strptime(s, "%m/%d/%Y").date(),
+        lambda s: date.fromisoformat(s[:10]),
+    ):
+        try:
+            return parser(text)
+        except (ValueError, TypeError):
+            continue
+    return None
 
 
 def _mark(is_checked: bool) -> str:
@@ -875,12 +905,25 @@ def resolve_doc_type(doc_type: str) -> str:
     return _DOC_TYPE_ALIASES.get(doc_type, doc_type)
 
 
-def build_synthetic_data(doc_type: str, scenario: str = "general") -> dict:
+def build_synthetic_data(doc_type: str, scenario: str = "general", anchor_date=None) -> dict:
+    """anchor_date: an authoritative real-world date (e.g. a Guidewire claim's
+    loss_date) to build every generated date field FROM, instead of an
+    independently-random one. `dos` is the one shared variable every
+    doc-type branch below derives its dates from (dos/dos_from/dos_to/
+    service_date directly; police-report's incident_date/report_date/
+    local_report_number's embedded year, etc.) - anchoring it here, before
+    generation, is what keeps every derived date consistent with the real
+    incident date. The alternative - generating independently then
+    overlaying a real loss_date onto just the one field it maps to - is what
+    produced a report showing report_date in 2025 against an overlaid
+    incident_date of 2026: the overlay replaces one field's value, but has no
+    way to know which OTHER already-generated fields were derived from the
+    date it just replaced."""
     doc_type = resolve_doc_type(doc_type)
     patient = _build_patient()
     physician = _build_physician()
     insurer = random.choice(_INSURERS)
-    dos = _rand_date_recent()
+    dos = _parse_anchor_date(anchor_date) or _rand_date_recent()
     icd_codes = _icd10_codes(scenario)
     line_items = _line_items(scenario)
     total = round(sum(i["charge"] for i in line_items), 2)
