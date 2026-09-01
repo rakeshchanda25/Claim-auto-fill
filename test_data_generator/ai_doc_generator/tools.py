@@ -321,13 +321,45 @@ _SHARED_NAME_FIELDS = ("patient_name", "insured_name", "claimant_name", "plainti
 _SHARED_LOCATION_FIELDS = ("location", "accident_location", "loss_location")
 _SHARED_DATE_FIELDS = ("incident_date",)
 
+# Which document_searches categories (Guidewire's own keyword-matched pattern
+# strings, e.g. "police report|accident report" - see response.json) are
+# actually relevant to each packet component's doc_type. A packet has no LLM
+# step to read the full set of claim-attached-document excerpts and judge
+# relevance itself (unlike generate/recreate mode, which gets the same
+# material as prose via user_input and decides there) - this is that
+# judgment made deterministically instead: an auto-accident-report or
+# police-report gets the real accident-report excerpt, a medical-record gets
+# the real injury/ER excerpt, and so on. Doc types with no entry here (e.g.
+# acord-25, cms-1500) get none - a certificate of insurance or claim form has
+# no narrative section to place one in anyway.
+_RELEVANT_EXCERPT_CATEGORIES = {
+    "police-report": ("police report", "accident report", "tow"),
+    "auto-accident-report": ("police report", "accident report", "tow"),
+    "medical-record": ("injury", "medical", "bodily injury"),
+    "medical-bill": ("injury", "medical", "bodily injury", "payment", "settlement"),
+    "discharge-summary": ("injury", "medical", "bodily injury"),
+    "property-loss-notice": ("estimate", "appraisal", "photo", "inspection", "total loss", "salvage", "title"),
+    "eob-explanation": ("payment", "settlement", "injury", "medical"),
+    "demand-letter": ("police report", "accident report", "injury", "medical"),
+    "litigation-document": ("police report", "accident report", "injury", "medical"),
+    "ub-04": ("injury", "medical", "payment"),
+    "pharmacy-invoice": ("injury", "medical"),
+}
+
 
 def _sync_packet_component(data: dict, *, name: str = None, location: str = None,
-                            incident_date: str = None, custom_fields: dict = None) -> None:
+                            incident_date: str = None, custom_fields: dict = None,
+                            scenario_facts: list = None, excerpts: list = None, doc_type: str = None) -> None:
     """Applies the packet's one shared identity/location/date onto whichever
     of THIS component's own field names actually carry that concept, plus any
     remaining custom_fields that match a literal key (claim_number,
-    policy_number, etc. - see _overlay_values)."""
+    policy_number, etc. - see _overlay_values), plus claim-level narrative
+    material (loss cause/type, claim description, and document_searches
+    excerpts relevant to THIS doc_type) appended to the component's own
+    scenario_facts list - the same "extra scenario detail" section every doc
+    type's template already renders (see synthetic_data.py's
+    _medical_scenario_facts/_property_scenario_facts/_auto_scenario_facts),
+    so no new template section is needed to surface it."""
     if custom_fields:
         _overlay_values(data, custom_fields)
     if name:
@@ -351,6 +383,19 @@ def _sync_packet_component(data: dict, *, name: str = None, location: str = None
         for field in _SHARED_DATE_FIELDS:
             if field in data:
                 data[field] = incident_date
+
+    extra_facts = list(scenario_facts or [])
+    if excerpts and doc_type:
+        keywords = _RELEVANT_EXCERPT_CATEGORIES.get(doc_type, ())
+        for ex in excerpts:
+            if keywords and not any(kw in ex.get("category", "") for kw in keywords):
+                continue
+            extra_facts.append({"label": f"Claim File Excerpt ({ex.get('source', 'attached document')})",
+                                 "value": ex.get("text", "")})
+    if extra_facts and isinstance(data.get("scenario_facts"), list):
+        data["scenario_facts"] = data["scenario_facts"] + extra_facts
+        if not data.get("scenario_facts_title"):
+            data["scenario_facts_title"] = "Claim File Details"
 
 _staged_packet_plan: list[dict] | None = None
 
@@ -377,7 +422,13 @@ def build_packet(packet_name: str, scenario: str = "general", seed: int = None, 
     all, silently dropping any custom_fields the prompt mentioned for packet
     requests. A 'loss_date' key, if present, also anchors every component's
     generated dates (see build_synthetic_data's anchor_date) - fully
-    automatic, no per-component step needed for that either."""
+    automatic, no per-component step needed for that either. Two reserved
+    keys - '_guidewire_scenario_facts' (list of {label, value}) and
+    '_guidewire_document_excerpts' (list of {category, source, text}) - carry
+    the claim's narrative material (loss cause, claim description, and real
+    excerpts from documents already on the claim); see app.py's
+    fetch_claim_facts for how these get built, and _sync_packet_component for
+    how each component picks what's relevant to ITS doc_type."""
 
     global _staged_packet_plan
     spec = PACKET_REGISTRY.get(packet_name)
@@ -389,7 +440,10 @@ def build_packet(packet_name: str, scenario: str = "general", seed: int = None, 
         Faker.seed(seed)
         random.seed(seed)
 
-    anchor_date = (custom_fields or {}).get("loss_date")
+    custom_fields = dict(custom_fields or {})
+    guidewire_scenario_facts = custom_fields.pop("_guidewire_scenario_facts", None)
+    guidewire_excerpts = custom_fields.pop("_guidewire_document_excerpts", None)
+    anchor_date = custom_fields.get("loss_date")
 
     first = build_synthetic_data(components[0]["doc_type"], scenario, anchor_date=anchor_date)
     # The shared name/location/incident_date come from custom_fields (Guidewire)
@@ -397,15 +451,14 @@ def build_packet(packet_name: str, scenario: str = "general", seed: int = None, 
     # generated - so a pure-Faker packet (no Guidewire data at all) still gets
     # ONE consistent identity/incident across every document, not just each
     # component agreeing with itself.
-    shared_name = (custom_fields or {}).get("insured_name") or first.get("patient_name")
-    shared_location = (
-        (custom_fields or {}).get("loss_location")
-        or first.get("location") or first.get("accident_location")
-    )
-    shared_incident_date = (custom_fields or {}).get("incident_date") or first.get("incident_date") or first.get("dos")
+    shared_name = custom_fields.get("insured_name") or first.get("patient_name")
+    shared_location = custom_fields.get("loss_location") or first.get("location") or first.get("accident_location")
+    shared_incident_date = custom_fields.get("incident_date") or first.get("incident_date") or first.get("dos")
     _sync_packet_component(
         first, name=shared_name, location=shared_location,
         incident_date=shared_incident_date, custom_fields=custom_fields,
+        scenario_facts=guidewire_scenario_facts, excerpts=guidewire_excerpts,
+        doc_type=components[0]["doc_type"],
     )
     shared = {k: first[k] for k in _PACKET_SHARED_FIELDS if k in first}
 
@@ -417,6 +470,8 @@ def build_packet(packet_name: str, scenario: str = "general", seed: int = None, 
             _sync_packet_component(
                 data, name=shared_name, location=shared_location,
                 incident_date=shared_incident_date, custom_fields=custom_fields,
+                scenario_facts=guidewire_scenario_facts, excerpts=guidewire_excerpts,
+                doc_type=comp["doc_type"],
             )
         plan.append({
             "label": comp["label"],

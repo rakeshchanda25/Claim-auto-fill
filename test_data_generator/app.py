@@ -73,8 +73,9 @@ def extract_claim_id(text: str) -> Optional[str]:
     return None
 
 
-def fetch_claim_facts(claim_id_or_number: str) -> tuple[dict, str]:
-    """Fetches the claim from Guidewire and returns (facts, context_text).
+def fetch_claim_facts(claim_id_or_number: str) -> tuple[dict, str, list, list]:
+    """Fetches the claim from Guidewire and returns (facts, context_text,
+    scenario_facts, document_excerpts).
 
     facts: flat claim-level field:value pairs (claim_number, policy_number,
     loss_date, etc.), named to match what these documents' skills already
@@ -84,18 +85,27 @@ def fetch_claim_facts(claim_id_or_number: str) -> tuple[dict, str]:
     prompt_builder.py's _custom_fields_block). The caller merges this into
     custom_fields.
 
-    context_text: the free-text, narrative-shaped material Guidewire holds
-    that isn't a "field value" in that sense - adjuster notes describing what
-    actually happened (the closest thing Guidewire has to an incident/claim
-    description), and excerpts from documents ALREADY attached to this claim
-    (a real police report narrative, a real ER discharge summary, etc. -
-    see response.json's document_searches, which Guidewire itself already
-    keyword-matched against category, e.g. "police report|accident report" or
-    "injury|medical|bodily injury"). Plus vehicles/activities/financials when
-    the claim has any. Returned as prose because it's meant to inform the
-    generated document's narrative content, not be inserted verbatim into a
-    field - the caller appends it to user_input, not custom_fields (see
-    prompt_builder.py's _user_input_block: "incorporate what's relevant").
+    context_text: free-text prose version of the narrative-shaped material
+    (adjuster notes, document excerpts, activities, financials) for
+    generate/recreate mode, where the LLM reads it and decides relevance
+    itself (see prompt_builder.py's _user_input_block).
+
+    scenario_facts / document_excerpts: the SAME underlying material, but
+    structured for packet mode instead - packets have no LLM reasoning step
+    per component (build_packet/render_packet run fully in Python, per
+    prompt_builder.py's packet prompt: "you never see, handle or encode any
+    component's data or bytes"), so there's no one to read prose and decide
+    what's relevant. scenario_facts is a flat list of {label, value} claim
+    facts (loss cause/type, claim status, adjuster, claim description, etc.)
+    meant to be appended to every component's own scenario_facts list (see
+    tools.py's _sync_packet_component). document_excerpts is the raw list of
+    {category, source, text} excerpts from documents already attached to the
+    claim (a real police report narrative, a real ER discharge summary) -
+    kept unfiltered here since which excerpt is relevant depends on which
+    component doc_type is asking (tools.py's _RELEVANT_EXCERPT_CATEGORIES
+    picks per doc_type from this same list, e.g. an auto-accident-report
+    gets the "police report|accident report" category, a medical-record gets
+    "injury|medical|bodily injury").
 
     Raises on failure - the caller decides whether that should block generation
     or just log a warning and fall back to pure Faker generation (see
@@ -136,7 +146,57 @@ def fetch_claim_facts(claim_id_or_number: str) -> tuple[dict, str]:
     facts = {k: v for k, v in facts.items() if v not in (None, "")}
 
     context_text = _build_claim_context(data, claim.get("claim_number"))
-    return facts, context_text
+    scenario_facts = _build_scenario_facts(data, claim, policy)
+    document_excerpts = _extract_document_excerpts(data)
+    return facts, context_text, scenario_facts, document_excerpts
+
+
+def _build_scenario_facts(data: dict, claim: dict, policy: dict) -> list:
+    """Universal (not doc-type-filtered) {label, value} facts - the same
+    concept as synthetic_data.py's own _medical_scenario_facts/
+    _property_scenario_facts/_auto_scenario_facts, which every doc type
+    already renders via its own generated scenario_facts/scenario_facts_title
+    fields. Appending to that existing, already-rendered list (see
+    tools.py's _sync_packet_component) is how this reaches every packet
+    component without needing a new template section per doc type."""
+    facts = []
+
+    def add(label, value):
+        if value not in (None, ""):
+            facts.append({"label": label, "value": str(value)})
+
+    add("Loss Type", claim.get("loss_type"))
+    add("Loss Cause", claim.get("loss_cause"))
+    add("Claim Status", claim.get("status"))
+    add("Jurisdiction", claim.get("jurisdiction"))
+    add("Line of Business", claim.get("line_of_business"))
+    add("How Reported", claim.get("how_reported"))
+    add("Assigned Adjuster", claim.get("assigned_adjuster"))
+    add("Policy Type", policy.get("policy_type"))
+
+    notes = [n.get("body_summary") for n in (data.get("notes", {}) or {}).get("notes", []) if n.get("body_summary")]
+    if notes:
+        add("Claim Description", " ".join(notes))
+
+    return facts
+
+
+def _extract_document_excerpts(data: dict) -> list:
+    """Raw {category, source, text} excerpts from documents already attached
+    to the claim (see response.json's document_searches - Guidewire itself
+    already keyword-matched these by category). Left unfiltered by doc_type
+    here; tools.py picks the relevant ones per component."""
+    excerpts = []
+    for result in (data.get("document_searches", {}) or {}).get("results", []):
+        if result.get("no_matches") or not result.get("matches"):
+            continue
+        category = result.get("pattern", "")
+        for match in result["matches"]:
+            name = match.get("name", "claim file")
+            for snippet in match.get("snippets", []):
+                if len(snippet) > 40:  # skip header/label-only fragments (e.g. a doc title line alone)
+                    excerpts.append({"category": category, "source": name, "text": snippet})
+    return excerpts
 
 
 def _build_claim_context(data: dict, claim_number) -> str:
@@ -348,12 +408,25 @@ async def ai_generate_document(
     if claim_id:
         logger.info(f"[1/6] detected claim id/number {claim_id!r} in user input - looking up Guidewire")
         try:
-            claim_facts, claim_context = await run_in_threadpool(fetch_claim_facts, claim_id)
+            claim_facts, claim_context, claim_scenario_facts, claim_excerpts = await run_in_threadpool(
+                fetch_claim_facts, claim_id
+            )
             logger.info(
                 f"[1/6] Guidewire lookup ok: {len(claim_facts)} claim fact(s), "
-                f"{len(claim_context)} chars of claim context retrieved"
+                f"{len(claim_context)} chars of claim context, {len(claim_scenario_facts)} scenario "
+                f"fact(s), {len(claim_excerpts)} document excerpt(s) retrieved"
             )
             custom_fields_dict = {**claim_facts, **custom_fields_dict}
+            # Packet mode has no LLM step per component to read prose context and
+            # decide relevance (see build_packet's docstring), so the structured
+            # forms ride along inside custom_fields under reserved keys tools.py's
+            # build_packet pops off before its literal field-name overlay pass -
+            # generate/recreate mode's LLM only ever sees the prose via user_input
+            # below, never these keys.
+            if claim_scenario_facts:
+                custom_fields_dict["_guidewire_scenario_facts"] = claim_scenario_facts
+            if claim_excerpts:
+                custom_fields_dict["_guidewire_document_excerpts"] = claim_excerpts
             if claim_context:
                 user_input = f"{user_input}\n\n{claim_context}" if user_input else claim_context
         except Exception as exc:
