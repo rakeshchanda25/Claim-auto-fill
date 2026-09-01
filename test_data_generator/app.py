@@ -120,8 +120,26 @@ def fetch_claim_facts(claim_id_or_number: str) -> dict:
         "policy_currency": policy.get("currency"),
         "policy_effective_date": policy.get("policy_effective_date"),
         "policy_expiration_date": policy.get("policy_expiration_date"),
+        # The producing agent/broker - claim_details/policy_details don't carry this,
+        # only the role-tagged contacts list does. Maps onto ACORD-25's producer_name,
+        # the one real field this covers (a certificate of insurance's "producer" IS
+        # the agent). Genuinely blank on plenty of real claims (confirmed: this
+        # response.json sample's own Agent contact has display_name "") - falls
+        # through to Faker exactly like any other field Guidewire doesn't have.
+        "producer_name": _find_contact_name(data, role="Agent"),
     }
     return {k: v for k, v in facts.items() if v not in (None, "")}
+
+
+def _find_contact_name(data: dict, *, role: str) -> str | None:
+    for contact in (data.get("contacts", {}) or {}).get("contacts", []):
+        if any(r.get("role") == role and r.get("active") for r in contact.get("roles", [])):
+            name = contact.get("display_name") or " ".join(
+                filter(None, [contact.get("first_name"), contact.get("last_name")])
+            )
+            if name:
+                return name
+    return None
 
 app.add_middleware(
     CORSMiddleware,

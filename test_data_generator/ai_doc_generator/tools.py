@@ -95,13 +95,6 @@ def clear_staged_artifact() -> None:
     _staged_artifact_kind = None
 
 
-def _require_staged_artifact() -> bytes:
-    data, _ = get_staged_artifact()
-    if data is None:
-        raise ValueError("No document has been staged yet in this request.")
-    return data
-
-
 _staged_packet: list[dict] | None = None
 
 
@@ -114,10 +107,6 @@ def clear_staged_packet() -> None:
     _staged_packet = None
 
 _staged_doc_data: dict | None = None
-
-
-def get_staged_doc_data() -> dict | None:
-    return _staged_doc_data
 
 
 def clear_staged_doc_data() -> None:
@@ -375,9 +364,6 @@ def _sync_packet_component(data: dict, *, name: str = None, location: str = None
 
 _staged_packet_plan: list[dict] | None = None
 
-
-def get_staged_packet_plan() -> list[dict] | None:
-    return _staged_packet_plan
 
 def clear_staged_packet_plan() -> None:
     global _staged_packet_plan

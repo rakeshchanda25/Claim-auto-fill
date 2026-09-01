@@ -19,5 +19,3 @@ except Exception as _html_renderer_error:  # pragma: no cover - environment-depe
             f"https://doc.courtbouillon.org/weasyprint/stable/first_steps.html#installation"
         )
 
-from .docx_parser import extract_docx_layout
-from .synthetic_data import build_synthetic_data

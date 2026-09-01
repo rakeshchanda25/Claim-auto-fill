@@ -2,6 +2,5 @@ fastapi
 uvicorn
 python-multipart
 PyMuPDF
-reportlab
 opencv-python-headless
 numpy

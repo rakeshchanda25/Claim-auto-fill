@@ -234,7 +234,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 <button type="button" class="btn-remove-rotation" title="Remove rotation rule" style="padding: 0.5rem 0.75rem; background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.4); color: #ef4444; border-radius: 4px; cursor: pointer; font-weight: 500;">✕</button>
             `;
             rotationRulesContainer.appendChild(rule);
-            console.log('Rotation rule added');
         }
     });
 

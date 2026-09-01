@@ -1,5 +1,4 @@
 import fitz
-import io
 
 def _normalize_font_name(raw_font: str) -> str:
     
