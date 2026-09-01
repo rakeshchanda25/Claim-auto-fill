@@ -304,6 +304,54 @@ _PACKET_SHARED_FIELDS = (
     "dos", "dos_from", "dos_to", "service_date",
 )
 
+# _PACKET_SHARED_FIELDS only reaches components that literally use that exact
+# key name - but the same "who/where/when" concept is named differently per
+# doc type: a medical form's patient_name is a demand-letter's claimant_name
+# is a litigation-document's plaintiff_name is an auto-accident-report's
+# insured_name/driver_name is police-report's parties_involved[0]['name'].
+# police-report/auto-accident-report's incident_date isn't "dos" either.
+# Without these aliases, a packet's own documents can disagree with EACH
+# OTHER about who the claimant is or when the incident happened - not just
+# against an external Guidewire claim, but with each other, even on a plain
+# Faker-only run with no external data at all (confirmed: litigation-
+# document's plaintiff_name was never in _PACKET_SHARED_FIELDS, so a
+# litigation-packet's own documents never actually agreed on the plaintiff's
+# name before this).
+_SHARED_NAME_FIELDS = ("patient_name", "insured_name", "claimant_name", "plaintiff_name", "driver_name")
+_SHARED_LOCATION_FIELDS = ("location", "accident_location", "loss_location")
+_SHARED_DATE_FIELDS = ("incident_date",)
+
+
+def _sync_packet_component(data: dict, *, name: str = None, location: str = None,
+                            incident_date: str = None, custom_fields: dict = None) -> None:
+    """Applies the packet's one shared identity/location/date onto whichever
+    of THIS component's own field names actually carry that concept, plus any
+    remaining custom_fields that match a literal key (claim_number,
+    policy_number, etc. - see _overlay_values)."""
+    if custom_fields:
+        _overlay_values(data, custom_fields)
+    if name:
+        for field in _SHARED_NAME_FIELDS:
+            if field in data:
+                data[field] = name
+        parties = data.get("parties_involved")
+        if isinstance(parties, list) and parties:
+            # parties_involved[0] is always the non-at-fault/reporting party
+            # (see synthetic_data.py's police-report branch: party1 = _party(
+            # "Driver 1", at_fault=False, ...)) - the claimant/insured, not
+            # the other party, which stays independently generated since
+            # Guidewire's claim data describes the insured, not whoever they
+            # were in an incident with.
+            parties[0]["name"] = name
+    if location:
+        for field in _SHARED_LOCATION_FIELDS:
+            if field in data:
+                data[field] = location
+    if incident_date:
+        for field in _SHARED_DATE_FIELDS:
+            if field in data:
+                data[field] = incident_date
+
 _staged_packet_plan: list[dict] | None = None
 
 
@@ -344,8 +392,21 @@ def build_packet(packet_name: str, scenario: str = "general", seed: int = None, 
     anchor_date = (custom_fields or {}).get("loss_date")
 
     first = build_synthetic_data(components[0]["doc_type"], scenario, anchor_date=anchor_date)
-    if custom_fields:
-        _overlay_values(first, custom_fields)
+    # The shared name/location/incident_date come from custom_fields (Guidewire)
+    # when present, falling back to whatever the FIRST component itself
+    # generated - so a pure-Faker packet (no Guidewire data at all) still gets
+    # ONE consistent identity/incident across every document, not just each
+    # component agreeing with itself.
+    shared_name = (custom_fields or {}).get("insured_name") or first.get("patient_name")
+    shared_location = (
+        (custom_fields or {}).get("loss_location")
+        or first.get("location") or first.get("accident_location")
+    )
+    shared_incident_date = (custom_fields or {}).get("incident_date") or first.get("incident_date") or first.get("dos")
+    _sync_packet_component(
+        first, name=shared_name, location=shared_location,
+        incident_date=shared_incident_date, custom_fields=custom_fields,
+    )
     shared = {k: first[k] for k in _PACKET_SHARED_FIELDS if k in first}
 
     plan = []
@@ -353,8 +414,10 @@ def build_packet(packet_name: str, scenario: str = "general", seed: int = None, 
         data = first if comp is components[0] else build_synthetic_data(comp["doc_type"], scenario, anchor_date=anchor_date)
         if data is not first:
             _overlay_values(data, shared)
-            if custom_fields:
-                _overlay_values(data, custom_fields)
+            _sync_packet_component(
+                data, name=shared_name, location=shared_location,
+                incident_date=shared_incident_date, custom_fields=custom_fields,
+            )
         plan.append({
             "label": comp["label"],
             "doc_type": comp["doc_type"],
@@ -365,14 +428,18 @@ def build_packet(packet_name: str, scenario: str = "general", seed: int = None, 
     _staged_packet_plan = plan
     logger.info(
         f"build_packet: {packet_name} / {scenario!r} - {len(plan)} component(s) staged, "
-        f"sharing claimant={shared.get('patient_name')!r} claim={shared.get('claim_number')!r}"
+        f"sharing claimant={shared_name!r} location={shared_location!r} "
+        f"incident_date={shared_incident_date!r} claim={shared.get('claim_number')!r}"
     )
     return {
         "packet": packet_name,
         "scenario": scenario,
         "component_count": len(plan),
         "components": [{k: c[k] for k in ("label", "doc_type", "template_name")} for c in plan],
-        "shared_identity": {k: shared.get(k) for k in ("patient_name", "claim_number", "policy_number")},
+        "shared_identity": {
+            "name": shared_name, "location": shared_location, "incident_date": shared_incident_date,
+            "claim_number": shared.get("claim_number"), "policy_number": shared.get("policy_number"),
+        },
     }
 
 
