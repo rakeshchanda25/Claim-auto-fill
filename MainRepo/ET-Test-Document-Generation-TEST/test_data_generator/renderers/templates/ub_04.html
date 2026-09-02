@@ -1,0 +1,315 @@
+{#
+  Recreation of the real CMS-1450/UB-04 institutional claim form's dense edge-to-edge
+  box grid (numbered fields, touching borders), matching the well-known specimen
+  layout. Plain Jinja - render_document_to_pdf (renderers/html_renderer.py) renders
+  this the same simple way as every other template: template.render(**data), no
+  AcroForm/placeholder-substitution step. Data keys come from
+  renderers/synthetic_data.py's "ub-04" branch. All names/numbers are synthetic test data.
+
+  Box layout is fixed regardless of scenario - a real UB-04's numbered boxes can't
+  restructure - so `components` always resolves to the same single composition; the split
+  below into named macros is for architectural consistency with every other template.
+#}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>UB-04 – {{ patient_control_number }}</title>
+<style>
+  @page { size: letter portrait; margin: 0.3in; }
+  * { box-sizing: border-box; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 6.6pt; color: #000; line-height: 1.15; }
+
+  .headline { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; }
+  .headline .bill-type { font-size: 15pt; font-weight: bold; letter-spacing: 2px; text-transform: uppercase; }
+  .headline .form-id { font-size: 6.5pt; text-align: right; color: #333; }
+
+  table.box { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  table.box td { border: 0.8pt solid #000; padding: 1px 3px 2px 3px; vertical-align: top; position: relative; overflow: hidden; }
+  .bn { font-size: 5pt; font-weight: bold; color: #000; display: block; }
+  .bl { font-size: 4.6pt; letter-spacing: .2px; color: #333; display: block; }
+  .bv { font-size: 7.2pt; font-weight: 600; color: #000; display: block; margin-top: 1px; }
+  .bv.sm { font-size: 6.4pt; }
+
+  table.lines { width: 100%; border-collapse: collapse; table-layout: fixed; border-top: none; }
+  table.lines th { border: 0.8pt solid #000; background: #eceff2; font-size: 5.4pt; padding: 1px 2px; text-align: center; font-weight: bold; }
+  table.lines td { border: 0.8pt solid #000; padding: 1px 3px; font-size: 6.6pt; height: 11pt; }
+  table.lines td.blank-line { height: 11pt; }
+
+  .footer-note { font-size: 5.4pt; color: #333; text-align: center; margin-top: 2px; border-top: 0.8pt solid #000; padding-top: 2px; }
+  .legend { display: flex; justify-content: space-between; align-items: center; margin-top: 3px; }
+  .legend .pageno { font-size: 16pt; font-weight: bold; }
+  .legend .key { font-size: 5.6pt; border: 0.8pt solid #000; padding: 3px 8px; text-align: center; }
+</style>
+</head>
+<body>
+
+{% macro header_boxes(data) %}
+<div class="headline">
+  <div></div>
+  <div class="bill-type">{{ data.scenario|replace("_"," ")|upper if data.scenario else "OUTPATIENT" }}</div>
+</div>
+
+<table class="box">
+  <tr>
+    <td style="width:24%;" rowspan="2">
+      <span class="bn">1</span>
+      <span class="bv">{{ data.provider_name }}</span><br>
+      <span class="bv sm">{{ data.provider_address.street }}</span><br>
+      <span class="bv sm">{{ data.provider_address.city }}, {{ data.provider_address.state }} {{ data.provider_address.zip }}</span><br>
+      <span class="bv sm">{{ data.billing_provider_phone }}</span>
+    </td>
+    <td style="width:24%;" rowspan="2">
+      <span class="bn">2</span>
+      <span class="bl">PAY-TO NAME, ADDRESS</span>
+      <span class="bv">{{ data.pay_to_name }}</span><br>
+      <span class="bv sm">{{ data.pay_to_address.street }}</span><br>
+      <span class="bv sm">{{ data.pay_to_address.city }}, {{ data.pay_to_address.state }} {{ data.pay_to_address.zip }}</span>
+    </td>
+    <td style="width:20%;">
+      <span class="bn">3a</span><span class="bl">PAT. CNTL #</span>
+      <span class="bv">{{ data.patient_control_number }}</span>
+    </td>
+    <td style="width:16%;" rowspan="2">
+      <span class="bn">4</span><span class="bl">TYPE OF BILL</span>
+      <span class="bv">{{ data.type_of_bill }}</span>
+    </td>
+    <td style="width:16%;" rowspan="2">
+      <span class="bn">7</span>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <span class="bn">3b</span><span class="bl">MED. REC. #</span>
+      <span class="bv">{{ data.medical_record_number }}</span>
+    </td>
+  </tr>
+  <tr>
+    <td style="width:24%;">
+      <span class="bn">5</span><span class="bl">FED. TAX NO.</span>
+      <span class="bv">{{ data.federal_tax_id }}</span>
+    </td>
+    <td colspan="2">
+      <span class="bn">6</span><span class="bl">STATEMENT COVERS PERIOD</span>
+      <span class="bl" style="display:inline-block; width:45%;">FROM<span class="bv">{{ data.statement_period_from }}</span></span>
+      <span class="bl" style="display:inline-block; width:45%;">THROUGH<span class="bv">{{ data.statement_period_to }}</span></span>
+    </td>
+    <td colspan="2">
+      <span class="bn">8</span><span class="bl">RESERVED</span>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2">
+      <span class="bn">8</span><span class="bl">PATIENT NAME</span>
+      <span class="bv">{{ data.patient_name }}</span>
+    </td>
+    <td colspan="3">
+      <span class="bn">9</span><span class="bl">PATIENT ADDRESS</span>
+      <span class="bv">{{ data.address.street }} &nbsp; {{ data.address.city }} &nbsp; {{ data.address.state }} &nbsp; {{ data.address.zip }}</span>
+    </td>
+  </tr>
+  <tr>
+    <td style="width:12%;">
+      <span class="bn">10</span><span class="bl">BIRTHDATE</span>
+      <span class="bv">{{ data.dob }}</span>
+    </td>
+    <td style="width:10%;">
+      <span class="bn">11</span><span class="bl">SEX</span>
+      <span class="bv">{{ data.gender[:1] }}</span>
+    </td>
+    <td colspan="2">
+      <span class="bn">12–17</span><span class="bl">ADMISSION — DATE / HR / TYPE / SRC / STAT</span>
+      <span class="bv sm">{{ data.admission_date }} &nbsp; {{ data.admission_hour }} &nbsp; {{ data.admission_type }} &nbsp; {{ data.admission_source }} &nbsp; {{ data.discharge_status }}</span>
+    </td>
+    <td>
+      <span class="bn">29</span><span class="bl">ACDT STATE</span>
+      <span class="bv">{{ data.acdt_state }}</span>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="4">
+      <span class="bn">18–28</span><span class="bl">CONDITION CODES</span>
+      <span class="bv sm">{{ data.condition_code }}</span>
+    </td>
+    <td>
+      <span class="bn">30</span><span class="bl">RESERVED</span>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="3">
+      <span class="bn">31–37</span><span class="bl">OCCURRENCE CODE / DATE</span>
+      {% for oc in data.occurrence_codes %}<span class="bv sm">{{ oc.code }}: {{ oc.date }}</span>{% endfor %}
+    </td>
+    <td colspan="2">
+      <span class="bn">39–41</span><span class="bl">VALUE CODES — CODE / AMOUNT</span>
+      {% for vc in data.value_codes %}<span class="bv sm">{{ vc.code }}: ${{ "%.2f"|format(vc.amount) }}</span>{% endfor %}
+    </td>
+  </tr>
+</table>
+{% endmacro %}
+
+{% macro revenue_code_lines(data) %}
+<table class="lines">
+  <thead>
+  <tr>
+    <th style="width:8%;">42 REV. CD.</th>
+    <th style="width:30%;">43 DESCRIPTION</th>
+    <th style="width:13%;">44 HCPCS/RATE</th>
+    <th style="width:12%;">45 SERV. DATE</th>
+    <th style="width:8%;">46 UNITS</th>
+    <th style="width:15%;">47 TOTAL CHARGES</th>
+    <th style="width:14%;">48 NON-COVERED</th>
+  </tr>
+  </thead>
+  {% for rev in data.revenue_codes %}
+  <tr>
+    <td>{{ rev.code }}</td>
+    <td>{{ rev.description }}</td>
+    <td>{{ rev.hcpcs }}</td>
+    <td>{{ data.discharge_date }}</td>
+    <td style="text-align:center;">{{ rev.units }}</td>
+    <td style="text-align:right;">{{ "%.2f"|format(rev.charge) }}</td>
+    <td style="text-align:right;">{{ "%.2f"|format(rev.non_covered) }}</td>
+  </tr>
+  {% endfor %}
+  {% for _ in range(6) %}
+  <tr><td class="blank-line" colspan="7">&nbsp;</td></tr>
+  {% endfor %}
+  <tr>
+    <td colspan="2"><span class="bl">PAGE</span> <b>1</b> <span class="bl">OF</span> <b>1</b> &nbsp; <span class="bl">CREATION DATE</span> {{ data.creation_date }}</td>
+    <td colspan="3" style="text-align:right; font-weight:bold;">49 &nbsp; TOTALS</td>
+    <td style="text-align:right; font-weight:bold;">{{ "%.2f"|format(data.total_charges) }}</td>
+    <td style="text-align:right; font-weight:bold;">{{ "%.2f"|format(data.non_covered_charges) }}</td>
+  </tr>
+</table>
+{% endmacro %}
+
+{% macro payer_diagnosis_boxes(data) %}
+<table class="box" style="margin-top:0;">
+  <tr>
+    <td style="width:24%;">
+      <span class="bn">50</span><span class="bl">PAYER NAME</span>
+      <span class="bv">{{ data.payer_name }}</span>
+    </td>
+    <td style="width:16%;">
+      <span class="bn">51</span><span class="bl">HEALTH PLAN ID</span>
+      <span class="bv sm">{{ data.health_plan_id }}</span>
+    </td>
+    <td style="width:10%;">
+      <span class="bn">53</span><span class="bl">ASG BEN</span>
+      <span class="bv">{{ data.assignment_of_benefits }}</span>
+    </td>
+    <td style="width:16%;">
+      <span class="bn">54</span><span class="bl">PRIOR PAYMENTS</span>
+      <span class="bv sm">{{ "%.2f"|format(data.prior_payments) }}</span>
+    </td>
+    <td style="width:16%;">
+      <span class="bn">55</span><span class="bl">EST. AMOUNT DUE</span>
+      <span class="bv sm">{{ "%.2f"|format(data.est_amount_due) }}</span>
+    </td>
+    <td>
+      <span class="bn">56</span><span class="bl">NPI</span>
+      <span class="bv sm">{{ data.provider_npi }}</span>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2">
+      <span class="bn">58</span><span class="bl">INSURED'S NAME</span>
+      <span class="bv">{{ data.patient_name }}</span>
+    </td>
+    <td>
+      <span class="bn">59</span><span class="bl">P.REL</span>
+      <span class="bv">{{ data.insured_relationship_code }}</span>
+    </td>
+    <td>
+      <span class="bn">60</span><span class="bl">INSURED'S UNIQUE ID</span>
+      <span class="bv sm">{{ data.patient_control_number }}</span>
+    </td>
+    <td>
+      <span class="bn">61</span><span class="bl">GROUP NAME</span>
+      <span class="bv sm">{{ data.group_name }}</span>
+    </td>
+    <td>
+      <span class="bn">62</span><span class="bl">INSURANCE GROUP NO</span>
+      <span class="bv sm">{{ data.insurance_group_no }}</span>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2">
+      <span class="bn">63</span><span class="bl">TREATMENT AUTHORIZATION CODES</span>
+      <span class="bv sm">{{ data.treatment_authorization }}</span>
+    </td>
+    <td colspan="2">
+      <span class="bn">64</span><span class="bl">DOCUMENT CONTROL NUMBER</span>
+      <span class="bv sm">{{ data.document_control_number }}</span>
+    </td>
+    <td colspan="2">
+      <span class="bn">65</span><span class="bl">EMPLOYER NAME</span>
+      <span class="bv sm">{{ data.employer_name }}</span>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <span class="bn">67</span><span class="bl">PRIN. DIAGNOSIS</span>
+      <span class="bv">{{ data.principal_diagnosis }}</span>
+    </td>
+    <td>
+      <span class="bn">69</span><span class="bl">ADMIT DX</span>
+      <span class="bv">{{ data.admitting_diagnosis }}</span>
+    </td>
+    <td>
+      <span class="bn">70</span><span class="bl">PATIENT REASON DX</span>
+      <span class="bv">{{ data.patient_reason_dx }}</span>
+    </td>
+    <td>
+      <span class="bn">71</span><span class="bl">PPS CODE</span>
+      <span class="bv">{{ data.pps_code }}</span>
+    </td>
+    <td colspan="2">
+      <span class="bn">72</span><span class="bl">DRG</span>
+      <span class="bv">{{ data.drg_code }}</span>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2">
+      <span class="bn">73</span><span class="bl">ATTENDING — QUAL / NPI / LAST / FIRST</span>
+      <span class="bv sm">{{ data.attending_physician_qualifier }} &nbsp; {{ data.attending_physician_npi }} &nbsp; {{ data.attending_last_name }}, {{ data.attending_first_name }}</span>
+    </td>
+    <td colspan="2">
+      <span class="bn">74</span><span class="bl">PRINCIPAL PROCEDURE — CODE / DATE</span>
+      <span class="bv sm">{{ data.principal_procedure_code }} / {{ data.principal_procedure_date }}</span>
+    </td>
+    <td colspan="2">
+      <span class="bn">77</span><span class="bl">OPERATING PHYSICIAN</span>
+      <span class="bv sm">{{ data.operating_physician_name }}</span>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="4">
+      <span class="bn">80</span><span class="bl">REMARKS</span>
+      <span class="bv sm">{{ data.remarks }}</span>
+    </td>
+    <td colspan="2">
+      <span class="bn">81</span><span class="bl">CC</span>
+      <span class="bv sm">{{ data.condition_code }}</span>
+    </td>
+  </tr>
+</table>
+{% endmacro %}
+
+{% macro footer_legend(data) %}
+<div class="footer-note">UB-04 CMS-1450 &nbsp;·&nbsp; THE CERTIFICATIONS ON THE REVERSE APPLY TO THIS BILL AND ARE MADE A PART HEREOF &nbsp;·&nbsp; SYNTHETIC / DEMONSTRATION DATA ONLY, NOT A REAL CLAIM</div>
+<div class="legend">
+  <div class="pageno">4</div>
+  <div class="key">Red = Required<br>Black = Situational/Required, if applicable/Reserved</div>
+</div>
+{% endmacro %}
+
+{% set component_map = {
+  "header_boxes": header_boxes, "revenue_code_lines": revenue_code_lines,
+  "payer_diagnosis_boxes": payer_diagnosis_boxes, "footer_legend": footer_legend,
+} %}
+{% for c in components %}{{ component_map[c](data) }}{% endfor %}
+
+</body>
+</html>

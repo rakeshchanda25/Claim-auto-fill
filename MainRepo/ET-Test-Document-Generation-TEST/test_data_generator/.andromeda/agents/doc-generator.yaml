@@ -1,0 +1,117 @@
+# Single source of truth for the document-generation agent.
+#
+# agent_factory.py loads this with WorkspaceAgentConfig.load_from_file(). The
+# only thing Python adds afterwards is the `tools` list - those are function
+# objects, which YAML cannot express. Everything else is here, and nowhere else.
+#
+# ${VAR} is substituted from the environment. Andromeda supports no default
+# syntax and raises on an unset variable, so agent_factory.AGENT_ENV_DEFAULTS
+# supplies a fallback for each one - keep the two in step.
+
+name: doc-generator
+recursion_limit: 300
+read_only: false
+
+model:
+  name: "${DOC_AGENT_MODEL}"
+  provider: "${DOC_AGENT_PROVIDER}"
+  other_args:
+    # Left literal rather than interpolated: env values arrive as strings, and
+    # these two have to stay numeric for the model client.
+    temperature: 0.3
+    timeout: 120
+
+# "auto" picks the bubblewrap sandbox for real isolation where the host supports
+# it (Linux) and falls back to ephemeral_fs elsewhere, so the same config works
+# on a developer's Mac/Windows machine and on the deployed Linux box.
+workspace_backend: "${WORKSPACE_BACKEND}"
+skill_sources:
+  - /skills
+skills_backend: filesystem
+
+# This agent drives one document at a time through a fixed tool sequence; there
+# is nothing to fan out to, and a parallel branch would race on the module-level
+# staging in tools.py.
+allow_parallel_agents: false
+allow_async_tasks: false
+
+middleware:
+  tool_error_handler: true
+  guardrails:
+    input: true
+    output: true
+    tool: false
+    blocked_message: "Request blocked by IDP document generation policy."
+
+    # Setting guardrails.input/output also activates DataPrivacyMiddleware with
+    # strategy="block" - it is not separately opt-in. Its default phone pattern
+    # matches any bare 10-digit number, which is exactly the shape of a policy,
+    # claim or member number, and "block" kills the whole run rather than
+    # redacting. That is incompatible with a generator whose job is to emit
+    # realistic policy/claim/phone-shaped data.
+    #
+    # `(?!)` is a negative lookahead of nothing: it can never match. Empty
+    # strings would not work - DataPrivacyMiddleware falls back to its defaults
+    # on a falsy pattern dict, which is the opposite of what we want here.
+    # Prompt-injection and compliance checks below are unaffected; they read
+    # their own pattern lists.
+    data_patterns:
+      email: "(?!)"
+      ssn: "(?!)"
+      phone: "(?!)"
+      credit_card: "(?!)"
+
+    prompt_injection_patterns:
+      patterns:
+        - "ignore.*(previous|above|earlier).*instructions"
+        - "disregard.*(system|prompt)"
+        - "reveal.*system.*prompt"
+        - "bypass.*(guardrail|safety|policy)"
+
+    # Deliberately narrower than the framework defaults. A bare \bfalsify\b or
+    # \bmisrepresent\b fires on legitimate generation requests, because these
+    # documents' own boilerplate contains phrases like "any person who knowingly
+    # misrepresents ... is guilty of insurance fraud". These require an
+    # instruction directed at the agent ("please falsify...") to match.
+    compliance_patterns:
+      patterns:
+        - "\\b(?:help\\s+me|please|can\\s+you|could\\s+you|i\\s+(?:want|need)\\s+you\\s+to|go\\s+ahead\\s+and|i\\s+will|i'll|let'?s|we\\s+(?:should|will))\\s+(?:(?!not\\b|never\\b)\\w+\\s+){0,2}falsif(?:y|ication)\\b"
+        - "\\b(?:help\\s+me|please|can\\s+you|could\\s+you|i\\s+(?:want|need)\\s+you\\s+to|go\\s+ahead\\s+and|i\\s+will|i'll|let'?s|we\\s+(?:should|will))\\s+(?:(?!not\\b|never\\b)\\w+\\s+){0,2}misrepresent"
+        - "guaranteed\\s+(approval|coverage|payout)"
+        - "cannot\\s+be\\s+denied"
+
+prompt: |
+  You are the lead insurance document generation agent for IDP testing.
+
+  Always call load_skill for the document type before generating anything - it
+  lists that document's exact field names.
+
+  GENERATE a new document:
+    generate_synthetic_data -> validate_document_structure -> render_document_to_pdf
+
+  RECREATE an uploaded document under a different scenario:
+    analyze_uploaded_reference -> read the real values out of each page's `text`
+    -> recreate_document_data(doc_type, scenario, carried_values={...})
+    -> render_document_to_pdf
+    Carry over only people and identifiers: names, DOB, policy/claim/member/record
+    numbers, provider, addresses. Never carry diagnoses, procedures, amounts or
+    narrative - the new scenario must drive those, or you have just reproduced
+    the original document.
+
+  PACKET - exactly two calls:
+    build_packet(packet_name, scenario) -> render_packet()
+    build_packet already gives every component the same claimant, claim number and
+    incident date. Do not loop over components yourself; there is no per-component
+    step.
+
+  Generated data and rendered documents are held server-side. Tools pick them up
+  automatically. Never restate a document's fields in your own output and never
+  put document bytes there - to change a value, call revise_document_data with
+  only the fields that change.
+
+  Stay on task: do not browse the workspace, list directories, read skill files
+  directly, or run shell commands to look around. load_skill already gives you
+  everything a skill contains.
+
+  When the document or packet is staged, your final answer is a short JSON status
+  object and nothing else: {"status": "ok"} or {"status": "ok", "components": 4}.

@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Tax Invoice – {{ invoice_number }}</title>
+<style>
+  @page { size: A4 portrait; margin: 0.45in 0.4in; }
+
+  :root {
+    --green: #3fa044;
+    --green-dark: #2f7d34;
+    --green-pale: #eef8ee;
+    --border: #7fc784;
+    --border-light: #cfe8d0;
+    --ink: #1c1c1c;
+    --muted: #555;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 9pt;
+    color: var(--ink);
+    line-height: 1.4;
+    margin: 0;
+  }
+
+  .invoice {
+    border: 2px solid var(--green);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  /* ---------- Header ---------- */
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 12px 16px 8px;
+  }
+  .brand-row { display: flex; gap: 10px; }
+  .logo-mark {
+    width: 54px; height: 54px; flex: none;
+  }
+  .brand-text .name-line {
+    font-size: 17pt;
+    font-weight: bold;
+    color: var(--green);
+    line-height: 1.15;
+  }
+  .brand-meta {
+    font-size: 8.5pt;
+    color: var(--muted);
+    margin-top: 3px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .brand-meta svg { flex: none; }
+
+  .promo { text-align: right; }
+  .promo img { max-height: 70px; }
+  .promo-text {
+    font-weight: bold;
+    font-size: 9.5pt;
+    color: var(--ink);
+    margin-top: 4px;
+  }
+
+  .tagline-bar {
+    text-align: center;
+    font-size: 8.5pt;
+    color: var(--muted);
+    border-top: 2px solid var(--green);
+    padding: 4px 0;
+  }
+
+  /* ---------- GSTIN / Title row ---------- */
+  .gstin-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-top: 2px solid var(--green);
+    border-bottom: 2px solid var(--green);
+    padding: 6px 16px;
+    font-weight: bold;
+  }
+  .gstin-row .tax-title {
+    font-size: 15pt;
+    color: var(--green);
+    letter-spacing: 0.5px;
+  }
+  .gstin-row .copy-label { font-size: 8.5pt; font-weight: bold; }
+
+  /* ---------- Customer / Invoice meta box ---------- */
+  .detail-box {
+    display: grid;
+    grid-template-columns: 1.5fr 1fr;
+    border-bottom: 2px solid var(--green);
+  }
+  .detail-left { border-right: 2px solid var(--green); padding: 6px 16px 10px; }
+  .detail-right { padding: 6px 16px; }
+  .detail-header {
+    text-align: center;
+    font-weight: bold;
+    border-bottom: 1px solid var(--border-light);
+    padding-bottom: 4px;
+    margin-bottom: 6px;
+  }
+  .kv-table { width: 100%; border-collapse: collapse; }
+  .kv-table td { padding: 2px 0; vertical-align: top; font-size: 8.7pt; }
+  .kv-table td.k { width: 30%; font-weight: bold; white-space: nowrap; }
+
+  .meta-table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+  .meta-table td { padding: 3px 0; font-size: 8.7pt; }
+  .meta-table td.k { font-weight: bold; width: 45%; }
+  .meta-table td.v { font-weight: bold; }
+
+  /* ---------- Items table ---------- */
+  table.items-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 8.3pt;
+  }
+  .items-table th {
+    background: var(--green);
+    color: #fff;
+    padding: 5px 6px;
+    border: 1px solid var(--green-dark);
+    text-align: center;
+    font-size: 8.2pt;
+  }
+  .items-table td {
+    padding: 4px 6px;
+    border: 1px solid var(--border-light);
+    text-align: center;
+  }
+  .items-table td:nth-child(2), .items-table th:nth-child(2) { text-align: left; }
+  .items-table td:nth-child(2) { font-weight: bold; }
+  .items-table td:nth-child(8),
+  .items-table td:nth-child(9),
+  .items-table td:nth-child(10),
+  .items-table td:nth-child(11) { text-align: right; }
+
+  .items-table tr.subtotal-line td {
+    border-left: none; border-right: none;
+    font-weight: bold;
+  }
+  .items-table tr.total-line td {
+    border-top: 2px solid var(--green);
+    border-bottom: 2px solid var(--green);
+    font-weight: bold;
+    font-size: 8.6pt;
+  }
+
+  /* ---------- Words / E&OE row ---------- */
+  .words-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    padding: 8px 16px;
+    border-bottom: 2px solid var(--green);
+  }
+  .words-row .label { font-size: 8.3pt; color: var(--muted); }
+  .words-row .value { font-weight: bold; font-size: 9pt; margin-top: 2px; }
+  .words-row .eoe { font-size: 8pt; font-style: italic; color: var(--muted); white-space: nowrap; }
+
+  /* ---------- HSN summary ---------- */
+  table.hsn-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 8.3pt;
+    border-bottom: 2px solid var(--green);
+  }
+  .hsn-table th, .hsn-table td {
+    border: 1px solid var(--border-light);
+    padding: 4px 8px;
+    text-align: center;
+  }
+  .hsn-table th { background: var(--green-pale); }
+  .hsn-table td:first-child, .hsn-table th.left { text-align: left; }
+  .hsn-table tr.total-line td { font-weight: bold; background: var(--green-pale); }
+
+  .tax-words-row {
+    padding: 6px 16px;
+    font-size: 8.3pt;
+    border-bottom: 2px solid var(--green);
+  }
+  .tax-words-row b { font-weight: bold; }
+
+  /* ---------- Bank / Signature ---------- */
+  .bottom-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border-bottom: 2px solid var(--green);
+  }
+  .bottom-left { border-right: 2px solid var(--green); }
+  .bank-block { padding: 8px 16px; }
+  .bank-inner { display: flex; justify-content: space-between; gap: 10px; }
+  .bank-fields td { padding: 2px 0; font-size: 8.5pt; }
+  .bank-fields td.k { font-weight: bold; width: 90px; }
+  .qr-col { text-align: center; }
+  .qr-col img { width: 78px; height: 78px; }
+  .qr-caption { font-size: 8pt; font-weight: bold; margin-top: 3px; }
+
+  .terms-block { border-top: 1px solid var(--border-light); padding: 8px 16px; }
+  .terms-header { font-weight: bold; text-align: center; margin-bottom: 4px; }
+  .terms-block p { margin: 2px 0; font-size: 8pt; color: var(--ink); }
+  .customer-sign { border-top: 1px solid var(--border-light); padding: 10px 16px 6px; font-weight: bold; font-size: 8.5pt; }
+
+  .bottom-right {
+    padding: 8px 16px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+  .certify-text { font-size: 8pt; text-align: center; color: var(--muted); }
+  .for-company { font-weight: bold; text-align: center; margin-top: 4px; }
+  .signatory-caption { text-align: center; font-weight: bold; font-size: 8.3pt; margin-top: 40px; }
+
+  .footer-note {
+    text-align: center;
+    font-size: 9pt;
+    padding: 10px 0 0;
+    color: var(--ink);
+  }
+</style>
+</head>
+<body>
+
+<div class="invoice">
+
+{% macro header(data) %}
+  <div class="header">
+    <div class="brand-row">
+      <img class="logo-mark" src="{{ data.logo_url | default('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAADICAYAAACtWK6eAAAEwUlEQVR4nO3dzZHbRhSFUcjlvOSFHYcVmhyHtbAik1eskqs8lwS6H/qH5wRAcgbvQzdnQPA4AAAAAGB2n0a/gJ99/vr7j9GvgTl8//Jtitkc+iIEwatGBXP7k4qCVnfGcssTiYIq1bH8UvngxyEOalXPV1l9wuBuFatJyQoiDkaomLuuxQmDWfRaTbqtIOJgJr3msUsg4mBGPeayeRnqHcc/f/7d8+FY0G9//dH18Vq2W02B9IhDEDzTI5irkVwOpDUOYXBWayhXIrkUSEscwqBVSyhnI/n18jOdJAx6ecxS7/cq/+f0X7GurB7ioMKVuTo7v6cCEQezqY6k9GJFcXCHyjl7OZCzq4c4uNPZeXt1nl8KRBysoCKS7lsscTBS7/kr/8AUrOxpIGe2V1YPZnBmDp/NtxUEgm6BWD2YSa95jIH4nAfvIM15lxXE6sGMesyl9yAQCASCDwPx/oN38tG8N68g3n8ws9b5tMWCQCAQCAQCgUAgEAgEAoFAIBAIBAKB4LY7K767irsAuoqhnkCKVd4e8/HYQqlji1XojnvH3vk870ggRe4eWpHUEEiBUcMqkv4E0tnoIR39/LsRCAQC6WiWs/csr2MHAoFAIBAIBAKBQCAQCAQCgUAgEAgEAoFAIBAIBAKBQCAQCAQCgUAgEAgEAoFAIBAIBAKBQCAQCAQCgUAgEAgEAoFAIBAIBAKBQCAQCLb8jkJ3Nx/3O9jt+xK3CkQY4+32xaLbbLHEMZddjscWgexyMHazw3FZPpAdDsLOVj8+Swey+i//Xax8nJYOBKotG8jKZ6V3tOrxWjYQuINAIBAIBAKBQCAQCAQCgUAgEAgEAoFAIBAIBAKBQCAQCAQCgUAgEAgEAoFAIBAIBAKBYNlAdrm15btY9XgtGwjcYelAVj0rvZuVj9PSgRzH2r/8d7D68Vk+kONY/yDsaofjskUgx7HHwdjJLsdjqy/QeRyUVW9zuYNdwnjYKpCHUQdppjB3G9RRttliQQWBQCAQCAQCgUAgEAgEAoFAIBAIBAKBQCAQCAQCgUAgEAgEAoFAIBAIBAKBQCAQCAQCgUAgEAgEAoFAIBAIBAKBQCAQCAQCgUAgEEhHs9xRfZbXsQOBQCCQzkafvUc//24EUmDUkIqjP4EUuXtYxVFDIIXuGlpx1NnyOwpnUvnFosKoJ5CbGOY12WJBIBAIBAKBQCAQCAQCgUAgEAgEAoFA0BxIxSUU0EvrfH4YyPcv3z41PTIs5KN5t8WCQCAQdAnE+xBm1GMuYyDeh/AO0px322JZRZhJr3n0HgSCp4Gc2WZZRZjBmTl8Nt9WEAi6B2IVYaTe8/dSIGf/miUSRjg7d6/M9csriEiYWUUcx1H8HkQk3KFyzk4FcuUfhyKh0pX5OjPHp1cQkTCL6jiO48Y7Kz5+GHcYpNWdJ9zL11p9/vr7j5YnFgpntYZxZffTdDFiayTHIRSe67FiXL3wtvlq3R6R/Eww9N5CtVyV3uVy9t6RQC+tH9no8n8QnxthRj3msts/CkXCTHrNY8lQ23IxSu8TdcmlJlYTRqiYu/JBtppQrfKEXP6BKasJlarn6/bhtaLQ6s6T7tCzu1h41aidyFTbH8HwYGsOAAAA/Me/0XJbZSOodIUAAAAASUVORK5CYII=', true) }}" alt="{{ data.company_name }} logo">
+      <div class="brand-text">
+        <div class="name-line">{{ data.company_name_line1 }}</div>
+        <div class="name-line">{{ data.company_name_line2 }}</div>
+        <div class="brand-meta">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="#3fa044"><path d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5z"/></svg>
+          <span>{{ data.company_address }}</span>
+        </div>
+        <div class="brand-meta">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="#3fa044"><path d="M6.6 10.8c1.4 2.7 3.6 4.9 6.3 6.3l2.1-2.1c.3-.3.7-.4 1-.2 1.2.4 2.4.6 3.7.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.6 21 3 13.4 3 4c0-.6.4-1 1-1h3.6c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.7.1.3 0 .7-.2 1L6.6 10.8z"/></svg>
+          <span>{{ data.company_phone }}</span>
+        </div>
+      </div>
+    </div>
+
+    {% if data.show_promo %}
+    <div class="promo">
+      <img src="{{ data.promo_image_url | default('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAUAAAACCCAYAAAA3xxGhAAAEJElEQVR4nO3doZJURxTH4SYVFRMEJjqIaEwQRLBi3oAVxKIiiB1MRAxjg0Bhg1jeYMUigiAGHUF0TAQxsRt1q5ipYOaeOzPd/+97gFt9zlb9tpfizrQGAAAAAAAAAAAAAABAH24c+wCttbZara7nPuPy8vIkZqlgH9vsY5t91DnqEip+kLt6/sHaxzb72GYf9T479gEAjuVoAVzit9mSz12afWyzj232sQw3QCCWAAKxBBCIJYBALAEEYgkgEEsAgVgCCMQSQCCWAAKxBBCIJYBArKN/HNatR89LnvX3ix9aa31/vM9qtbq+ePRvybPOX3zRWut/H9+s75Q864/Nu9Za//v4+c665Fk/vdu01vreRwU3QCDW0ev/8OJ9ycfxvDy/ffRZKny4uFeyj5vnb4bYx+Ordck+np1thtjH2/VVyT7ubs6G2MdcboBALAEEYgkgEEsAgVgCCMQSQCCWAAKxBBCIJYBALAEEYgkgEGuR9wGr3u9d0iHfHa56v3dJh3x3uOr93iUd8t3hqvd7lzTqu8OlQ/UQvl1LhrCH8O1aMoQ9hG/XkiHsIXy7Rgth2Z/APcavteXO3WP8Wlvu3D3Gr7Xlzt1j/Frr99yfUhLAXuM3qT5/r/GbVJ+/1/hNqs/fe0R6P//HZgew9/hNquboPX6Tqjl6j9+kao5R4jHKHLMCOEr8JnPnGSV+k7nzjBK/ydx5RonGZIR5/DcYINbeARzt9jfZd67Rbn+Tfeca7fY32XeuEW5L/6f3udwAgVgCCMQSQCCWAAKxBBCIJYBALAEEYgkgEEsAgVgCCMQSQCCWAAKxBBCIJYBALAEEYgkgEEsAgVgCCMQSQCCWAAKxBBCIJYBALAEEYn1e9aBfH3z9V9WzDu37V39+Vf3MLx/81u0+/nn1Xfk+frn/tNt9/Pj6Sfk+vn16v9t9/P7kdfk+jsUNEIglgEAsAQRiCSAQSwCBWAIIxBJAIJYAArEEEIglgEAsAQRiCSAQSwCBWAIIxBJAIJYAArEEEIglgEAsAQRiCSAQSwCBWAIIxCr7WswlvlqyZ0t8tWTPlvhqyZ6N9NWSPXMDBGIJIBBLAIFYAgjEEkAglgACsQQQiCWAQCwBBGIJIBBLAIFYAgjEEkAglgACsQQQiLV3AF+e375ReZBTse9cN8/fDLmPfed6drYZch/7znV3czbkPnqfyw0QiDUrgKPdAufOM9otcO48o90C587T+21p1wjzzL4BjhLBqjlGiWDVHKNEsGqOEaLR2jhzlPwJ3HsEq8/fewSrz997BKvP33s8ej//x8r+DbDXCC517l4juNS5e43gUufuNSK9nvtTFhnm4cX76yWeW+mQwf5wce/k93HIYD++Wp/8Pg4Z7Lfrq5Pfx2jhAwAAAAAAAAAAAAAAAAAAADhJ/wHo5UMz6hNR3gAAAABJRU5ErkJggg==', true) }}" alt="promo">
+      <div class="promo-text">{{ data.promo_text }}</div>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="tagline-bar">{{ data.tagline }}</div>
+{% endmacro %}
+
+{% macro gstin_row(data) %}
+  <div class="gstin-row">
+    <div>GSTIN : {{ data.company_gstin }}</div>
+    <div class="tax-title">{{ data.document_title | default("TAX INVOICE") }}</div>
+    <div class="copy-label">{{ data.copy_label | default("ORIGINAL FOR RECIPIENT") }}</div>
+  </div>
+{% endmacro %}
+
+{% macro detail_box(data) %}
+  <div class="detail-box">
+    <div class="detail-left">
+      <div class="detail-header">Customer Detail</div>
+      <table class="kv-table">
+        <tr><td class="k">M/S</td><td>{{ data.customer_name }}</td></tr>
+        <tr><td class="k">C.Person</td><td>{{ data.contact_person }}</td></tr>
+        <tr><td class="k">Address</td><td>{{ data.customer_address }}</td></tr>
+        <tr><td class="k">Phone</td><td>{{ data.customer_phone }}</td></tr>
+        <tr><td class="k">GSTIN</td><td>{{ data.customer_gstin }}</td></tr>
+        <tr><td class="k">Place of Supply</td><td>{{ data.place_of_supply }}</td></tr>
+      </table>
+    </div>
+    <div class="detail-right">
+      <table class="meta-table">
+        <tr><td class="k">Invoice No.</td><td class="v">{{ data.invoice_number }}</td></tr>
+        <tr><td class="k">Invoice Date</td><td class="v">{{ data.invoice_date }}</td></tr>
+      </table>
+    </div>
+  </div>
+{% endmacro %}
+
+{% macro items_table(data) %}
+  <table class="items-table">
+    <thead>
+      <tr>
+        <th>Sr.<br>No.</th>
+        <th>Name of Product / Service</th>
+        <th>Batch No</th>
+        <th>MFG Date</th>
+        <th>Expiry Date</th>
+        <th>HSN / SAC</th>
+        <th>Qty</th>
+        <th>MRP</th>
+        <th>Rate</th>
+        <th>Disc.<br>(%)</th>
+        <th>Taxable Value</th>
+      </tr>
+    </thead>
+    <tbody>
+      {# data['items'], not data.items - "items" collides with dict.items() (a bound method,
+         not this document's item list), so attribute access silently resolves to the
+         wrong thing here; subscript access always gets the actual dict key. #}
+      {% for item in data['items'] %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td>{{ item.name }}</td>
+        <td>{{ item.batch_no }}</td>
+        <td>{{ item.mfg_date }}</td>
+        <td>{{ item.expiry_date }}</td>
+        <td>{{ item.hsn_sac }}</td>
+        <td>{{ item.qty }} {{ item.unit }}</td>
+        <td>{{ "%.2f"|format(item.mrp) }}</td>
+        <td>{{ "%.2f"|format(item.rate) }}</td>
+        <td>{{ "%.2f"|format(item.discount_pct) }}</td>
+        <td>{{ "%.2f"|format(item.taxable_value) }}</td>
+      </tr>
+      {% endfor %}
+
+      <tr class="subtotal-line">
+        <td colspan="10"></td>
+        <td>{{ "%.2f"|format(data.subtotal_taxable_value) }}</td>
+      </tr>
+      <tr class="subtotal-line">
+        <td colspan="10" style="text-align:right;">IGST ({{ "%.2f"|format(data.igst_pct) }} %)</td>
+        <td>{{ "%.2f"|format(data.igst_amount) }}</td>
+      </tr>
+      <tr class="total-line">
+        <td colspan="6" style="text-align:right;">Total</td>
+        <td>{{ data.total_qty }}</td>
+        <td></td>
+        <td>{{ "%.2f"|format(data.total_rate) }}</td>
+        <td></td>
+        <td>&#8377; {{ "%.2f"|format(data.grand_total) }}</td>
+      </tr>
+    </tbody>
+  </table>
+{% endmacro %}
+
+{% macro words_row(data) %}
+  <div class="words-row">
+    <div>
+      <div class="label">Total in words</div>
+      <div class="value">{{ data.total_in_words }}</div>
+    </div>
+    <div class="eoe">(E &amp; O.E.)</div>
+  </div>
+{% endmacro %}
+
+{% macro hsn_table(data) %}
+  <table class="hsn-table">
+    <thead>
+      <tr>
+        <th class="left" rowspan="2">HSN / SAC</th>
+        <th rowspan="2">Taxable Value</th>
+        <th colspan="2">IGST</th>
+        <th rowspan="2">Total</th>
+      </tr>
+      <tr>
+        <th>%</th>
+        <th>Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in data.hsn_summary %}
+      <tr>
+        <td class="left">{{ row.hsn_sac }}</td>
+        <td>{{ "%.2f"|format(row.taxable_value) }}</td>
+        <td>{{ "%.2f"|format(row.igst_pct) }}</td>
+        <td>{{ "%.2f"|format(row.igst_amount) }}</td>
+        <td>{{ "%.2f"|format(row.total) }}</td>
+      </tr>
+      {% endfor %}
+      <tr class="total-line">
+        <td class="left">Total</td>
+        <td>{{ "%.2f"|format(data.hsn_total_taxable_value) }}</td>
+        <td></td>
+        <td>{{ "%.2f"|format(data.hsn_total_igst_amount) }}</td>
+        <td>{{ "%.2f"|format(data.hsn_total) }}</td>
+      </tr>
+    </tbody>
+  </table>
+{% endmacro %}
+
+{% macro tax_words_row(data) %}
+  <div class="tax-words-row">
+    Total Tax in words: <b>{{ data.tax_in_words }}</b>
+  </div>
+{% endmacro %}
+
+{% macro bottom_grid(data) %}
+  <div class="bottom-grid">
+    <div class="bottom-left">
+      <div class="bank-block">
+        <div class="bank-inner">
+          <table class="bank-fields">
+            <tr><td class="k">Name</td><td>{{ data.bank_name }}</td></tr>
+            <tr><td class="k">Branch</td><td>{{ data.bank_branch }}</td></tr>
+            <tr><td class="k">Acc. Number</td><td>{{ data.bank_account_number }}</td></tr>
+            <tr><td class="k">IFSC</td><td>{{ data.bank_ifsc }}</td></tr>
+            <tr><td class="k">UPI ID</td><td>{{ data.upi_id }}</td></tr>
+          </table>
+          <div class="qr-col">
+            <img src="{{ data.qr_code_url | default('data:image/png;base64,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', true) }}" alt="UPI QR code">
+            <div class="qr-caption">Pay using UPI</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="terms-block">
+        <div class="terms-header">Terms and Conditions</div>
+        {% for term in data.terms %}
+        <p>{{ term }}</p>
+        {% endfor %}
+      </div>
+
+      <div class="customer-sign">Customer Signature</div>
+    </div>
+
+    <div class="bottom-right">
+      <div>
+        <div class="certify-text">Certified that the particulars given above are true and correct.</div>
+        <div class="for-company">For {{ data.company_legal_name | default(data.company_name) }}</div>
+      </div>
+      <div class="signatory-caption">Authorised Signatory</div>
+    </div>
+  </div>
+{% endmacro %}
+
+{% macro footer_note(data) %}
+  <div class="footer-note">{{ data.footer_note | default("Thanks for your order! We look forward to working with you again soon.") }}</div>
+{% endmacro %}
+
+{% set component_map = {
+  "header": header, "gstin_row": gstin_row, "detail_box": detail_box, "items_table": items_table,
+  "words_row": words_row, "hsn_table": hsn_table, "tax_words_row": tax_words_row,
+  "bottom_grid": bottom_grid, "footer_note": footer_note,
+} %}
+{% for c in components %}{{ component_map[c](data) }}{% endfor %}
+
+</div>
+
+</body>
+</html>

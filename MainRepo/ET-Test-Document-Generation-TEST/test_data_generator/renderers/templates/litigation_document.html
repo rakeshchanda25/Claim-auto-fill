@@ -1,0 +1,523 @@
+{#
+  Recreation of a real specimen civil complaint: firm letterhead cover letter, then
+  pleading paper (line numbers, vertical rules, filed stamp, caption block), causes
+  of action, prayer for relief, verification, and notary acknowledgment. Plain Jinja -
+  not in html_renderer.py's is_standard_form tuple. Data keys come from
+  renderers/synthetic_data.py's "litigation-document" branch. All names/numbers are
+  synthetic test data.
+
+  A verified complaint's overall shape doesn't restructure by injury type in real life
+  (slip_and_fall/medical_malpractice/product_liability all use the same cover letter,
+  caption, parties/jurisdiction/allegations, causes of action, prayer, and verification/
+  notary sections) - `components` always resolves to the same single composition. What DOES
+  vary is how many physical pages the causes-of-action section takes: each cause of action
+  gets its own full pleading page (traditional legal-pleading convention, and the only way
+  to avoid silently clipping content in this template's fixed 8.5x11in `overflow:hidden`
+  page boxes - a scenario with 3 causes needs more room than one with 2, and unlike
+  police_report.html this file keeps the fixed-page-per-physical-page mechanism rather than
+  switching to natural CSS flow, so "more content" has to mean "more page divs", not "taller
+  pages"). Page numbering ("— N —" in the footer) is therefore a CSS counter
+  (`.pleading` class + `counter-increment`), not hardcoded text, since the number of pages
+  before prayer-for-relief/verification now varies.
+#}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Complaint — {{ plaintiff_name }} v. {{ defendant_name }} (SPECIMEN)</title>
+<style>
+  @page { size: Letter; margin: 0; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+  body {
+    margin: 0; padding: 0;
+    font-family: "FreeSerif", "Latin Modern Roman", "DejaVu Serif", Times, serif;
+    color: #10161f;
+    background: #6b7280;
+  }
+
+  .page {
+    position: relative;
+    width: 8.5in; height: 11in;
+    background: #fffdf8;
+    overflow: hidden;
+    page-break-after: always;
+    box-sizing: border-box;
+  }
+  .page:last-child { page-break-after: auto; }
+
+  /* Running page number for the pleading-paper pages only (not the cover letter, which a
+     real filed pleading doesn't number) - a CSS counter rather than hardcoded "— N —" text,
+     since the causes-of-action section can now span 1-3 pages depending on scenario, which
+     shifts every later page's number. */
+  body { counter-reset: pleadingpage; }
+  .page.pleading { counter-increment: pleadingpage; }
+  .pagenum::after { content: "— " counter(pleadingpage) " —"; }
+
+  @media print {
+    html, body { margin: 0 !important; padding: 0 !important; background: #fff; }
+    .page {
+      height: 10.92in; margin: 0 !important;
+      overflow: hidden !important;
+      break-inside: avoid; page-break-inside: avoid;
+      break-after: page; page-break-after: always;
+    }
+    .page:last-child { break-after: auto; page-break-after: auto; }
+    .page * { break-inside: avoid; page-break-inside: avoid; }
+  }
+
+  .watermark {
+    position: absolute; top: 4.4in; left: -0.9in; width: 10.3in;
+    text-align: center; transform: rotate(-31deg);
+    font-family: "DejaVu Sans", sans-serif;
+    font-size: 62pt; font-weight: bold; letter-spacing: 10px;
+    color: rgba(150, 40, 40, 0.085); z-index: 50;
+  }
+
+  /* ---- letterhead page ---- */
+  .lh-wrap { padding: 0.72in 0.9in 0.6in 0.9in; height: 11in; box-sizing: border-box; position: relative; }
+  .lh-top { border-bottom: 2.5pt solid #14304f; padding-bottom: 10px; }
+  .lh-top-inner { display: table; width: 100%; }
+  .lh-mark { display: table-cell; width: 0.78in; vertical-align: middle; }
+  .lh-names { display: table-cell; vertical-align: middle; padding-left: 14px; }
+  .firm-name { font-size: 17.4pt; letter-spacing: 2.1px; color: #14304f; line-height: 1.12; }
+  .firm-name small { font-size: 10.2pt; letter-spacing: 1.8px; display: block; margin-top: 2px; }
+  .firm-tag { font-family: "DejaVu Sans", sans-serif; font-size: 6.2pt; letter-spacing: 2.05px; color: #7a6234; text-transform: uppercase; margin-top: 5px; }
+  .lh-thin { border-top: 0.6pt solid #b99b52; margin-top: 3px; }
+  .lh-cols { display: table; width: 100%; margin-top: 9px; }
+  .lh-attys, .lh-addr { display: table-cell; vertical-align: top; font-family: "DejaVu Sans", sans-serif; font-size: 6.6pt; color: #45505f; line-height: 1.62; letter-spacing: .4px; }
+  .lh-addr { text-align: right; }
+  .lh-attys b { color: #14304f; letter-spacing: .8px; }
+  .letter-body { font-size: 10.2pt; line-height: 1.48; margin-top: 13px; }
+  .letter-body p { margin: 0 0 6.5px 0; text-align: justify; }
+  .ref-block { font-family: "DejaVu Sans", sans-serif; font-size: 8.2pt; line-height: 1.45; margin: 11px 0 10px 0; }
+  .ref-block .k { display: inline-block; width: 0.95in; color: #55606f; }
+  .date-line { font-size: 10.4pt; margin-bottom: 16px; }
+  .via { font-family: "DejaVu Sans", sans-serif; font-size: 7.6pt; letter-spacing: 1.2px; text-transform: uppercase; color: #8a2b2b; margin-bottom: 11px; }
+  .sig-block { margin-top: 9px; }
+  .sig-block .closing { font-size: 10.8pt; margin-bottom: 2px; }
+  .sig-name { font-size: 10.4pt; margin-top: 0; line-height: 1.4; }
+  .sig-name .nm { font-weight: bold; letter-spacing: .4px; }
+  .sig-name .rl { font-family: "DejaVu Sans", sans-serif; font-size: 7.6pt; color: #55606f; letter-spacing: .6px; }
+  .lh-foot { position: absolute; left: 0.9in; right: 0.9in; bottom: 0.4in; border-top: 0.6pt solid #b99b52; padding-top: 6px; font-family: "DejaVu Sans", sans-serif; font-size: 6.2pt; letter-spacing: 1.1px; color: #77808c; text-align: center; }
+
+  /* ---- pleading paper ---- */
+  .rule { position: absolute; background: #2b3a4d; }
+  .v1 { left: 0.98in; top: 0.32in; width: 0.9pt; height: 10.36in; }
+  .v2 { left: 1.06in; top: 0.32in; width: 0.9pt; height: 10.36in; }
+  .v3 { right: 0.52in; top: 0.32in; width: 0.9pt; height: 10.36in; }
+  .h-top { left: 0.98in; right: 0.52in; top: 0.32in; height: 0.9pt; }
+  .h-bot { left: 0.98in; right: 0.52in; top: 10.68in; height: 0.9pt; }
+  .lineno { position: absolute; left: 0.52in; top: 0.62in; width: 0.4in; text-align: right; font-size: 10.5pt; color: #2b3a4d; }
+  .lineno div { height: 0.345in; line-height: 0.345in; }
+  .content { position: absolute; left: 1.22in; right: 0.72in; top: 0.52in; font-size: 11.4pt; }
+  .content p, .content div.txt { line-height: 0.345in; margin: 0; text-align: justify; }
+  .blank { height: 0.345in; }
+  .ctr { text-align: center !important; }
+  .u { text-decoration: underline; }
+  .b { font-weight: bold; }
+  .sp { letter-spacing: 1.6px; }
+  .indent { text-indent: 0.5in; }
+  .counsel { font-size: 10.4pt; line-height: 0.207in; }
+
+  .filed-stamp {
+    position: absolute; right: 0.75in; top: 0.55in; width: 2.45in;
+    border: 1.6pt solid #1f3f7a; padding: 7px 9px 8px 9px;
+    font-family: "DejaVu Sans", sans-serif; color: #1f3f7a;
+    transform: rotate(-1.1deg); background: rgba(255,255,255,0.6);
+  }
+  .filed-stamp .fs-h { font-size: 13pt; font-weight: bold; letter-spacing: 5px; text-align: center; border-bottom: 0.9pt solid #1f3f7a; padding-bottom: 3px; margin-bottom: 4px; }
+  .filed-stamp .fs-l { font-size: 6.8pt; letter-spacing: .5px; line-height: 1.5; }
+
+  .caption { width: 100%; border-collapse: collapse; font-size: 11.2pt; }
+  .caption td { vertical-align: top; padding: 0; }
+  .cap-left { width: 47%; padding-right: 10px; line-height: 0.225in; }
+  .cap-mid { width: 5%; text-align: center; line-height: 0.225in; }
+  .cap-right { width: 48%; padding-left: 10px; line-height: 0.225in; font-size: 10.3pt; }
+  .ink { display: block; }
+  .footer-pl { position: absolute; left: 1.22in; right: 0.72in; top: 10.78in; font-family: "DejaVu Sans", sans-serif; font-size: 7.2pt; color: #4a5563; display: table; width: auto; }
+</style>
+</head>
+<body>
+
+{% macro cover_letter(data) %}
+<div class="page">
+  <div class="watermark">SPECIMEN</div>
+  <div class="lh-wrap">
+
+    <div class="lh-top">
+      <div class="lh-top-inner">
+        <div class="lh-mark">
+          <svg viewBox="0 0 100 100" width="72" height="72">
+            <circle cx="50" cy="50" r="47" fill="none" stroke="#14304f" stroke-width="2.4"/>
+            <circle cx="50" cy="50" r="41" fill="none" stroke="#b99b52" stroke-width="1"/>
+            <path d="M50 34 L50 72" stroke="#14304f" stroke-width="2.4"/>
+            <path d="M38 74 L62 74 L64 78 L36 78 Z" fill="#14304f"/>
+          </svg>
+        </div>
+        <div class="lh-names">
+          <div class="firm-name">{{ data.firm_name|upper }}<small>{{ data.firm_tagline|upper }} &nbsp;·&nbsp; A LIMITED LIABILITY PARTNERSHIP</small></div>
+          <div class="lh-thin"></div>
+          <div class="firm-tag">{{ data.firm_practice_areas }}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="lh-cols">
+      <div class="lh-attys">
+        {% for atty in data.firm_attorneys %}<b>{{ atty.name|upper }}</b>{% if atty.role %} &nbsp;<i>{{ atty.role }}</i>{% endif %}<br>{% endfor %}
+      </div>
+      <div class="lh-addr">
+        {{ data.firm_address|upper }}<br>
+        {{ data.firm_city_state_zip|upper }}<br>
+        TEL {{ data.firm_phone }} &nbsp; FAX {{ data.firm_fax }}<br>
+        {{ data.firm_email }}
+      </div>
+    </div>
+
+    <div class="letter-body">
+      <div class="date-line">{{ data.filing_date }}</div>
+      <div class="via">{{ data.letter_recipient_note }}</div>
+
+      <div style="font-size:10.4pt; line-height:1.38;">
+        {{ data.opposing_counsel_name }}<br>
+        <b>{{ data.opposing_firm_name|upper }}</b><br>
+        {{ data.opposing_firm_address }}
+      </div>
+
+      <div class="ref-block">
+        <span class="k">RE:</span><b>{{ data.plaintiff_name }} v. {{ data.defendant_name }}, et al.</b><br>
+        <span class="k">COURT:</span>{{ data.court_name }}, County of {{ data.court_county }}<br>
+        <span class="k">CASE NO.:</span>{{ data.case_number }}<br>
+        <span class="k">ENCLOSURE:</span>Verified Complaint; Civil Case Cover Sheet; Summons
+      </div>
+
+      <p>Dear {{ data.opposing_counsel_name }}:</p>
+
+      <p>This firm represents {{ data.plaintiff_name }} ("Plaintiff") in connection with the above-referenced matter. Enclosed please find a conformed copy of the Verified Complaint filed this date in the {{ data.court_name }}, together with the Summons and Civil Case Cover Sheet.</p>
+
+      <p>{{ data.letter_reference }}</p>
+
+      <p>Notwithstanding the filing, my client remains willing to discuss an early resolution of this dispute. Should your client wish to explore mediation prior to the case management conference presently calendared for {{ data.case_management_date }}, kindly contact the undersigned. This letter is written without prejudice to any of my client's rights or remedies, all of which are expressly reserved.</p>
+
+      <div class="sig-block">
+        <div class="closing">Very truly yours,</div>
+        <svg class="ink" width="195" height="50" viewBox="0 0 215 58">
+          <g fill="none" stroke="#1a2f6b" stroke-width="2.1" stroke-linecap="round">
+            <path d="M8 44 C14 20, 22 8, 30 12 C37 16, 27 36, 22 42 C18 47, 24 50, 32 44 C42 37, 48 22, 52 14 C55 8, 60 10, 58 20 C56 30, 50 40, 54 44 C58 48, 68 38, 74 28"/>
+            <path d="M100 42 C110 24, 122 10, 130 14 C137 18, 124 34, 118 40 C114 44, 120 48, 130 42 C142 35, 152 22, 162 16"/>
+          </g>
+        </svg>
+        <div class="sig-name">
+          <span class="nm">{{ data.firm_attorneys[0].name|upper }}</span><br>
+          <span class="rl">{{ data.firm_name|upper }}<br>Attorneys for Plaintiff {{ data.plaintiff_name|upper }}</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="lh-foot">
+      THIS COMMUNICATION MAY CONTAIN ATTORNEY–CLIENT PRIVILEGED OR ATTORNEY WORK-PRODUCT MATERIAL.<br>
+      SPECIMEN DOCUMENT &nbsp;·&nbsp; FICTITIOUS PARTIES &nbsp;·&nbsp; NOT A GENUINE LEGAL FILING
+    </div>
+  </div>
+</div>
+{% endmacro %}
+
+{% macro caption_page(data) %}
+<div class="page pleading">
+  <div class="watermark">SPECIMEN</div>
+  <div class="rule v1"></div><div class="rule v2"></div><div class="rule v3"></div>
+  <div class="rule h-top"></div><div class="rule h-bot"></div>
+
+  <div class="lineno">
+    {% for i in range(1, 29) %}<div>{{ i }}</div>{% endfor %}
+  </div>
+
+  <div class="filed-stamp">
+    <div class="fs-h">FILED</div>
+    <div class="fs-l">
+      {{ data.court_name }}<br>
+      County of {{ data.court_county }}<br>
+      <b>{{ data.filing_date }} &nbsp; {{ data.filing_time }}</b><br>
+      Clerk of the Court<br>
+      BY: {{ data.filing_clerk }}, Deputy Clerk
+    </div>
+  </div>
+
+  <div class="content">
+    <div class="counsel">
+      {% for atty in data.firm_attorneys[:3] %}{{ atty.name|upper }} (SBN {{ atty.bar_number }})<br>{% endfor %}
+      <b>{{ data.firm_name|upper }}</b><br>
+      {{ data.firm_address }}<br>
+      {{ data.firm_city_state_zip }}<br>
+      Telephone: {{ data.firm_phone }} &nbsp;|&nbsp; Facsimile: {{ data.firm_fax }}<br>
+      E-mail: {{ data.firm_email }}<br>
+      <br>
+      Attorneys for Plaintiff<br>
+      <b>{{ data.plaintiff_name|upper }}</b>
+    </div>
+
+    <div class="blank"></div>
+
+    <div class="txt ctr b sp">{{ data.court_name|upper }}</div>
+    <div class="txt ctr b sp">IN AND FOR THE COUNTY OF {{ data.court_county|upper }}</div>
+    <div class="txt ctr" style="font-size:10pt;">UNLIMITED CIVIL JURISDICTION</div>
+
+    <div class="blank" style="height:0.17in"></div>
+    <div style="border-top:1pt solid #2b3a4d; margin-bottom:6px;"></div>
+
+    <table class="caption">
+      <tr>
+        <td class="cap-left">
+          {{ data.plaintiff_name|upper }},<br>
+          <br>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Plaintiff,<br>
+          <br>
+          &nbsp;&nbsp;&nbsp;&nbsp;v.<br>
+          <br>
+          {{ data.defendant_name|upper }}, a {{ data.defendant_state }} entity;<br>
+          and DOES 1 through 20, inclusive,<br>
+          <br>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Defendants.
+        </td>
+        <td class="cap-mid">)<br>)<br>)<br>)<br>)<br>)<br>)<br>)<br>)<br>)<br>)<br>)<br>)<br>)<br>)<br>)</td>
+        <td class="cap-right">
+          <b>Case No. {{ data.case_number }}</b><br>
+          <br>
+          <b class="u">VERIFIED COMPLAINT FOR DAMAGES:</b><br>
+          <br>
+          {% for cause in data.causes_of_action %}&nbsp;&nbsp;({{ loop.index }})&nbsp; {{ cause }};<br>{% endfor %}
+          <br>
+          <b>DEMAND FOR JURY TRIAL</b><br>
+          <br>
+          Amount in Controversy: {{ data.prayer_for_relief }}<br>
+          Action Filed: {{ data.filing_date }}<br>
+          {{ data.court_dept }} — {{ data.judge_name }}
+        </td>
+      </tr>
+    </table>
+
+    <div style="border-top:1pt solid #2b3a4d; margin-top:4px;"></div>
+    <div class="blank" style="height:0.2in"></div>
+
+    <p class="indent">Plaintiff {{ data.plaintiff_name|upper }}, by and through its undersigned counsel of record, complains and alleges against Defendants, and each of them, as follows:</p>
+
+    <div class="txt ctr b u">I. &nbsp;THE PARTIES</div>
+
+    <p class="indent">1. &nbsp;Plaintiff {{ data.plaintiff_name|upper }} is, and at all relevant times was, an individual residing in the State of {{ data.plaintiff_state_of_incorporation }}.</p>
+  </div>
+
+  <div class="footer-pl"><span class="l">VERIFIED COMPLAINT FOR DAMAGES &nbsp;—&nbsp; CASE NO. {{ data.case_number }}</span></div>
+  <div class="pagenum" style="position:absolute; right:0.72in; top:10.78in; font-family:'DejaVu Sans',sans-serif; font-size:7.2pt; color:#4a5563;"></div>
+</div>
+{% endmacro %}
+
+{% macro allegations_page(data) %}
+<div class="page pleading">
+  <div class="watermark">SPECIMEN</div>
+  <div class="rule v1"></div><div class="rule v2"></div><div class="rule v3"></div>
+  <div class="rule h-top"></div><div class="rule h-bot"></div>
+  <div class="lineno">{% for i in range(1, 29) %}<div>{{ i }}</div>{% endfor %}</div>
+
+  <div class="content">
+    <p class="indent">2. &nbsp;Plaintiff is informed and believes, and on that basis alleges, that Defendant {{ data.defendant_name|upper }} ("Defendant") is an entity organized under the laws of the State of {{ data.defendant_state }}, and that Defendant regularly transacts business within the County of {{ data.court_county }}.</p>
+
+    <p class="indent">3. &nbsp;The true names and capacities of Defendants sued herein as DOES 1 through 20 are unknown to Plaintiff, who therefore sues said Defendants by such fictitious names. Plaintiff will seek leave to amend this Complaint when their true names and capacities are ascertained.</p>
+
+    <div class="txt ctr b u">II. &nbsp;JURISDICTION AND VENUE</div>
+
+    <p class="indent">4. &nbsp;This Court has jurisdiction over this action. The amount in controversy exceeds the jurisdictional minimum of this Court, exclusive of interest and costs.</p>
+
+    <p class="indent">5. &nbsp;Venue is proper in this County in that the events at issue occurred, and the obligations sued upon were incurred, in this County.</p>
+
+    <div class="txt ctr b u">III. &nbsp;GENERAL ALLEGATIONS</div>
+
+    {% for para in data.general_allegations %}
+    <p class="indent">{{ loop.index + 5 }}. &nbsp;{{ para }}</p>
+    {% endfor %}
+  </div>
+
+  <div class="footer-pl"><span class="l">VERIFIED COMPLAINT FOR DAMAGES &nbsp;—&nbsp; CASE NO. {{ data.case_number }}</span></div>
+  <div class="pagenum" style="position:absolute; right:0.72in; top:10.78in; font-family:'DejaVu Sans',sans-serif; font-size:7.2pt; color:#4a5563;"></div>
+</div>
+{% endmacro %}
+
+{% macro causes_of_action_page(data) %}
+{#
+  One physical page per cause of action - previously all of them (2-3, depending on the
+  scenario's random causes_of_action sample) were crammed onto a single fixed 8.5x11in
+  overflow:hidden page, which silently clips anything past 11in tall rather than adding a
+  page for it. A scenario with 3 causes needs more room than one with 2; this makes the
+  section's actual page count track len(causes_of_action) instead of always being exactly 1.
+#}
+{% for cause in data.causes_of_action %}
+<div class="page pleading">
+  <div class="watermark">SPECIMEN</div>
+  <div class="rule v1"></div><div class="rule v2"></div><div class="rule v3"></div>
+  <div class="rule h-top"></div><div class="rule h-bot"></div>
+  <div class="lineno">{% for i in range(1, 29) %}<div>{{ i }}</div>{% endfor %}</div>
+
+  <div class="content">
+    {% if loop.first %}
+    <p>{{ data.facts }}</p>
+
+    <p class="indent">9. &nbsp;Despite repeated written demands, Defendant has failed and refused, and continues to fail and refuse, to remedy the harm alleged herein.</p>
+    {% endif %}
+
+    <div class="txt ctr b u">{{ ["FIRST","SECOND","THIRD","FOURTH","FIFTH"][loop.index0] }} CAUSE OF ACTION</div>
+    <div class="txt ctr b" style="font-size:10.4pt;">({{ cause }} — Against Defendant and Does 1–10)</div>
+    <p class="indent">{{ loop.index + 9 }}. &nbsp;Plaintiff realleges and incorporates by reference each of the foregoing paragraphs as though fully set forth herein.</p>
+    <p class="indent">{{ loop.index + 10 }}. &nbsp;Defendant owed Plaintiff a duty of care, materially breached that duty, and as a direct and proximate result Plaintiff has suffered damages according to proof at trial, presently estimated at {{ data.prayer_for_relief }}.</p>
+  </div>
+
+  <div class="footer-pl"><span class="l">VERIFIED COMPLAINT FOR DAMAGES &nbsp;—&nbsp; CASE NO. {{ data.case_number }}</span></div>
+  <div class="pagenum" style="position:absolute; right:0.72in; top:10.78in; font-family:'DejaVu Sans',sans-serif; font-size:7.2pt; color:#4a5563;"></div>
+</div>
+{% endfor %}
+{% endmacro %}
+
+{% macro prayer_and_signature_page(data) %}
+<div class="page pleading">
+  <div class="watermark">SPECIMEN</div>
+  <div class="rule v1"></div><div class="rule v2"></div><div class="rule v3"></div>
+  <div class="rule h-top"></div><div class="rule h-bot"></div>
+  <div class="lineno">{% for i in range(1, 29) %}<div>{{ i }}</div>{% endfor %}</div>
+
+  <div class="content">
+    <div class="txt ctr b u">PRAYER FOR RELIEF</div>
+
+    <p class="indent">WHEREFORE, Plaintiff prays for judgment against Defendants, and each of them, as follows:</p>
+
+    {% for item in data.prayer_items %}
+    <div class="txt">&nbsp;&nbsp;&nbsp;&nbsp;{{ loop.index }}. &nbsp;{{ item }};</div>
+    {% endfor %}
+
+    <div class="blank" style="height:0.25in"></div>
+
+    <table style="width:100%; border-collapse:collapse;">
+      <tr>
+        <td style="width:42%; vertical-align:top; line-height:0.345in;">DATED: &nbsp;{{ data.filing_date }}</td>
+        <td style="width:58%; vertical-align:top; font-size:10.6pt; line-height:1.5;">
+          Respectfully submitted,<br>
+          <b>{{ data.firm_name|upper }}</b>
+          <svg class="ink" width="205" height="52" viewBox="0 0 205 52">
+            <g fill="none" stroke="#1a2f6b" stroke-width="2" stroke-linecap="round">
+              <path d="M6 40 C12 18, 20 6, 28 10 C35 14, 25 34, 20 39 C16 44, 22 47, 30 41 C40 34, 46 20, 50 12"/>
+              <path d="M96 39 C106 21, 118 8, 126 12 C133 16, 120 31, 114 37 C110 41, 116 45, 126 39"/>
+            </g>
+          </svg>
+          <span style="display:block; border-top:0.9pt solid #10161f; width:2.7in;"></span>
+          <b>{{ data.firm_attorneys[0].name|upper }}</b><br>
+          <span style="font-size:9.6pt;">Attorneys for Plaintiff<br>{{ data.plaintiff_name|upper }}</span>
+        </td>
+      </tr>
+    </table>
+
+    <div class="blank" style="height:0.2in"></div>
+    <div class="txt ctr b u">DEMAND FOR JURY TRIAL</div>
+    <p class="indent">Plaintiff hereby demands a trial by jury on all issues so triable.</p>
+  </div>
+
+  <div class="footer-pl"><span class="l">VERIFIED COMPLAINT FOR DAMAGES &nbsp;—&nbsp; CASE NO. {{ data.case_number }}</span></div>
+  <div class="pagenum" style="position:absolute; right:0.72in; top:10.78in; font-family:'DejaVu Sans',sans-serif; font-size:7.2pt; color:#4a5563;"></div>
+</div>
+{% endmacro %}
+
+{% macro verification_and_notary_page(data) %}
+<div class="page pleading">
+  <div class="watermark">SPECIMEN</div>
+  <div class="rule v1"></div><div class="rule v2"></div><div class="rule v3"></div>
+  <div class="rule h-top"></div><div class="rule h-bot"></div>
+  <div class="lineno">{% for i in range(1, 29) %}<div>{{ i }}</div>{% endfor %}</div>
+
+  <div class="content">
+    <div class="txt ctr b u sp">VERIFICATION</div>
+    <div class="blank" style="height:0.17in"></div>
+
+    <p class="indent">I, {{ data.verifier_name|upper }}, declare as follows:</p>
+
+    <p class="indent">I am the {{ data.verifier_title }} and an authorized representative of {{ data.plaintiff_name }}, the Plaintiff in the above-entitled action. I have read the foregoing <b>VERIFIED COMPLAINT FOR DAMAGES</b> and know the contents thereof. The same is true of my own knowledge, except as to those matters stated on information and belief, and as to those matters I believe them to be true.</p>
+
+    <p class="indent">I declare under penalty of perjury under the laws of the State of {{ data.jurisdiction }} that the foregoing is true and correct.</p>
+
+    <p class="indent">Executed on {{ data.verification_date }}, at {{ data.court_county }}.</p>
+
+    <div class="blank" style="height:0.1in"></div>
+
+    <table style="width:100%; border-collapse:collapse;">
+      <tr>
+        <td style="width:48%;"></td>
+        <td style="width:52%; vertical-align:top; font-size:10.6pt; line-height:1.5;">
+          <svg class="ink" width="200" height="48" viewBox="0 0 200 48">
+            <g fill="none" stroke="#14213d" stroke-width="1.9" stroke-linecap="round">
+              <path d="M8 36 C10 16, 18 4, 26 8 C33 12, 22 30, 18 36 C15 41, 22 42, 30 36 C38 30, 44 16, 50 12"/>
+              <path d="M84 38 C92 18, 104 6, 112 10 C118 14, 106 28, 100 34 C96 38, 104 42, 114 36"/>
+            </g>
+          </svg>
+          <span style="display:block; border-top:0.9pt solid #10161f; width:2.7in;"></span>
+          <b>{{ data.verifier_name|upper }}</b><br>
+          <span style="font-size:9.6pt;">{{ data.verifier_title }}<br>{{ data.plaintiff_name }}</span>
+        </td>
+      </tr>
+    </table>
+
+    <div class="blank" style="height:0.22in"></div>
+    <div style="border-top:1pt solid #2b3a4d;"></div>
+    <div class="blank" style="height:0.14in"></div>
+
+    <div class="txt ctr b u" style="font-size:10.6pt;">CERTIFICATE OF ACKNOWLEDGMENT</div>
+    <div style="font-size:10pt; line-height:0.235in; margin-top:6px;">
+      STATE OF {{ data.jurisdiction|upper }} &nbsp;&nbsp;&nbsp;)<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;) &nbsp;ss.<br>
+      COUNTY OF {{ data.court_county|upper }} &nbsp;)
+    </div>
+
+    <div style="font-size:10pt; line-height:0.235in; margin-top:8px; text-align:justify;">
+      On {{ data.verification_date }}, before me, {{ data.notary_name|upper }}, Notary Public, personally appeared {{ data.verifier_name|upper }}, who proved to me on the basis of satisfactory evidence to be the person whose name is subscribed to the within instrument, and acknowledged to me that they executed the same in their authorized capacity. I certify under PENALTY OF PERJURY under the laws of the State of {{ data.jurisdiction }} that the foregoing paragraph is true and correct.
+    </div>
+
+    <table style="width:100%; margin-top:10px; border-collapse:collapse;">
+      <tr>
+        <td style="width:52%; vertical-align:top; padding-top:6px;">
+          <span style="font-size:10pt;">WITNESS my hand and official seal.</span>
+          <svg class="ink" width="185" height="44" viewBox="0 0 185 44" style="margin-top:4px;">
+            <g fill="none" stroke="#1a2f6b" stroke-width="1.8" stroke-linecap="round">
+              <path d="M6 32 C10 14, 18 4, 24 8 C30 12, 20 26, 16 32 C13 37, 20 38, 28 32 C36 26, 42 14, 48 10"/>
+              <path d="M70 34 C78 16, 90 6, 98 10 C104 14, 92 26, 86 32 C82 36, 90 40, 100 34"/>
+            </g>
+          </svg>
+          <span style="display:block; border-top:0.9pt solid #10161f; width:2.3in;"></span>
+          <span style="font-size:9.6pt;"><b>{{ data.notary_name|upper }}</b>, Notary Public<br>
+          Commission No. {{ data.notary_commission_number }}<br>
+          My Commission Expires: {{ data.notary_commission_expires }}</span>
+        </td>
+        <td style="width:48%; text-align:center; vertical-align:top;">
+          <svg width="130" height="130" viewBox="0 0 200 200">
+            <circle cx="100" cy="100" r="86" fill="none" stroke="#1f3f7a" stroke-width="2.6"/>
+            <circle cx="100" cy="100" r="80" fill="none" stroke="#1f3f7a" stroke-width="1.1"/>
+            <circle cx="100" cy="100" r="50" fill="none" stroke="#1f3f7a" stroke-width="1.6"/>
+            <text x="100" y="94" font-family="DejaVu Sans" font-size="13" font-weight="bold" fill="#1f3f7a" text-anchor="middle">NOTARY</text>
+            <text x="100" y="112" font-family="DejaVu Sans" font-size="10" fill="#1f3f7a" text-anchor="middle">PUBLIC</text>
+            <line x1="60" y1="122" x2="140" y2="122" stroke="#1f3f7a" stroke-width="1"/>
+            <text x="100" y="136" font-family="DejaVu Sans" font-size="8" fill="#1f3f7a" text-anchor="middle">STATE OF {{ data.jurisdiction|upper }}</text>
+          </svg>
+          <div style="font-family:'DejaVu Sans',sans-serif; font-size:6.4pt; letter-spacing:1.4px; color:#6a7480; text-transform:uppercase;">Official Seal Affixed</div>
+        </td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="footer-pl"><span class="l">VERIFIED COMPLAINT FOR DAMAGES &nbsp;—&nbsp; CASE NO. {{ data.case_number }}</span></div>
+  <div class="pagenum" style="position:absolute; right:0.72in; top:10.78in; font-family:'DejaVu Sans',sans-serif; font-size:7.2pt; color:#4a5563;"></div>
+</div>
+{% endmacro %}
+
+{% set component_map = {
+  "cover_letter": cover_letter, "caption_page": caption_page, "allegations_page": allegations_page,
+  "causes_of_action_page": causes_of_action_page, "prayer_and_signature_page": prayer_and_signature_page,
+  "verification_and_notary_page": verification_and_notary_page,
+} %}
+{% for c in components %}{{ component_map[c](data) }}{% endfor %}
+
+</body>
+</html>

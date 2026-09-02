@@ -1,0 +1,335 @@
+{#
+  Recreation of the real ACORD 25 (2018/09) form layout (logo block, IMPORTANT clause,
+  ADDL INSR/SUBR WVD columns, full WC section, cancellation box). Plain Jinja -
+  render_document_to_pdf (renderers/html_renderer.py) renders this the same simple way as
+  every other template: template.render(**data), no AcroForm/placeholder-substitution step.
+  (An earlier version of that pipeline routed this template through a
+  placeholder-then-<input>-substitute pass for a now-removed pdf_forms=True AcroForm step -
+  see html_renderer.py's own docstring if that history matters.) Data keys come from
+  renderers/synthetic_data.py's "acord-25" branch.
+
+  A certificate of insurance's box layout doesn't restructure by scenario in real life
+  (this doc type appears in both the auto and property packets) - `components` always
+  resolves to the same single composition; the split below into named macros is for
+  architectural consistency with every other template.
+#}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ACORD 25 – {{ certificate_holder }}</title>
+<style>
+  @page { size: letter portrait; margin: 0.35in; }
+  * { box-sizing: border-box; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 7.2pt; color: #000; line-height: 1.25; }
+
+  .outer { border: 2px solid #000; }
+
+  /* ---- header ---- */
+  .header { display: flex; align-items: stretch; border-bottom: 2px solid #000; }
+  .logo { width: 78px; flex: 0 0 78px; border-right: 2px solid #000; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 4px 2px; }
+  .logo-mark { width: 34px; height: 34px; border-radius: 50%; background: #000; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 13pt; }
+  .logo-word { font-size: 8pt; font-weight: bold; letter-spacing: 1px; margin-top: 2px; }
+  .title-block { flex: 1; display: flex; align-items: center; justify-content: center; padding: 6px; }
+  .title { font-size: 16pt; font-weight: bold; text-align: center; }
+  .date-block { width: 130px; flex: 0 0 130px; border-left: 2px solid #000; padding: 4px 6px; }
+  .date-label { font-size: 6.4pt; font-weight: bold; }
+  .date-val { font-size: 8pt; margin-top: 10px; }
+
+  .clause { padding: 4px 8px; font-size: 6.6pt; font-weight: bold; border-bottom: 1px solid #000; }
+  .important { padding: 4px 8px; font-size: 6.6pt; font-weight: bold; border-bottom: 2px solid #000; }
+
+  /* ---- producer / insured / insurers ---- */
+  table.top { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  table.top td { border: 1px solid #000; padding: 3px 6px; vertical-align: top; }
+  .lbl { font-size: 6.2pt; font-weight: bold; display: block; margin-bottom: 2px; }
+  .val { font-size: 7.4pt; }
+  .val-name { font-size: 7.6pt; font-weight: 600; }
+
+  table.insurers { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  table.insurers td { border: 1px solid #000; padding: 2px 6px; font-size: 6.8pt; }
+  table.insurers td.naic { width: 22%; text-align: right; }
+
+  /* ---- coverages bar + certify paragraph ---- */
+  .section-bar { background: #1a1a1a; color: #fff; font-size: 7.4pt; font-weight: bold; padding: 3px 8px; display: flex; justify-content: space-between; border-top: 2px solid #000; }
+  .certify { border: 1px solid #000; border-top: none; padding: 4px 8px; font-size: 6.4pt; }
+
+  table.cov { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  table.cov th { border: 1px solid #000; background: #d8dee8; font-size: 5.6pt; padding: 2px; text-align: center; font-weight: bold; }
+  table.cov td { border: 1px solid #000; padding: 2px 5px; font-size: 7pt; vertical-align: top; }
+  .col-ltr { width: 5%; text-align: center; }
+  .col-type { width: 27%; }
+  .col-chk { width: 6%; text-align: center; }
+  .col-policy { width: 15%; }
+  .col-date { width: 9%; }
+  .col-limits { width: 27%; }
+  .limit-row td { font-size: 6.6pt; }
+  .type-check { font-size: 6.2pt; margin-top: 2px; line-height: 1.5; }
+  .amt { float: right; }
+  /* Each coverage type (GL/Auto/Umbrella/WC) is one rowspan-joined group -
+     if a page break lands inside it, the rowspan'd TYPE/POLICY/DATE cells
+     don't repeat on the continuation page, so the limit rows that follow
+     look shifted/misaligned. break-inside: avoid keeps each group whole,
+     pushing it to the next page rather than splitting it. */
+  tbody.cov-group { break-inside: avoid; page-break-inside: avoid; }
+
+  /* ---- description / cert holder / cancellation ---- */
+  table.desc { width: 100%; border-collapse: collapse; }
+  table.desc td { border: 1px solid #000; border-top: none; padding: 4px 8px; font-size: 6.8pt; min-height: 46px; }
+
+  table.holder { width: 100%; border-collapse: collapse; }
+  table.holder td { border: 1px solid #000; padding: 5px 8px; vertical-align: top; }
+  .holder-cell { width: 55%; }
+  .cancel-cell { width: 45%; font-size: 6.4pt; }
+  .sig-row td { border-top: none; }
+  .sig-line { display: inline-block; width: 100%; border-top: 1px solid #000; margin-top: 20px; padding-top: 2px; font-size: 6.2pt; }
+
+  .footer { display: flex; justify-content: space-between; font-size: 6.4pt; padding: 4px 2px 0; }
+</style>
+</head>
+<body>
+
+<div class="outer">
+
+{% macro header(data) %}
+  <div class="header">
+    <div class="logo">
+      <div class="logo-mark">A</div>
+      <div class="logo-word">ACORD</div>
+    </div>
+    <div class="title-block"><div class="title">CERTIFICATE OF LIABILITY INSURANCE</div></div>
+    <div class="date-block">
+      <span class="date-label">DATE (MM/DD/YYYY)</span>
+      <div class="date-val">{{ data.certificate_date }}</div>
+    </div>
+  </div>
+{% endmacro %}
+
+{% macro clauses(data) %}
+  <div class="clause">
+    THIS CERTIFICATE IS ISSUED AS A MATTER OF INFORMATION ONLY AND CONFERS NO RIGHTS UPON THE CERTIFICATE
+    HOLDER. THIS CERTIFICATE DOES NOT AFFIRMATIVELY OR NEGATIVELY AMEND, EXTEND OR ALTER THE COVERAGE AFFORDED
+    BY THE POLICIES BELOW. THIS CERTIFICATE OF INSURANCE DOES NOT CONSTITUTE A CONTRACT BETWEEN THE ISSUING
+    INSURER(S), AUTHORIZED REPRESENTATIVE OR PRODUCER, AND THE CERTIFICATE HOLDER.
+  </div>
+  <div class="important">
+    IMPORTANT: If the certificate holder is an ADDITIONAL INSURED, the policy(ies) must be endorsed. If
+    SUBROGATION IS WAIVED, subject to the terms and conditions of the policy, certain policies may require an
+    endorsement. A statement on this certificate does not confer rights to the certificate holder in lieu of
+    such endorsement(s).
+  </div>
+{% endmacro %}
+
+{% macro producer_insurer_insured(data) %}
+  <table class="top">
+    <tr>
+      <td style="width:52%;">
+        <span class="lbl">PRODUCER</span>
+        <span class="val-name">{{ data.producer_name }}</span><br>
+        <span class="val">{{ data.producer_address.street }}</span><br>
+        <span class="val">{{ data.producer_address.city }}, {{ data.producer_address.state }} {{ data.producer_address.zip }}</span><br>
+        <span class="val">PHONE (A/C, No, Ext): {{ data.producer_phone }}</span><br>
+        <span class="val">E-MAIL ADDRESS: {{ data.producer_email }}</span>
+      </td>
+      <td style="width:48%;">
+        <table class="insurers" style="border:none;">
+          <tr><td style="border:none; padding:0 0 4px 0;" colspan="2"><span class="lbl">INSURER(S) AFFORDING COVERAGE</span></td></tr>
+          <tr><td>INSURER A: {{ data.insurer_a }}</td><td class="naic">NAIC #: {{ data.insurer_a_naic }}</td></tr>
+          <tr><td>INSURER B:</td><td class="naic"></td></tr>
+          <tr><td>INSURER C:</td><td class="naic"></td></tr>
+          <tr><td>INSURER D:</td><td class="naic"></td></tr>
+        </table>
+      </td>
+    </tr>
+    <tr>
+      <td colspan="2">
+        <span class="lbl">INSURED</span>
+        <span class="val-name">{{ data.insured_name }}</span><br>
+        <span class="val">{{ data.insured_address.street }}</span><br>
+        <span class="val">{{ data.insured_address.city }}, {{ data.insured_address.state }} {{ data.insured_address.zip }}</span>
+      </td>
+    </tr>
+  </table>
+{% endmacro %}
+
+{% macro certification_bar(data) %}
+  <div class="section-bar">
+    <span>COVERAGES &nbsp; CERTIFICATE NUMBER: {{ data.claim_number }}</span>
+    <span>REVISION NUMBER: 0</span>
+  </div>
+  <div class="certify">
+    THIS IS TO CERTIFY THAT THE POLICIES OF INSURANCE LISTED BELOW HAVE BEEN ISSUED TO THE INSURED NAMED ABOVE
+    FOR THE POLICY PERIOD INDICATED. NOTWITHSTANDING ANY REQUIREMENT, TERM OR CONDITION OF ANY CONTRACT OR
+    OTHER DOCUMENT WITH RESPECT TO WHICH THIS CERTIFICATE MAY BE ISSUED OR MAY PERTAIN, THE INSURANCE AFFORDED
+    BY THE POLICIES DESCRIBED HEREIN IS SUBJECT TO ALL THE TERMS, EXCLUSIONS AND CONDITIONS OF SUCH POLICIES.
+    LIMITS SHOWN MAY HAVE BEEN REDUCED BY PAID CLAIMS.
+  </div>
+{% endmacro %}
+
+{% macro coverages(data) %}
+  <table class="cov">
+    <thead>
+    <tr>
+      <th class="col-ltr">INSR LTR</th>
+      <th class="col-type">TYPE OF INSURANCE</th>
+      <th class="col-chk">ADDL INSR</th>
+      <th class="col-chk">SUBR WVD</th>
+      <th class="col-policy">POLICY NUMBER</th>
+      <th class="col-date">POLICY EFF</th>
+      <th class="col-date">POLICY EXP</th>
+      <th class="col-limits">LIMITS</th>
+    </tr>
+    </thead>
+
+    <tbody class="cov-group">
+    <tr>
+      <td class="col-ltr" rowspan="7">A</td>
+      <td rowspan="7">
+        GENERAL LIABILITY
+        <div class="type-check">
+          ☑ COMMERCIAL GENERAL LIABILITY<br>
+          {{ data.gl_claims_made_mark }} CLAIMS-MADE &nbsp; {{ data.gl_occurrence_mark }} OCCUR
+        </div>
+      </td>
+      <td class="col-chk" rowspan="7"></td>
+      <td class="col-chk" rowspan="7"></td>
+      <td rowspan="7">{{ data.gl_policy_number }}</td>
+      <td rowspan="7">{{ data.effective_date }}</td>
+      <td rowspan="7">{{ data.expiration_date }}</td>
+      <td>EACH OCCURRENCE <span class="amt">$ {{ data.gl_each_occurrence }}</span></td>
+    </tr>
+    <tr class="limit-row"><td>DAMAGE TO RENTED PREMISES (Ea occurrence) <span class="amt">$ {{ data.gl_damage_rented_premises }}</span></td></tr>
+    <tr class="limit-row"><td>MED EXP (Any one person) <span class="amt">$ {{ data.gl_med_exp }}</span></td></tr>
+    <tr class="limit-row"><td>PERSONAL &amp; ADV INJURY <span class="amt">$ {{ data.gl_personal_injury }}</span></td></tr>
+    <tr class="limit-row"><td>GENERAL AGGREGATE <span class="amt">$ {{ data.gl_general_aggregate }}</span></td></tr>
+    <tr class="limit-row"><td>PRODUCTS - COMP/OP AGG <span class="amt">$ {{ data.gl_products_agg }}</span></td></tr>
+    <tr class="limit-row">
+      <td>
+        <span style="font-size:6.2pt;">GEN'L AGGREGATE LIMIT APPLIES PER: &nbsp; {{ data.gl_agg_policy_mark }} POLICY &nbsp; {{ data.gl_agg_project_mark }} PROJECT &nbsp; {{ data.gl_agg_loc_mark }} LOC</span>
+      </td>
+    </tr>
+    </tbody>
+
+    <tbody class="cov-group">
+    <tr>
+      <td class="col-ltr" rowspan="4">A</td>
+      <td rowspan="4">
+        AUTOMOBILE LIABILITY
+        <div class="type-check">
+          {{ data.auto_any_auto_mark }} ANY AUTO<br>
+          {{ data.auto_all_owned_mark }} ALL OWNED AUTOS &nbsp; {{ data.auto_scheduled_mark }} SCHEDULED AUTOS<br>
+          {{ data.auto_hired_mark }} HIRED AUTOS &nbsp; {{ data.auto_non_owned_mark }} NON-OWNED AUTOS
+        </div>
+      </td>
+      <td class="col-chk" rowspan="4"></td>
+      <td class="col-chk" rowspan="4"></td>
+      <td rowspan="4">{{ data.auto_policy_number }}</td>
+      <td rowspan="4">{{ data.effective_date }}</td>
+      <td rowspan="4">{{ data.expiration_date }}</td>
+      <td>COMBINED SINGLE LIMIT (Ea accident) <span class="amt">$ {{ data.auto_combined_single_limit }}</span></td>
+    </tr>
+    <tr class="limit-row"><td>BODILY INJURY (Per person) <span class="amt">$</span></td></tr>
+    <tr class="limit-row"><td>BODILY INJURY (Per accident) <span class="amt">$</span></td></tr>
+    <tr class="limit-row"><td>PROPERTY DAMAGE (Per accident) <span class="amt">$</span></td></tr>
+    </tbody>
+
+    <tbody class="cov-group">
+    <tr>
+      <td class="col-ltr" rowspan="2">A</td>
+      <td rowspan="2">
+        <div class="type-check">
+          {{ data.umb_umbrella_mark }} UMBRELLA LIAB &nbsp; {{ data.umb_occur_mark }} OCCUR<br>
+          {{ data.umb_excess_mark }} EXCESS LIAB &nbsp; {{ data.umb_claims_made_mark }} CLAIMS-MADE<br>
+          DED {{ data.umb_ded_mark }} &nbsp; RETENTION {{ data.umb_retention_mark }} &nbsp; $
+        </div>
+      </td>
+      <td class="col-chk" rowspan="2"></td>
+      <td class="col-chk" rowspan="2"></td>
+      <td rowspan="2">{{ data.umb_policy_number }}</td>
+      <td rowspan="2">{{ data.effective_date }}</td>
+      <td rowspan="2">{{ data.expiration_date }}</td>
+      <td>EACH OCCURRENCE <span class="amt">$ {{ data.umb_each_occurrence }}</span></td>
+    </tr>
+    <tr class="limit-row"><td>AGGREGATE <span class="amt">$ {{ data.umb_aggregate }}</span></td></tr>
+    </tbody>
+
+    <tbody class="cov-group">
+    <tr>
+      <td class="col-ltr" rowspan="3">A</td>
+      <td rowspan="3">
+        WORKERS COMPENSATION AND EMPLOYERS' LIABILITY
+        <div class="type-check">
+          ANY PROPRIETOR/PARTNER/EXECUTIVE {{ data.wc_officer_excluded_y_mark }} Y &nbsp; {{ data.wc_officer_excluded_n_mark }} N<br>
+          OFFICER/MEMBER EXCLUDED? &nbsp; N/A<br>
+          (Mandatory in NH)
+        </div>
+      </td>
+      <td class="col-chk" rowspan="3"></td>
+      <td class="col-chk" rowspan="3"></td>
+      <td rowspan="3">{{ data.wc_policy_number }}</td>
+      <td rowspan="3">{{ data.effective_date }}</td>
+      <td rowspan="3">{{ data.expiration_date }}</td>
+      <td style="font-size:6.4pt;">{{ data.wc_statutory_mark }} WC STATUTORY LIMITS &nbsp; {{ data.wc_other_mark }} OTHER</td>
+    </tr>
+    <tr class="limit-row"><td>E.L. EACH ACCIDENT <span class="amt">$ {{ data.wc_el_each_accident }}</span></td></tr>
+    <tr class="limit-row">
+      <td>E.L. DISEASE - EA EMPLOYEE <span class="amt">$ {{ data.wc_el_disease_employee }}</span><br>
+          E.L. DISEASE - POLICY LIMIT <span class="amt">$ {{ data.wc_el_disease_policy }}</span></td>
+    </tr>
+    </tbody>
+  </table>
+{% endmacro %}
+
+{% macro description_of_operations(data) %}
+  <table class="desc">
+    <tr><td>
+      <span class="lbl">DESCRIPTION OF OPERATIONS / LOCATIONS / VEHICLES (ACORD 101, Additional Remarks Schedule, may be attached if more space is required)</span>
+      {{ data.description_of_operations }}
+    </td></tr>
+  </table>
+{% endmacro %}
+
+{% macro holder_cancellation(data) %}
+  <table class="holder">
+    <tr>
+      <td class="holder-cell">
+        <span class="lbl">CERTIFICATE HOLDER</span><br>
+        <span class="val-name">{{ data.certificate_holder }}</span><br>
+        <span class="val">{{ data.certificate_holder_address.street }}</span><br>
+        <span class="val">{{ data.certificate_holder_address.city }}, {{ data.certificate_holder_address.state }} {{ data.certificate_holder_address.zip }}</span>
+      </td>
+      <td class="cancel-cell">
+        <span class="lbl">CANCELLATION</span><br>
+        SHOULD ANY OF THE ABOVE DESCRIBED POLICIES BE CANCELLED BEFORE THE EXPIRATION DATE THEREOF, NOTICE
+        WILL BE DELIVERED IN ACCORDANCE WITH THE POLICY PROVISIONS.
+      </td>
+    </tr>
+    <tr class="sig-row">
+      <td colspan="2">
+        <span class="sig-line">AUTHORIZED REPRESENTATIVE &nbsp; {{ data.authorized_representative }}</span>
+      </td>
+    </tr>
+  </table>
+{% endmacro %}
+
+{% macro footer(data) %}
+  <div class="footer">
+    <span>ACORD 25 (2018/09)</span>
+    <span>© 1988-2015 ACORD CORPORATION. All rights reserved.</span>
+  </div>
+  <div class="footer" style="margin-top:0;">
+    <span>The ACORD name and logo are registered marks of ACORD — SYNTHETIC / DEMONSTRATION DATA ONLY, FOR IDP TESTING PURPOSES.</span>
+  </div>
+{% endmacro %}
+
+{% set component_map = {
+  "header": header, "clauses": clauses, "producer_insurer_insured": producer_insurer_insured,
+  "certification_bar": certification_bar, "coverages": coverages,
+  "description_of_operations": description_of_operations, "holder_cancellation": holder_cancellation,
+  "footer": footer,
+} %}
+{% for c in components %}{{ component_map[c](data) }}{% endfor %}
+
+</div>
+</body>
+</html>

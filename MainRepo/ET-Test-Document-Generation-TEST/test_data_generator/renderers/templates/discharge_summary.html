@@ -1,0 +1,258 @@
+{% macro box(val, target) %}{% if val == target %}☒{% else %}☐{% endif %}{% endmacro %}
+{% macro ruled(lines, min_count) %}{% for line in lines %}<div class="ruled-line">{{ line }}</div>{% endfor %}{% for i in range(min_count - lines|length) %}<div class="ruled-line">&nbsp;</div>{% endfor %}{% endmacro %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Discharge Summary – {{ patient_name | default('', true) }}</title>
+<style>
+  @page { size: letter portrait; margin: 0.4in; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 9pt;
+    color: #000;
+    margin: 0;
+  }
+
+  /* ---------- Header ---------- */
+  .doc-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+  .doc-header img { height: 68px; }
+  .doc-title { background: #b3b3b3; font-weight: bold; font-size: 15pt; padding: 8px 16px; align-self: flex-start; margin-top: 6px; }
+
+  /* ---------- Patient info grid ---------- */
+  table.info-grid { width: 100%; border-collapse: collapse; border: 2px solid #000; margin-bottom: 14px; }
+  table.info-grid td { border: 1px solid #000; padding: 3px 8px; font-size: 9.5pt; vertical-align: top; }
+  table.info-grid td.label-cell { }
+  table.info-grid .lbl { font-weight: bold; }
+  table.info-grid .lbl-plain { font-weight: normal; }
+  table.info-grid .inline-pair { display: flex; }
+  table.info-grid .inline-pair .a { flex: 0 0 62%; }
+  table.info-grid .inline-pair .b { flex: 1; }
+  table.info-grid .date-cell { text-align: left; }
+  table.info-grid .date-cell .lbl { display: block; margin-bottom: 14px; }
+
+  /* ---------- Sections ---------- */
+  .section { border: 2px solid #000; margin-bottom: 14px; }
+  .section-header {
+    background: #b3b3b3;
+    font-weight: bold;
+    font-size: 11.5pt;
+    padding: 4px 8px;
+    border-bottom: 2px solid #000;
+  }
+  .section-body { padding: 6px 10px 8px; }
+
+  /* ruled fill-in lines */
+  .ruled-line {
+    border-bottom: 1px solid #000;
+    min-height: 20px;
+    padding: 1px 2px 3px;
+    font-size: 9.5pt;
+  }
+  .ruled-line:last-child { border-bottom: none; }
+
+  .inline-field { display: flex; align-items: baseline; margin-bottom: 4px; }
+  .inline-field .lbl { font-weight: bold; white-space: nowrap; margin-right: 6px; }
+  .inline-field .value {
+    flex: 1;
+    border-bottom: 1px solid #000;
+    padding: 0 4px 2px;
+    min-height: 16px;
+  }
+  .inline-field.short .value { flex: 0 0 220px; margin-right: 20px; }
+
+  .para { margin: 2px 0 6px; line-height: 1.35; }
+  .para .lbl { font-weight: bold; margin-right: 6px; }
+
+  /* checkbox list */
+  .checkbox-cols { display: flex; }
+  .checkbox-cols .col { flex: 1; }
+  .checkbox-cols .col + .col { margin-left: 24px; }
+  .chk-item { margin-bottom: 6px; display: flex; }
+  .chk-item .box { margin-right: 4px; font-family: Arial, sans-serif; flex: none; }
+  .chk-item .txt { flex: 1; }
+  .chk-item .detail { text-decoration: underline; margin-left: 4px; }
+
+  .comments-lbl { font-weight: bold; }
+
+  /* footer signature */
+  table.sig-grid { width: 100%; border-collapse: collapse; border: 2px solid #000; }
+  table.sig-grid td { border: 1px solid #000; padding: 5px 8px; font-weight: bold; font-size: 10pt; }
+  table.sig-grid td.sig-name { width: 78%; }
+  table.sig-grid td.sig-date { width: 22%; }
+</style>
+</head>
+<body>
+
+{% macro doc_header(data) %}
+  <div class="doc-header">
+    <img src="{{ data.logo_url | default('data:image/png;base64,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', true) }}" alt="{{ data.org_name | default('Newborn & Nurses', true) }} logo">
+    <div class="doc-title">{{ data.document_title | default('Discharge Summary: Antepartum', true) }}</div>
+  </div>
+{% endmacro %}
+
+{% macro info_grid(data) %}
+  <table class="info-grid">
+    <tr>
+      <td style="width:63%">
+        <div class="inline-pair">
+          <span class="a"><span class="lbl">PATIENT NAME:</span> {{ data.patient_name }}</span>
+          <span class="b"><span class="lbl">DOB:</span> {{ data.dob }}</span>
+        </div>
+      </td>
+      <td rowspan="1" class="date-cell">&nbsp;</td>
+    </tr>
+    <tr>
+      <td><span class="lbl">PATIENT ADDRESS:</span> {{ data.patient_address }}</td>
+      <td rowspan="2" class="date-cell">
+        <span class="lbl">DATE OF ADMISSION:</span>
+        <div class="ruled-line">{{ data.date_of_admission }}</div>
+      </td>
+    </tr>
+    <tr>
+      <td>{{ data.patient_address_line2 }}</td>
+    </tr>
+    <tr>
+      <td>
+        <div class="inline-pair">
+          <span class="a"><span class="lbl">CITY, STATE:</span> {{ data.city_state }}</span>
+          <span class="b"><span class="lbl">ZIP:</span> {{ data.zip_code }}</span>
+        </div>
+      </td>
+      <td rowspan="2" class="date-cell">
+        <span class="lbl">DATE OF DISCHARGE:</span>
+        <div class="ruled-line">{{ data.date_of_discharge }}</div>
+      </td>
+    </tr>
+    <tr>
+      <td><span class="lbl">PHYSICIAN NAME:</span> {{ data.physician_name }}</td>
+    </tr>
+  </table>
+{% endmacro %}
+
+{% macro reason_for_discharge(data) %}
+  <div class="section">
+    <div class="section-header">REASON FOR DISCHARGE</div>
+    <div class="section-body">
+      <div class="checkbox-cols">
+        <div class="col">
+          <div class="chk-item"><span class="box">{{ box(data.reason.goals_achieved, true) }}</span><span class="txt">GOALS AND OBJECTIVES OF PATIENT CARE ACHIEVED.</span></div>
+          <div class="chk-item"><span class="box">{{ box(data.reason.admitted_acute_care, true) }}</span><span class="txt">PATIENT ADMITTED TO ACUTE CARE HOSPITAL (LONGER THAN 48 HOURS).</span></div>
+          <div class="chk-item"><span class="box">{{ box(data.reason.admitted_ecf_snf, true) }}</span><span class="txt">PATIENT ADMITTED TO AN ECF/SNF.</span></div>
+          <div class="chk-item"><span class="box">{{ box(data.reason.transferred_other_service, true) }}</span><span class="txt">PATIENT TRANSFERRED TO OTHER SERVICE.</span></div>
+        </div>
+        <div class="col">
+          <div class="chk-item"><span class="box">{{ box(data.reason.refused_further_care, true) }}</span><span class="txt">PATIENT REFUSED FURTHER CARE.</span></div>
+          <div class="chk-item"><span class="box">{{ box(data.reason.expired, true) }}</span><span class="txt">PATIENT EXPIRED. <span class="lbl">DATE:</span><span class="detail">{{ data.reason.expired_date }}</span></span></div>
+          <div class="chk-item"><span class="box">{{ box(data.reason.other, true) }}</span><span class="txt">OTHER<span class="detail">{{ data.reason.other_detail }}</span></span></div>
+        </div>
+      </div>
+
+      <div class="comments-lbl" style="margin-top:6px;">COMMENTS:</div>
+      {{ ruled(data.reason_comments | default([], true), 5) }}
+    </div>
+  </div>
+{% endmacro %}
+
+{% macro summary_of_care(data) %}
+  <div class="section">
+    <div class="section-header">SUMMARY OF CARE</div>
+    <div class="section-body">
+      <div style="display:flex;">
+        <div class="inline-field" style="flex:0 0 45%;">
+          <span class="lbl">DIAGNOSIS</span>
+          <span class="value">{{ data.diagnosis }}</span>
+        </div>
+        <div class="inline-field" style="flex:1;">
+          <span class="lbl">DATE OF FIRST VISIT</span>
+          <span class="value">{{ data.date_of_first_visit }}</span>
+        </div>
+      </div>
+
+      <div class="para">
+        <span class="lbl">SUMMARY OF CARE PLAN:</span>{{ data.summary_of_care_plan | default('Antepartum assessment with vital signs. Pt instructed on medications (actions, S/E, compliance, access), emergency planning, S/S PTL/pre-eclampsia, coping behaviors for pregnancy discomforts, L&D process, ID support systems, parental roles, community resources, home preparation, infant care, wt gain, exercise/rest, avoiding toxins, childbirth, coping skills, balanced diet & MD follow up.', true) }}
+      </div>
+
+      <div class="para">
+        <span class="lbl">GOALS ACHIEVED / NOT ACHIEVED</span>{{ data.goals_achieved_summary | default('Caregiver verbalizes understanding of treatment and follow up with PCP.', true) }}
+      </div>
+      {{ ruled(data.care_plan_notes | default([], true), 3) }}
+    </div>
+  </div>
+{% endmacro %}
+
+{% macro status_of_discharge(data) %}
+  <div class="section">
+    <div class="section-header">STATUS OF DISCHARGE</div>
+    <div class="section-body">
+      <div class="para">
+        <span class="lbl">ASSESSMENT OF PATIENT CONDITION</span>{{ data.assessment_of_patient_condition | default('(see nursing notes)', true) }}
+      </div>
+      {{ ruled(data.assessment_notes | default([], true), 3) }}
+
+      <div style="display:flex; margin-top:10px;">
+        <div class="inline-field" style="flex:0 0 60%;">
+          <span class="lbl">LAST VISIT MADE:</span>
+          <span class="value">{{ data.last_visit_made }}</span>
+        </div>
+        <div class="inline-field" style="flex:1;">
+          <span class="lbl">NUMBER OF VISITS:</span>
+          <span class="value">{{ data.number_of_visits }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endmacro %}
+
+{% macro plan_for_transition(data) %}
+  <div class="section">
+    <div class="section-header">PLAN FOR TRANSITION: (IF APPLICABLE)</div>
+    <div class="section-body" style="padding:0;">
+      {{ ruled(data.transition_plan | default([], true), 3) }}
+    </div>
+  </div>
+{% endmacro %}
+
+{% macro discharge_instructions(data) %}
+  <div class="section">
+    <div class="section-header">SUMMARY OF PATIENT DISCHARGE INSTRUCTIONS</div>
+    <div class="section-body">
+      <div class="para">{{ data.discharge_instructions | default('Discharge patient to caregiver after completing skilled nursing visits. Client instructed to comply with all physician orders, attend follow up appointments, report any significant changes in patient status and call physician with any questions and concerns.', true) }}</div>
+      {{ ruled(data.discharge_instruction_notes | default([], true), 2) }}
+    </div>
+  </div>
+{% endmacro %}
+
+{% macro scenario_details(data) %}
+  {% if data.scenario_facts %}
+  <div class="section">
+    <div class="section-header">{{ data.scenario_facts_title | upper }}</div>
+    <div class="section-body">
+      {% for fact in data.scenario_facts %}
+      <div class="inline-field short"><span class="lbl">{{ fact.label }}:</span> <span class="value">{{ fact.value }}</span></div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+{% endmacro %}
+
+{% macro signature(data) %}
+  <table class="sig-grid">
+    <tr>
+      <td class="sig-name">CLINICIAN SIGNATURE: <span style="font-weight:normal;">{{ data.clinician_signature }}</span></td>
+      <td class="sig-date">DATE <span style="font-weight:normal;">{{ data.signature_date }}</span></td>
+    </tr>
+  </table>
+{% endmacro %}
+
+{% set component_map = {
+  "doc_header": doc_header, "info_grid": info_grid, "reason_for_discharge": reason_for_discharge,
+  "summary_of_care": summary_of_care, "status_of_discharge": status_of_discharge,
+  "plan_for_transition": plan_for_transition, "discharge_instructions": discharge_instructions,
+  "scenario_details": scenario_details, "signature": signature,
+} %}
+{% for c in components %}{{ component_map[c](data) }}{% endfor %}
+
+</body>
+</html>
