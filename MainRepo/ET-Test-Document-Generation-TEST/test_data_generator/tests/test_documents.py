@@ -174,27 +174,57 @@ def test_loss_date_anchors_every_generated_date():
 # ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize("packet_name", sorted(PACKET_REGISTRY))
-def test_packet_components_agree_with_each_other(packet_name):
-    """Every document in a packet has to describe one claim. This held even
-    without external data before only by accident - litigation-document's
-    plaintiff_name was never in the shared-field list."""
+def test_packet_components_agree_on_every_shared_concept(packet_name):
+    """Every document in a packet describes ONE claim, so wherever two of them
+    carry the same concept they must carry the same value - whatever each calls
+    it. Documents that lack a concept simply do not constrain it."""
     scenario = PACKET_REGISTRY[packet_name]["compatible_scenarios"][0]
-    summary = tools.build_packet(packet_name, scenario)
+    tools.build_packet(packet_name, scenario)
     plan = tools.current_run().packet_plan
 
-    assert summary["component_count"] == len(PACKET_REGISTRY[packet_name]["components"])
-    name = summary["shared_identity"]["name"]
-    assert name
+    for concept in tools._ALIASES:
+        seen = {}
+        for component in plan:
+            value = tools._read_concept(component["data"], component["doc_type"], concept)
+            if value is not None:
+                seen[component["label"]] = value
+        assert len(set(seen.values())) <= 1, (
+            f"{packet_name}: components disagree on {concept!r} -> {seen}"
+        )
 
-    for component in plan:
-        data = component["data"]
-        present = [f for f in tools._NAME_FIELDS if f in data]
-        for field in present:
-            assert data[field] == name, f"{packet_name}/{component['label']}.{field} disagrees"
-        if isinstance(data.get("parties_involved"), list) and data["parties_involved"]:
-            assert data["parties_involved"][0]["name"] == name
-        if isinstance(data.get("employee"), dict):
-            assert data["employee"]["name"] == name
+
+def test_auto_packet_agrees_on_the_incident_date_across_field_names():
+    """A police report calls it incident_date and an auto loss notice calls it
+    accident_date. Before concept syncing these were independently generated,
+    so one packet described two different crashes."""
+    tools.build_packet("auto-accident-packet", "rear_end_collision")
+    by_type = {c["doc_type"]: c["data"] for c in tools.current_run().packet_plan}
+    assert by_type["police-report"]["incident_date"] == by_type["auto-accident-report"]["accident_date"]
+
+
+def test_property_packet_agrees_on_the_loss_date_across_field_names():
+    tools.build_packet("property-claim-packet", "fire_damage")
+    by_type = {c["doc_type"]: c["data"] for c in tools.current_run().packet_plan}
+    assert by_type["property-loss-notice"]["loss_date"] == by_type["police-report"]["incident_date"]
+
+
+def test_medical_packet_agrees_on_admission_and_physician():
+    """discharge-summary says date_of_admission, ub-04 says admission_date; the
+    prescribing/attending doctor is named differently again on each form."""
+    tools.build_packet("medical-packet", "hospital_admission")
+    by_type = {c["doc_type"]: c["data"] for c in tools.current_run().packet_plan}
+
+    assert by_type["discharge-summary"]["date_of_admission"] == by_type["ub-04"]["admission_date"]
+    assert by_type["discharge-summary"]["date_of_discharge"] == by_type["ub-04"]["discharge_date"]
+    assert by_type["medical-record"]["physician_name"] == by_type["ub-04"]["attending_physician_name"]
+
+
+def test_provider_name_is_not_synced_across_its_two_meanings():
+    """provider_name is the treating clinician on an EOB but the facility on a
+    UB-04. Syncing it as one concept would print a doctor in a hospital field."""
+    tools.build_packet("medical-packet", "hospital_admission")
+    by_type = {c["doc_type"]: c["data"] for c in tools.current_run().packet_plan}
+    assert by_type["ub-04"]["provider_name"] == by_type["medical-record"]["hospital"]
 
 
 @pytest.mark.parametrize("packet_name", sorted(PACKET_REGISTRY))
@@ -243,7 +273,7 @@ def test_claim_narrative_only_reaches_documents_that_have_somewhere_for_it():
 # ---------------------------------------------------------------------------
 
 def _context_from(claim_fixture):
-    from guidewire import ClaimContext
+    from claim_context import ClaimContext
 
     return ClaimContext(
         details=claim_fixture["claim_details"],
@@ -255,7 +285,7 @@ def _context_from(claim_fixture):
 
 def test_claim_response_maps_onto_document_fields(claim_fixture):
     """Guards the mapping against a real captured API response."""
-    from app import claim_to_fields
+    from claim_context import claim_to_fields
 
     fields = claim_to_fields(_context_from(claim_fixture))
     details = claim_fixture["claim_details"]
@@ -272,7 +302,7 @@ def test_claim_response_maps_onto_document_fields(claim_fixture):
 
 def test_claim_facts_from_a_real_response_reach_a_document(claim_fixture):
     """End to end on real data: response -> field mapping -> rendered document."""
-    from app import claim_to_fields
+    from claim_context import claim_to_fields
 
     fields = claim_to_fields(_context_from(claim_fixture))
     tools.begin_run(custom_fields=fields, anchor_date=fields["loss_date"])
@@ -288,7 +318,7 @@ def test_claim_facts_from_a_real_response_reach_a_document(claim_fixture):
 
 
 def test_claim_notes_are_available_as_narrative(claim_fixture):
-    from app import claim_narrative
+    from claim_context import claim_narrative
 
     narrative = claim_narrative(_context_from(claim_fixture))
     assert "Adjuster's claim description:" in narrative
@@ -329,28 +359,25 @@ def test_agent_config_loads_and_is_usable():
     assert config.middleware.guardrails.data_patterns.phone == "(?!)"
 
 
-def test_configured_backend_resolves_to_one_the_framework_accepts():
+def test_configured_backend_is_one_the_framework_accepts():
     """WorkspaceSession.create rejects "auto" - it is a config-level default the
-    framework only expands when it builds the session itself. We build our own,
-    so _resolve_backend has to expand it first. Shipping "auto" straight through
-    raised WorkspaceCompatibilityError at runtime.
-    """
+    framework expands only when it builds the session itself. We build our own,
+    so the YAML has to name a concrete backend. Shipping "auto" raised
+    WorkspaceCompatibilityError at runtime."""
     pytest.importorskip("andromeda.workspace", reason="Andromeda framework not installed")
+    from andromeda.config import WorkspaceAgentConfig
     from andromeda.workspace.backends import get_backend_capabilities
 
-    from ai_doc_generator.agent_factory import _AGENT_CONFIG, _resolve_backend
-    from andromeda.config import WorkspaceAgentConfig
+    from ai_doc_generator.agent_factory import _AGENT_CONFIG
 
     config = WorkspaceAgentConfig.load_from_file(str(_AGENT_CONFIG), resolve_tools=False)
-    backend = _resolve_backend(config.workspace_backend)
-
-    assert backend != "auto"
+    assert config.workspace_backend != "auto"
     # Raises WorkspaceCompatibilityError for a name the framework does not know.
-    assert get_backend_capabilities(backend).supports_file_tools
+    assert get_backend_capabilities(config.workspace_backend).supports_file_tools
 
 
 def test_claim_id_is_found_in_free_text():
-    from app import extract_claim_id
+    from claim_context import extract_claim_id
 
     assert extract_claim_id("please use claim 000-00-053109 for this") == "000-00-053109"
     assert extract_claim_id("cc:12345 needs a police report") == "cc:12345"

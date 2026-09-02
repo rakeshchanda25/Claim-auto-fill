@@ -18,12 +18,15 @@ model:
     temperature: 0.3
     timeout: 120
 
-# "auto" = the bubblewrap sandbox for real isolation where the host supports it
-# (Linux), falling back to ephemeral_fs elsewhere, so the same config works on a
-# developer's Mac/Windows machine and on the deployed Linux box.
-# agent_factory._resolve_backend turns this into a concrete backend name -
-# WorkspaceSession.create does not accept "auto" itself.
-workspace_backend: auto
+# A concrete backend name. "auto" is NOT valid here: it is a config-level
+# default the framework expands only when it builds the session itself, and we
+# build our own (to seed skills/ into the sandbox), so it would reach
+# WorkspaceSession.create unexpanded and raise WorkspaceCompatibilityError.
+#
+# ephemeral_fs = managed local workspace, no isolation. Works on every host.
+# Switch to bubblewrap_process for real process isolation on a Linux host that
+# has bubblewrap installed.
+workspace_backend: ephemeral_fs
 skill_sources:
   - /skills
 skills_backend: filesystem

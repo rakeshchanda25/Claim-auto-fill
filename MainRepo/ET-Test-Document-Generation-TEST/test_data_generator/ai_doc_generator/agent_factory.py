@@ -20,27 +20,6 @@ _PROJECT_ROOT = Path(__file__).parent.parent
 _AGENT_CONFIG = _PROJECT_ROOT / ".andromeda" / "agents" / "doc-generator.yaml"
 
 
-def _resolve_backend(backend: str) -> str:
-    """Turns the config's "auto" into a concrete backend name.
-
-    WorkspaceSession.create only accepts real backend names - "auto" is a
-    WorkspaceAgentConfig-level default that the framework expands only when it
-    creates the session itself. We pass our own session (to seed skills/ into
-    the sandbox), so we have to expand it here, using the same rule the
-    framework uses: the bubblewrap sandbox when the host can run it, otherwise
-    the unisolated local workspace.
-    """
-    if backend != "auto":
-        return backend
-
-    from andromeda.workspace import check_provider_availability
-
-    if check_provider_availability("bubblewrap_process").available:
-        return "bubblewrap_process"
-    logger.info("bubblewrap unavailable on this host - using ephemeral_fs (no isolation)")
-    return "ephemeral_fs"
-
-
 @dataclass(frozen=True)
 class ScopedDirectorySeed:
     """Seeds only selected subdirectories into the sandbox rather than the whole
@@ -93,7 +72,7 @@ def create_agent():
     config = WorkspaceAgentConfig.load_from_file(str(_AGENT_CONFIG), resolve_tools=False)
     config.tools = tool_objects
 
-    backend = _resolve_backend(config.workspace_backend)
+    backend = config.workspace_backend
 
     policy = WorkspacePolicy(
         read_only=False,

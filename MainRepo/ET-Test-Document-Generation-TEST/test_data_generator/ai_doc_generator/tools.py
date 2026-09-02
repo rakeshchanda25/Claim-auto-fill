@@ -20,7 +20,7 @@ from faker import Faker
 
 from renderers import render_html_to_pdf
 from renderers.docx_parser import extract_docx_layout
-from renderers.synthetic_data import build_synthetic_data, resolve_doc_type
+from renderers.synthetic_data import _parse_anchor_date, build_synthetic_data, resolve_doc_type
 
 from .registry import PACKET_REGISTRY
 
@@ -145,71 +145,121 @@ def _overlay(dst: dict, src: dict, path: str = "", unmapped: list | None = None)
     return unmapped
 
 
-# The same "who / where / when" concept is named differently by each document
-# type: a medical form's patient_name is a demand letter's claimant_name is a
-# complaint's plaintiff_name is an auto report's insured_name. A plain key-match
-# overlay only reaches whichever type happens to use the matching name, which is
-# why a packet's own documents could disagree with each other about who the
-# claimant was - even with no external claim data involved at all.
+# Documents describing ONE claim name the same thing differently: a medical
+# form's patient_name is a complaint's plaintiff_name; a police report's
+# incident_date is an auto report's accident_date is a property notice's
+# loss_date. A plain key-match overlay only reaches whichever document happens
+# to use the matching name, which is why a packet's own documents could
+# disagree with each other - even with no external claim data involved.
 #
-# This is every field synthetic_data.py derives from the claimant. Two of them
-# are nested rather than top-level and are handled separately in _apply_name.
-# Keep this in step with synthetic_data.py: a field missing here is a field that
-# silently keeps its generated name while the rest of the document changes.
-_NAME_FIELDS = (
-    "patient_name", "insured_name", "claimant_name", "plaintiff_name", "driver_name",
-    "subscriber_name", "benefit_patient_name", "customer_name", "contact_person",
-)
-_LOCATION_FIELDS = ("location", "accident_location", "loss_location")
-_DATE_FIELDS = ("incident_date",)
+# So syncing works by CONCEPT, not by field name. Keep this in step with
+# renderers/synthetic_data.py: a field missing here silently keeps its
+# generated value while the rest of the packet moves.
+_ALIASES = {
+    "claimant": ("patient_name", "insured_name", "claimant_name", "plaintiff_name",
+                 "driver_name", "subscriber_name", "benefit_patient_name",
+                 "customer_name", "contact_person"),
+    "location": ("location", "accident_location", "loss_location"),
+    "incident_date": ("incident_date", "accident_date", "loss_date"),
+    "dob": ("dob", "insured_dob"),
+    "member_id": ("insurance_id", "insured_id"),
+    "group_no": ("group_number", "insurance_group_no"),
+    "physician": ("physician_name", "attending_physician_name",
+                  "operating_physician_name", "prescriber_name"),
+    "facility": ("hospital", "pay_to_name", "billing_provider_name"),
+    "insurer": ("insurer_name", "payer_name"),
+    "admission_date": ("date_of_admission", "admission_date"),
+    "discharge_date": ("date_of_discharge", "discharge_date"),
+}
 
-# Fields a packet's components must agree on, where they share the name.
+# provider_name cannot live in a group above: on an EOB it is the treating
+# clinician ("Dr. Mary Carlson"), on a UB-04 it is the facility ("Memorial
+# Health System"). Syncing it blindly would put a doctor's name in a hospital
+# field. These map one field to one concept, for one document type only.
+_PER_DOC_ALIASES = {
+    "eob-explanation": {"provider_name": "physician"},
+    "ub-04": {"provider_name": "facility"},
+}
+
+# Identical field names that must agree across a packet. Concept aliases above
+# handle the rest.
 _PACKET_SHARED_FIELDS = (
-    "patient_name", "dob", "gender", "address", "phone", "mrn",
-    "insurance_id", "group_number",
-    "physician_name", "npi", "specialty", "dea", "hospital",
-    "insurer_name", "claim_number", "policy_number",
+    "gender", "address", "phone", "mrn", "npi", "specialty", "dea",
+    "claim_number", "policy_number",
     "dos", "dos_from", "dos_to", "service_date",
 )
 
+# Claim values that are dates. Guidewire returns ISO timestamps
+# ("2026-08-01T04:01:00.000Z"); these documents render MM/DD/YYYY, so applying
+# the raw value would print a timestamp on the page.
+_CLAIM_DATE_FIELDS = ("loss_date", "reported_date", "policy_effective_date",
+                      "policy_expiration_date")
 
-def _apply_name(data: dict, name: str) -> None:
-    """Applies `name` to whichever field this document type actually uses for
-    the claimant, including the two that are nested rather than top-level."""
-    for f in _NAME_FIELDS:
+
+def _alias_fields(doc_type: str | None, concept: str) -> list[str]:
+    """Every field name this document uses for `concept`. A name that is not a
+    registered concept stands for itself, so _PACKET_SHARED_FIELDS (plain field
+    names that must simply match) flows through the same path."""
+    fields = list(_ALIASES.get(concept, ()))
+    for field_name, mapped in _PER_DOC_ALIASES.get(doc_type or "", {}).items():
+        if mapped == concept:
+            fields.append(field_name)
+    return fields or [concept]
+
+
+def _apply_concept(data: dict, doc_type: str | None, concept: str, value) -> None:
+    """Writes one concept's value onto every field this document uses for it."""
+    if value is None:
+        return
+    for f in _alias_fields(doc_type, concept):
         if f in data:
-            data[f] = name
+            data[f] = value
+    if concept != "claimant":
+        return
     # police-report: parties_involved[0] is always the reporting/non-at-fault
     # party. The other party stays independently generated - claim data
     # describes the insured, not whoever they collided with.
     parties = data.get("parties_involved")
     if isinstance(parties, list) and parties:
-        parties[0]["name"] = name
+        parties[0]["name"] = value
     # auto-accident-report's "STATE EMPLOYEE" block - the insured driver, as
     # distinct from vehicle2's driver. Nested, so the loop above never saw it.
     employee = data.get("employee")
     if isinstance(employee, dict):
-        employee["name"] = name
+        employee["name"] = value
 
 
-def _apply_location(data: dict, location: str) -> None:
-    for f in _LOCATION_FIELDS:
-        if f in data:
-            data[f] = location
+def _read_concept(data: dict, doc_type: str | None, concept: str):
+    """The value this document already holds for a concept, if any."""
+    for f in _alias_fields(doc_type, concept):
+        if data.get(f):
+            return data[f]
+    return None
 
 
-def _apply_claim_facts(data: dict, custom_fields: dict) -> None:
-    """Applies claim facts to one document: a literal field overlay plus name
-    and location aliasing. Deliberately narrow - only fields the document
-    genuinely has are touched, and no summary prose is added anywhere.
+def _normalize_claim_dates(fields: dict) -> dict:
+    """Reformats claim date values to the MM/DD/YYYY these documents render."""
+    out = dict(fields)
+    for key in _CLAIM_DATE_FIELDS:
+        parsed = _parse_anchor_date(out.get(key))
+        if parsed:
+            out[key] = parsed.strftime("%m/%d/%Y")
+    return out
+
+
+def _apply_claim_facts(data: dict, doc_type: str, custom_fields: dict) -> None:
+    """Applies claim facts to one document: a literal field overlay plus concept
+    aliasing, so a value lands on whatever this document type calls it.
+    Deliberately narrow - only fields the document genuinely has are touched,
+    and no summary prose is added anywhere.
     """
     if not custom_fields:
         return
-    _overlay(data, custom_fields)
-    if custom_fields.get("insured_name"):
-        _apply_name(data, custom_fields["insured_name"])
-    if custom_fields.get("loss_location"):
-        _apply_location(data, custom_fields["loss_location"])
+    fields = _normalize_claim_dates(custom_fields)
+    _overlay(data, fields)
+    _apply_concept(data, doc_type, "claimant", fields.get("insured_name"))
+    _apply_concept(data, doc_type, "location", fields.get("loss_location"))
+    _apply_concept(data, doc_type, "incident_date", fields.get("loss_date"))
 
 
 # Which claim-document categories are worth attaching to which document type.
@@ -235,22 +285,15 @@ _RELEVANT_EXCERPTS = {
 
 def _sync_component(data: dict, doc_type: str, shared: dict, custom_fields: dict,
                     claim_description: str | None, excerpts: list | None) -> None:
-    """Applies the packet's one shared identity/location/date to a component,
-    plus any narrative material relevant to this component's type.
+    """Makes one packet component agree with the rest of the packet.
 
-    `shared` carries name/location/incident_date, which come from the claim when
-    there is one and otherwise from the first component's own generated values -
-    so a packet with no external data still agrees with itself.
+    `shared` is concept -> value (see _ALIASES). Values come from the claim when
+    there is one and otherwise from whichever component first produced them, so
+    a packet with no external data still agrees with itself.
     """
-    _overlay(data, custom_fields)
-    if shared.get("name"):
-        _apply_name(data, shared["name"])
-    if shared.get("location"):
-        _apply_location(data, shared["location"])
-    if shared.get("incident_date"):
-        for f in _DATE_FIELDS:
-            if f in data:
-                data[f] = shared["incident_date"]
+    _apply_claim_facts(data, doc_type, custom_fields)
+    for concept, value in shared.items():
+        _apply_concept(data, doc_type, concept, value)
 
     # scenario_facts is the one place every document type already has for extra
     # detail. Types without it get nothing rather than growing a new section.
@@ -269,6 +312,24 @@ def _sync_component(data: dict, doc_type: str, shared: dict, custom_fields: dict
         data["scenario_facts"] = data["scenario_facts"] + extra
         if not data.get("scenario_facts_title"):
             data["scenario_facts_title"] = "Claim File Details"
+
+
+def _seed_shared(shared: dict, data: dict, doc_type: str) -> None:
+    """Records any concept this component supplies that the packet has not
+    pinned down yet, so a later component inherits it.
+
+    Accumulating across components (rather than reading only the first) matters
+    because no single document carries every concept: the first component may
+    have no physician, and the third one would otherwise invent its own.
+    """
+    for concept in _ALIASES:
+        if not shared.get(concept):
+            value = _read_concept(data, doc_type, concept)
+            if value:
+                shared[concept] = value
+    for field_name in _PACKET_SHARED_FIELDS:
+        if not shared.get(field_name) and data.get(field_name):
+            shared[field_name] = data[field_name]
 
 
 def _merged_fields(custom_fields: dict | None) -> dict:
@@ -318,7 +379,7 @@ def generate_synthetic_data(doc_type: str, scenario: str = "general", seed: int 
         Faker.seed(seed)
         random.seed(seed)
     data = build_synthetic_data(doc_type, scenario, anchor_date=anchor_date or current_run().anchor_date)
-    _apply_claim_facts(data, _merged_fields(custom_fields))
+    _apply_claim_facts(data, resolve_doc_type(doc_type), _merged_fields(custom_fields))
     return _stage_doc_data(data, doc_type, scenario)
 
 
@@ -338,9 +399,10 @@ def recreate_document_data(doc_type: str, scenario: str, carried_values: dict,
 
     Returns a field summary plus carried and unmapped key counts.
     """
-    data = build_synthetic_data(resolve_doc_type(doc_type), scenario,
+    resolved = resolve_doc_type(doc_type)
+    data = build_synthetic_data(resolved, scenario,
                                 anchor_date=anchor_date or current_run().anchor_date)
-    _apply_claim_facts(data, _merged_fields(custom_fields))
+    _apply_claim_facts(data, resolved, _merged_fields(custom_fields))
     unmapped = _overlay(data, carried_values or {})
 
     # Counted by top-level key: `unmapped` may hold nested paths ("address.street"),
@@ -494,48 +556,56 @@ def build_packet(packet_name: str, scenario: str = "general", seed: int = None,
     excerpts = fields.pop("_document_excerpts", None)
     anchor_date = fields.get("loss_date") or current_run().anchor_date
 
+    # Claim values pin their concepts up front, so they win over anything a
+    # component generates. Everything the claim does not cover is filled in by
+    # the first component that produces it (see _seed_shared).
+    claim_fields = _normalize_claim_dates(fields)
+    shared: dict = {}
+    for concept, key in (("claimant", "insured_name"), ("location", "loss_location"),
+                         ("incident_date", "loss_date"), ("insurer", "insurer_name")):
+        if claim_fields.get(key):
+            shared[concept] = claim_fields[key]
+
     components = sorted(spec["components"], key=lambda c: c["order"])
-    first = build_synthetic_data(components[0]["doc_type"], scenario, anchor_date=anchor_date)
-
-    # Identity falls back to the first component's own generated values, so a
-    # packet with no claim data still agrees with itself across documents.
-    shared_identity = {
-        "name": fields.get("insured_name") or first.get("patient_name"),
-        "location": fields.get("loss_location") or first.get("location") or first.get("accident_location"),
-        "incident_date": fields.get("incident_date") or first.get("incident_date") or first.get("dos"),
-    }
-
     plan = []
-    shared = None
     for comp in components:
-        if comp is components[0]:
-            data = first
-        else:
-            data = build_synthetic_data(comp["doc_type"], scenario, anchor_date=anchor_date)
-            _overlay(data, shared)
-        _sync_component(data, comp["doc_type"], shared_identity, fields, claim_description, excerpts)
-        if shared is None:
-            # Captured after the first component is synced, so the shared values
-            # already reflect the claim data rather than the raw generated ones.
-            shared = {k: first[k] for k in _PACKET_SHARED_FIELDS if k in first}
+        doc_type = comp["doc_type"]
+        data = build_synthetic_data(doc_type, scenario, anchor_date=anchor_date)
+        # Sync first so this component adopts what the packet already agreed,
+        # then seed so whatever it uniquely contributes is available to the rest.
+        _sync_component(data, doc_type, shared, fields, claim_description, excerpts)
+        _seed_shared(shared, data, doc_type)
         plan.append({
             "label": comp["label"],
-            "doc_type": comp["doc_type"],
-            "template_name": comp["doc_type"].replace("-", "_"),
+            "doc_type": doc_type,
+            "template_name": doc_type.replace("-", "_"),
             "data": data,
         })
+
+    # A concept only discovered on a later component (a physician the first
+    # document does not name) has to be pushed back over the earlier ones, or
+    # the packet still disagrees with itself.
+    for entry in plan:
+        _sync_component(entry["data"], entry["doc_type"], shared, fields,
+                        claim_description, excerpts=None)
 
     current_run().packet_plan = plan
     logger.info(
         f"packet {packet_name}/{scenario!r}: {len(plan)} component(s) sharing "
-        f"claimant={shared_identity['name']!r} claim={shared.get('claim_number')!r}"
+        f"claimant={shared.get('claimant')!r} claim={shared.get('claim_number')!r} "
+        f"incident={shared.get('incident_date')!r}"
     )
     return {
         "packet": packet_name,
         "scenario": scenario,
         "component_count": len(plan),
         "components": [{k: c[k] for k in ("label", "doc_type", "template_name")} for c in plan],
-        "shared_identity": {**shared_identity, "claim_number": shared.get("claim_number")},
+        "shared_identity": {
+            "name": shared.get("claimant"),
+            "location": shared.get("location"),
+            "incident_date": shared.get("incident_date"),
+            "claim_number": shared.get("claim_number"),
+        },
     }
 
 

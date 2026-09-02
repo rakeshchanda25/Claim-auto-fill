@@ -1,7 +1,6 @@
 import io
 import json
 import logging
-import re
 import zipfile
 from pathlib import Path
 from typing import List, Optional
@@ -16,7 +15,8 @@ from starlette.concurrency import run_in_threadpool
 from ai_doc_generator.config import GenerationRequest
 from ai_doc_generator.prompt_builder import build_generation_prompt
 from ai_doc_generator.registry import DOC_TYPES, PACKET_REGISTRY, SCENARIO_REGISTRY
-from guidewire import ClaimContext, GuidewireClient
+from claim_context import claim_narrative, claim_to_fields, extract_claim_id, fetch_claim_context
+from guidewire import GuidewireClient
 from pdf_manager import combine_pdfs, replace_text_in_pdf
 from scanner_simulator import simulate_scan
 
@@ -149,78 +149,12 @@ async def api_combine(
 
 
 # ============================================================================
-# Guidewire claim lookup
+# AI document generation
 #
 # A claim number typed into the free-text input pulls live claim data, which is
 # merged into custom_fields and applied ahead of any generated value. A lookup
 # failure is logged and generation continues with synthetic data only - real
-# claim data is an enrichment, never a requirement.
-# ============================================================================
-
-# Checked in this order so an explicit public ID or a labelled "claim id: X" is
-# never shadowed by some other run of digits in the text. The bare pattern is
-# the shape Guidewire's own claim numbers use, e.g. 000-00-053109.
-_CLAIM_PATTERNS = (
-    re.compile(r"\bcc:[A-Za-z0-9_-]+\b"),
-    re.compile(r"claim\s*(?:id|number|#)?\s*[:\-]?\s*([A-Za-z0-9][A-Za-z0-9:_\-]{4,})", re.IGNORECASE),
-    re.compile(r"\b\d{3}-\d{2}-\d{6}\b"),
-)
-
-
-def extract_claim_id(text: str) -> Optional[str]:
-    """Best-effort claim ID or number pulled out of free-form user text."""
-    for pattern in _CLAIM_PATTERNS:
-        if m := pattern.search(text or ""):
-            return (m.group(1) if m.groups() else m.group(0)).strip().rstrip(".,;")
-    return None
-
-
-def claim_to_fields(claim: ClaimContext) -> dict:
-    """Maps a claim onto the field names these documents actually use, so each
-    value lands on the field it belongs to. Empty values are dropped so they
-    fall through to generated data rather than blanking a field."""
-    fields = {
-        "claim_number": claim.details.get("claim_number"),
-        "policy_number": claim.details.get("policy_number") or claim.policy.get("policy_number"),
-        "claim_status": claim.details.get("status"),
-        "loss_type": claim.details.get("loss_type"),
-        "loss_cause": claim.details.get("loss_cause"),
-        "loss_date": claim.details.get("loss_date"),
-        "reported_date": claim.details.get("reported_date"),
-        "insured_name": claim.details.get("insured"),
-        "reporter_name": claim.details.get("reporter"),
-        "main_contact": claim.details.get("main_contact"),
-        "adjuster_name": claim.details.get("assigned_adjuster"),
-        "how_reported": claim.details.get("how_reported"),
-        "jurisdiction": claim.details.get("jurisdiction"),
-        "line_of_business": claim.details.get("line_of_business"),
-        "loss_location": claim.details.get("loss_location"),
-        "policy_address": claim.details.get("policy_address"),
-        "policy_type": claim.policy.get("policy_type"),
-        "policy_currency": claim.policy.get("currency"),
-        "policy_effective_date": claim.policy.get("policy_effective_date"),
-        "policy_expiration_date": claim.policy.get("policy_expiration_date"),
-        # The producing agent - carried only by the role-tagged contacts list.
-        # Maps onto ACORD-25's producer_name, the one field it applies to.
-        "producer_name": claim.contact_name("Agent"),
-    }
-    return {k: v for k, v in fields.items() if v not in (None, "")}
-
-
-def claim_narrative(claim: ClaimContext) -> str:
-    """The claim's prose - the adjuster's description and excerpts from attached
-    documents - as free text for the model to apply with its own judgment."""
-    lines = []
-    if claim.description:
-        lines.append(f"Adjuster's claim description: {claim.description}")
-    if claim.excerpts:
-        lines.append("Excerpts from documents already attached to this claim:")
-        lines += [f'- [{e["category"]}] {e["source"]}: "{e["text"]}"' for e in claim.excerpts]
-    return "\n".join(lines)
-
-
-# ============================================================================
-# AI document generation
+# claim data is an enrichment, never a requirement. See claim_context.py.
 # ============================================================================
 
 @app.post("/api/ai-generate")
@@ -249,7 +183,7 @@ async def ai_generate_document(
     if claim_id := extract_claim_id(user_input):
         logger.info(f"looking up claim {claim_id!r} in Guidewire")
         try:
-            claim = await run_in_threadpool(_guidewire.fetch_claim_context, claim_id)
+            claim = await run_in_threadpool(fetch_claim_context, _guidewire, claim_id)
             # User-supplied fields still win over the claim's.
             fields = {**claim_to_fields(claim), **fields}
 
