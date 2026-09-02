@@ -82,7 +82,10 @@ def current_run() -> RunContext:
 # Logging
 # ---------------------------------------------------------------------------
 
-def _summarize(value, maxlen: int = 120) -> str:
+_MAX_LOG_CHARS = 120
+
+
+def _summarize(value) -> str:
     """Log-safe representation - never dumps document bytes or a whole dict."""
     if isinstance(value, bytes):
         return f"<bytes: {len(value)}>"
@@ -91,7 +94,9 @@ def _summarize(value, maxlen: int = 120) -> str:
     if isinstance(value, (list, tuple)):
         return f"<{type(value).__name__}: {len(value)} items>"
     r = repr(value)
-    return r if len(r) <= maxlen else r[:maxlen] + f"...<+{len(r) - maxlen} chars>"
+    if len(r) <= _MAX_LOG_CHARS:
+        return r
+    return r[:_MAX_LOG_CHARS] + f"...<+{len(r) - _MAX_LOG_CHARS} chars>"
 
 
 def _logged(func):

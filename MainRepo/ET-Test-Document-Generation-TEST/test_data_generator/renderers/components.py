@@ -1,26 +1,17 @@
-"""Document-component composition registry.
+"""Which sections each document is assembled from.
 
-Each doc type's template used to be one fixed structure that every scenario's data got
-poured into - the DESIGN (typography, layout conventions, page chrome) and the STRUCTURE
-(which sections exist) were the same thing, so a scenario that genuinely needed a different
-shape (police-report serving both real auto-collision reports and property-incident
-reports) got forced into a template that couldn't represent it - e.g. a fire-damage report
-showing empty "Driver 1 / Driver 2" vehicle tables.
+A template holds the DESIGN (typography, page chrome) and a set of named Jinja macros. This
+registry holds the STRUCTURE: for a given (doc_type, scenario), which macros are called and
+in what order. Keeping them apart is what lets one police-report template serve both an auto
+collision and a fire - previously a fire-damage report rendered empty "Driver 1 / Driver 2"
+vehicle tables, because structure and design were the same fixed thing.
 
-This module is the split: each template is decomposed into named Jinja macros ("components"),
-and COMPONENT_COMPOSITION says, for a given (doc_type, scenario), which components are
-assembled and in what order. The template's CSS/typography/page chrome never changes - only
-which macros get called does. Templates read this via the `components` list synthetic_data.py
-puts in the data dict; see renderers/templates/police_report.html for the reference
-implementation (the doc type this was built for - the only one with two genuinely different
-document shapes today, auto-collision vs. property-incident).
+Templates read the resulting list from the `components` key synthetic_data.py puts in the
+data dict. See renderers/templates/police_report.html for the reference implementation.
 
-For doc types whose real-world document shape does NOT vary by scenario (a legal complaint,
-a federal claim form, a SOAP note keep the same sections regardless of injury/drug type),
-every scenario intentionally resolves to the SAME component list - the mechanism still
-applies uniformly (every template is decomposed into macros, every doc type is registered
-here), it's just not exercised to produce different shapes for those doc types, because their
-real-world documents don't.
+Only police-report's structure actually varies by scenario; a legal complaint, a federal
+claim form and a SOAP note keep the same sections whatever the scenario, so they register a
+single "general" list. get_components falls back to "general" for any scenario not named.
 """
 
 from __future__ import annotations
@@ -100,9 +91,6 @@ _UB_04_ALL = [
 # do with this doc type at all - see the police-report/collision_type bug this session).
 COMPONENT_COMPOSITION: dict[str, dict[str, list[str]]] = {
     "police-report": {
-        "rear_end_collision": _POLICE_REPORT_AUTO,
-        "intersection_accident": _POLICE_REPORT_AUTO,
-        "hit_and_run": _POLICE_REPORT_AUTO,
         "fire_damage": _POLICE_REPORT_PROPERTY,
         "water_damage": _POLICE_REPORT_PROPERTY,
         "theft": _POLICE_REPORT_PROPERTY,
@@ -110,38 +98,16 @@ COMPONENT_COMPOSITION: dict[str, dict[str, list[str]]] = {
         "general": _POLICE_REPORT_AUTO,
     },
     "acord-25": {"general": _ACORD_25_ALL},
-    "auto-accident-report": {
-        "rear_end_collision": _AUTO_ACCIDENT_REPORT_ALL,
-        "intersection_accident": _AUTO_ACCIDENT_REPORT_ALL,
-        "hit_and_run": _AUTO_ACCIDENT_REPORT_ALL,
-        "general": _AUTO_ACCIDENT_REPORT_ALL,
-    },
+    "auto-accident-report": {"general": _AUTO_ACCIDENT_REPORT_ALL},
     "cms-1500": {"general": _CMS_1500_ALL},
-    "demand-letter": {
-        "slip_and_fall": _DEMAND_LETTER_ALL,
-        "medical_malpractice": _DEMAND_LETTER_ALL,
-        "product_liability": _DEMAND_LETTER_ALL,
-        "general": _DEMAND_LETTER_ALL,
-    },
-    "discharge-summary": {
-        "hospital_admission": _DISCHARGE_SUMMARY_ALL,
-        "surgery": _DISCHARGE_SUMMARY_ALL,
-        "emergency_visit": _DISCHARGE_SUMMARY_ALL,
-        "outpatient_procedure": _DISCHARGE_SUMMARY_ALL,
-        "general": _DISCHARGE_SUMMARY_ALL,
-    },
+    "demand-letter": {"general": _DEMAND_LETTER_ALL},
+    "discharge-summary": {"general": _DISCHARGE_SUMMARY_ALL},
     "eob-explanation": {"general": _EOB_EXPLANATION_ALL},
     "litigation-document": {"general": _LITIGATION_DOCUMENT_ALL},
     "medical-bill": {"general": _MEDICAL_BILL_ALL},
     "medical-record": {"general": _MEDICAL_RECORD_ALL},
     "pharmacy-invoice": {"general": _PHARMACY_INVOICE_ALL},
-    "property-loss-notice": {
-        "fire_damage": _PROPERTY_LOSS_NOTICE_ALL,
-        "water_damage": _PROPERTY_LOSS_NOTICE_ALL,
-        "theft": _PROPERTY_LOSS_NOTICE_ALL,
-        "wind_damage": _PROPERTY_LOSS_NOTICE_ALL,
-        "general": _PROPERTY_LOSS_NOTICE_ALL,
-    },
+    "property-loss-notice": {"general": _PROPERTY_LOSS_NOTICE_ALL},
     "ub-04": {"general": _UB_04_ALL},
 }
 

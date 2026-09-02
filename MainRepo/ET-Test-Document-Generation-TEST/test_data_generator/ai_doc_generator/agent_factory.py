@@ -27,19 +27,14 @@ class ScopedDirectorySeed:
 
     source_dir: str
     subpaths: tuple[str, ...]
-    target_path: str = "/"
 
     def apply(self, root, policy) -> None:
         from andromeda.workspace import DirectorySeed
 
-        base = Path(self.source_dir)
-        base_target = self.target_path.strip("/")
         for sub in self.subpaths:
-            src = base / sub
-            if not src.is_dir():
-                continue
-            target = f"{base_target}/{sub}" if base_target else sub
-            DirectorySeed(source_dir=str(src), target_path=target).apply(root, policy)
+            src = Path(self.source_dir) / sub
+            if src.is_dir():
+                DirectorySeed(source_dir=str(src), target_path=sub).apply(root, policy)
 
 
 def create_agent():
