@@ -1,13 +1,3 @@
-"""What this generator can produce: document types, packets, and scenarios.
-
-Adding a document type means adding it here, a template in renderers/templates/,
-a data branch in renderers/synthetic_data.py, a component list in
-renderers/components.py, a required-field list in ai_doc_generator/tools.py, and
-a skill under skills/. This registry is what the frontend reads.
-"""
-
-# id -> what the UI shows. `id` is also the template name (with - as _), the
-# skill directory name, and the key used everywhere else.
 DOC_TYPES = [
     {"id": "medical-record",       "label": "Medical Record",       "icon": "🏥", "category": "Clinical"},
     {"id": "medical-bill",         "label": "Medical Bill",         "icon": "💊", "category": "Billing"},

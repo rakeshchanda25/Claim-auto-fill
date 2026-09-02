@@ -1,6 +1,3 @@
-"""Entry point. Runs app.py with this directory as the working directory so its
-relative paths resolve no matter where the script is invoked from."""
-
 import os
 
 import uvicorn

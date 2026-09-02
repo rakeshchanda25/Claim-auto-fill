@@ -38,13 +38,7 @@ _NDC_DRUGS = [
     ("Hydrocodone 5mg/Acetaminophen 325mg", "00406-0512-01", "tablet"),
 ]
 
-# Real insurance limits cluster on round, standard tiers - the realism is in
-# varying WHICH tier lands on a given certificate, not in avoiding round
-# numbers altogether. Each GL tier keeps its own sub-limits internally
-# consistent (aggregate tracks occurrence, products-comp/op agg = general
-# aggregate), matching how these are actually sold as a package.
 _GL_LIMIT_TIERS = [
-    # (each_occurrence, damage_rented_premises, med_exp, personal_adv_injury, general_aggregate, products_comp_op_agg)
     (500_000, 100_000, 5_000, 500_000, 1_000_000, 1_000_000),
     (1_000_000, 100_000, 5_000, 1_000_000, 2_000_000, 2_000_000),
     (1_000_000, 300_000, 10_000, 1_000_000, 2_000_000, 2_000_000),
@@ -53,7 +47,6 @@ _GL_LIMIT_TIERS = [
 _AUTO_CSL_TIERS = [500_000, 1_000_000, 2_000_000]
 _UMBRELLA_TIERS = [1_000_000, 2_000_000, 5_000_000, 10_000_000]
 _WC_EL_TIERS = [
-    # (each_accident, disease_ea_employee, disease_policy_limit)
     (100_000, 500_000, 500_000),
     (500_000, 500_000, 500_000),
     (1_000_000, 1_000_000, 1_000_000),
@@ -72,8 +65,6 @@ _TENS = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eigh
 
 
 def _int_to_words(n: int) -> str:
-    """Plain English integer-to-words, Indian digit grouping (Lakh/Crore) - GST invoices
-    print amounts in this grouping, not the Western thousand/million one."""
     if n == 0:
         return "Zero"
 
@@ -115,8 +106,6 @@ def _amount_in_words(amount: float, unit: str = "Rupees") -> str:
 
 
 def _gstin() -> str:
-    """Synthetic 15-char GSTIN shape (2-digit state code + 10-char PAN-like + entity + Z +
-    checksum) - plausible-looking, not a real checksum-valid number."""
     state_code = f"{random.randint(1, 37):02d}"
     pan = "".join(random.choices(string.ascii_uppercase, k=5)) + "".join(random.choices(string.digits, k=4)) + random.choice(string.ascii_uppercase)
     return f"{state_code}{pan}1Z{random.choice(string.digits + string.ascii_uppercase)}"
@@ -128,14 +117,6 @@ def _rand_date_recent(years_back=2) -> date:
 
 
 def _parse_anchor_date(value) -> date | None:
-    """Parses an external authoritative date (Guidewire's loss_date, e.g.
-    "2026-08-01T04:01:00.000Z") into the `date` build_synthetic_data anchors
-    every other date field to. Accepts a few shapes since this can come from
-    a live API (ISO datetime), a hand-typed custom_fields value (MM/DD/YYYY),
-    or already be a date/datetime object. Returns None (falls back to
-    _rand_date_recent()) rather than raising on anything unparseable - a
-    malformed anchor should degrade to today's normal random-date behavior,
-    not break generation."""
     if value is None:
         return None
     if isinstance(value, datetime):
@@ -158,13 +139,6 @@ def _parse_anchor_date(value) -> date | None:
 
 
 def _mark(is_checked: bool) -> str:
-    """Checkbox glyph for a data-driven form checkbox. Templates for the
-    standardized forms (acord-25, cms-1500, ub-04) may never branch on a
-    data value themselves (see the maintainer note atop cms_1500.html) - the
-    placeholder-then-substitute render pass would see a placeholder string,
-    not the real value, so any {% if %} there would always take the same
-    branch. Deciding which box is ticked has to happen here instead, then
-    the template just plain-substitutes the glyph like any other field."""
     return "☑" if is_checked else "☐"
 
 
@@ -347,15 +321,6 @@ _CLINICAL_NOTE_TEXT = {
 
 
 def _clinical_note_fields(scenario: str = "general", icd_codes=None) -> dict:
-    """Chief complaint / HPI / vitals / exam / assessment / plan - the encounter-note fields
-    shared by medical-record and medical-bill (the latter is a "superbill", the common
-    real-world combined clinical-note-plus-itemized-charges document).
-
-    chief_complaint/hpi/physical_exam/plan used to be pure Faker Lorem-Ipsum-style text
-    regardless of scenario - _CLINICAL_NOTE_TEXT covers all 13 scenario names this doc-type
-    family can be called with (see PACKET_REGISTRY - it's reused by every packet), same
-    coverage as _medical_scenario_facts(). An unrecognised scenario (e.g. "general") falls
-    back to generic-but-real prose rather than Faker gibberish."""
     diag = icd_codes[0][1] if icd_codes else "the presenting condition"
     entry = _CLINICAL_NOTE_TEXT.get(scenario)
     if entry:
@@ -385,20 +350,6 @@ def _clinical_note_fields(scenario: str = "general", icd_codes=None) -> dict:
         "plan": plan,
     }
 
-
-# --- scenario-driven structural facts ---------------------------------
-# Several doc types register 3-4 scenarios that used to render through the
-# exact same template with only cosmetic value differences (a fire, a flood,
-# and a theft all produced the identical "Loss Information" box, just with a
-# different `cause_of_loss` string) - the scenario name never changed the
-# document's STRUCTURE. Each function below returns (section_title, facts)
-# for one doc-type family; the template renders whatever it gets back
-# generically (one heading + a label/value loop), so it never needs to know
-# the scenario names or grow a new {% if %} branch. Adding a scenario to an
-# EXISTING family, or a whole new family, is a Python-only change - add one
-# branch here, nothing in the .html ever changes. An unrecognised scenario
-# (e.g. "general") returns ("", []), which the template's own {% if
-# scenario_facts %} guard turns into "section omitted", not a blank box.
 
 def _property_scenario_facts(scenario: str) -> tuple[str, list[dict]]:
     if scenario == "fire_damage":
@@ -461,12 +412,6 @@ def _auto_scenario_facts(scenario: str) -> tuple[str, list[dict]]:
 
 
 def _medical_scenario_facts(scenario: str) -> tuple[str, list[dict]]:
-    # Shared across every medical-family doc type (medical-record, medical-bill,
-    # discharge-summary, cms-1500, ub-04). These doc types get reused across every
-    # packet (see PACKET_REGISTRY) so this covers all 13 non-property scenario
-    # names they can actually be called with, not just the 4 "medical" ones -
-    # a chart note for a slip-and-fall ER visit should read differently from
-    # one for a chronic-medication refill visit.
     if scenario == "hospital_admission":
         return "Admission Details", [
             {"label": "Admission Type", "value": random.choice(["Emergency", "Elective", "Urgent"])},
@@ -549,9 +494,6 @@ def _medical_scenario_facts(scenario: str) -> tuple[str, list[dict]]:
 
 
 def _vehicle_damage_descriptions(scenario) -> tuple[str, str]:
-    """(state vehicle's damage, other vehicle's damage) - was two independent
-    _fake.sentence() calls, so a rear_end_collision report could just as
-    easily describe front-end damage on the state vehicle as rear-end."""
     if scenario == "rear_end_collision":
         return (
             random.choice(["Rear bumper and trunk crumpled from impact.", "Rear-end damage to bumper and taillight assembly."]),
@@ -574,11 +516,6 @@ def _vehicle_damage_descriptions(scenario) -> tuple[str, str]:
 
 
 def _litigation_narrative(scenario, plaintiff_name, defendant_name, incident_date):
-    """(facts paragraph, [3 general-allegation paragraphs]) - was pure Faker
-    Lorem-Ipsum-style prose regardless of scenario, so a product_liability
-    complaint read no differently from a slip_and_fall one even though
-    causes_of_action was already anchored to the scenario. This makes the
-    prose actually recount the anchored cause."""
     if scenario == "slip_and_fall":
         facts = (
             f"On or about {incident_date}, Plaintiff {plaintiff_name} was lawfully present on premises "
@@ -639,14 +576,6 @@ def _litigation_narrative(scenario, plaintiff_name, defendant_name, incident_dat
 
 
 def _discharge_narrative(scenario: str, diag: str) -> dict:
-    """summary_of_care_plan/goals_achieved_summary/care_plan_notes/assessment_notes/
-    discharge_instructions for discharge-summary. Before this, synthetic_data.py never set
-    summary_of_care_plan or goals_achieved_summary at all - discharge_summary.html's own
-    Jinja `| default(...)` fallback then printed the SAME hardcoded pregnancy/antepartum
-    boilerplate on every single discharge summary regardless of scenario ("Antepartum
-    assessment with vital signs..."), which is the single worst instance of the static-
-    content bug: not even scenario-blind Faker filler, just literally identical text. This
-    doc type is only ever called with the 4 medical scenarios (see PACKET_REGISTRY)."""
     entries = {
         "hospital_admission": (
             f"Skilled nursing visits initiated following inpatient hospital admission for "
@@ -709,11 +638,6 @@ def _discharge_narrative(scenario: str, diag: str) -> dict:
 
 
 def _facts_line(facts: list[dict]) -> str:
-    # CMS-1500 and UB-04 are standardized federal forms with a fixed box
-    # layout - unlike the other templates, they can't grow a new section for
-    # scenario_facts without breaking that real-world layout. Their existing
-    # free-text boxes (19. Additional Claim Information / UB-04 Remarks) are
-    # the form-correct place for this, so collapse facts to one line instead.
     return "; ".join(f"{f['label']}: {f['value']}" for f in facts)
 
 
@@ -732,20 +656,6 @@ def _witness_statement(scenario, hit_and_run_flag, party2):
 
 def _police_narrative(scenario, incident_date, location, weather, road_cond, speed_limit, party1, party2,
                        collision_type, primary_factor, hit_and_run_flag, property_facts):
-    """3 narrative paragraphs + a 1-line summary. Faker filler here used to be
-    the same random Lorem-Ipsum-style sentences regardless of scenario - a
-    hit_and_run report read no differently from a rear-end one. This builds
-    the actual account from the fields already generated for this report
-    (parties, collision_type, primary_factor, weather/road conditions), so
-    the story it tells is the one collision_type/primary_factor/hit_and_run
-    already claim happened, not a disconnected paragraph of prose next to
-    them. property_facts (from _property_scenario_facts) does the same job
-    when this doc type is serving as the property-packet's Incident Report."""
-    # Two openers exist per shape so the report doesn't read identically every time -
-    # each is worded correctly for its own shape from the start (a post-hoc .replace()
-    # on a collision-worded opener only matches the ONE of the two sentences that
-    # contains that exact substring, silently leaving the other's "traffic collision"
-    # wording in a fire/water/theft/wind report - the bug this replaced).
     if property_facts:
         p1_open = random.choice([
             f"On {incident_date}, officers were dispatched to {location} in reference to a property damage incident.",
@@ -756,19 +666,6 @@ def _police_narrative(scenario, incident_date, location, weather, road_cond, spe
             f"On {incident_date}, officers were dispatched to {location} in reference to a motor vehicle collision.",
             f"Officers responded to a reported traffic collision at {location} on {incident_date}.",
         ])
-    # hit_and_run_flag is checked FIRST, before the scenario branches - it is only
-    # ~85% likely even for scenario == "hit_and_run" (see the police-report branch
-    # above), so branching on the scenario string alone would have this paragraph
-    # claim a fleeing vehicle even on the ~15% of "hit_and_run"-scenario reports
-    # where the flag actually landed False (and vice versa: any other scenario's
-    # 5% base rate can still produce a real hit-and-run that needs this account,
-    # not the generic fallback). Matches the same fix applied to collision_type/
-    # primary_factor above - both are keyed off the actual outcome, not the
-    # requested scenario name. `and not property_facts` matters too: that same 5%
-    # base rate can land True for a fire/water/theft/wind report, which has no
-    # Driver 1/Driver 2 vehicles at all - without this guard the narrative would
-    # tell a two-vehicle hit-and-run story directly contradicting the property-
-    # incident fields the rest of the document actually renders.
     if hit_and_run_flag and not property_facts:
         p1 = p1_open + (
             f" The {party1['vehicle_year']} {party1['vehicle_make']} {party1['vehicle_model']} (Driver 1, "
@@ -881,44 +778,14 @@ def _build_physician():
     }
 
 
-# A template that is a visual redesign/variant of another form reads exactly
-# the same fields as its parent, so it must resolve to the parent's data
-# contract. Without this, build_synthetic_data falls through every branch
-# below and returns only `base` - every form-specific field then renders
-# blank, which is precisely how a brand-new template silently produces an
-# empty document. Add one line here when adding a variant template file
-# (renderers/templates/<name>.html) that is NOT also registered in
-# app.py's /api/ai-doc-types - an alias with no matching .html file makes
-# generate_synthetic_data succeed while render_document_to_pdf 404s, which
-# is exactly what happened to acord-new/police-report-new/litigation-
-# document-new/ub-04-new once those variant files were merged into their
-# base templates and deleted; the (now empty) aliases below are that
-# lesson, not speculative infrastructure - keep this dict, but only ever
-# populate it alongside a real template file on disk.
 _DOC_TYPE_ALIASES: dict[str, str] = {}
 
 
 def resolve_doc_type(doc_type: str) -> str:
-    """Maps a variant template's doc_type onto the parent form whose data
-    contract it shares. Every consumer that keys off doc_type must go
-    through this, or a variant silently gets the 'unknown doc type' path."""
     return _DOC_TYPE_ALIASES.get(doc_type, doc_type)
 
 
 def build_synthetic_data(doc_type: str, scenario: str = "general", anchor_date=None) -> dict:
-    """anchor_date: an authoritative real-world date (e.g. a Guidewire claim's
-    loss_date) to build every generated date field FROM, instead of an
-    independently-random one. `dos` is the one shared variable every
-    doc-type branch below derives its dates from (dos/dos_from/dos_to/
-    service_date directly; police-report's incident_date/report_date/
-    local_report_number's embedded year, etc.) - anchoring it here, before
-    generation, is what keeps every derived date consistent with the real
-    incident date. The alternative - generating independently then
-    overlaying a real loss_date onto just the one field it maps to - is what
-    produced a report showing report_date in 2025 against an overlaid
-    incident_date of 2026: the overlay replaces one field's value, but has no
-    way to know which OTHER already-generated fields were derived from the
-    date it just replaced."""
     doc_type = resolve_doc_type(doc_type)
     patient = _build_patient()
     physician = _build_physician()
@@ -946,18 +813,10 @@ def build_synthetic_data(doc_type: str, scenario: str = "general", anchor_date=N
         "policy_number": policy_num,
         "provider_npi": _npi(),
         "scenario": scenario,
-        # which named Jinja component macros this document assembles, and in what order -
-        # see renderers/components.py. Set once here for every doc type; a doc-type branch
-        # below may still add scenario-specific DATA a component needs (e.g. police-report's
-        # property_incident component), but the composition list itself always comes from
-        # the registry, not ad-hoc per-branch logic.
         "components": get_components(doc_type, scenario),
     }
 
     if doc_type == "medical-record":
-        # medical-record is reused across every packet (medical/auto-accident/
-        # litigation/pharmacy) - see PACKET_REGISTRY - so it can be called with
-        # any of 13 different scenario names, not just the 4 "medical" ones.
         facts_title, facts = _medical_scenario_facts(scenario)
         base.update(_clinical_note_fields(scenario, icd_codes))
         base.update({
@@ -971,12 +830,6 @@ def build_synthetic_data(doc_type: str, scenario: str = "general", anchor_date=N
         })
 
     elif doc_type == "discharge-summary":
-        # Template is a home-health/skilled-nursing discharge summary (Reason for Discharge
-        # checkboxes: goals achieved / admitted to acute care / ECF-SNF / transferred /
-        # refused care / expired / other; visit counts; plan for transition) - a different
-        # document from an inpatient hospital discharge, so this branch generates that shape
-        # rather than reusing the old admission/DRG/length-of-stay fields (kept below for
-        # anything that still reads them, but nothing in the template does any more).
         admission_date = dos - timedelta(days=random.randint(1, 7))
         discharge_date = dos
         first_visit_date = admission_date + timedelta(days=random.randint(0, 1))
@@ -1000,9 +853,6 @@ def build_synthetic_data(doc_type: str, scenario: str = "general", anchor_date=N
         discharge_narrative = _discharge_narrative(scenario, discharge_diag)
 
         base.update({
-            # legacy inpatient-hospital fields - unused by the current template, kept for
-            # callers that might still reference them (validate_document_structure no longer
-            # requires these)
             "attending_physician": physician["physician_name"],
             "admission_diagnosis": icd_codes[0][1] if icd_codes else "Acute illness",
             "discharge_diagnosis": icd_codes[0][1] if icd_codes else "Resolved",
@@ -1018,7 +868,6 @@ def build_synthetic_data(doc_type: str, scenario: str = "general", anchor_date=N
             ],
             "drg_code": str(random.randint(100, 999)),
             "length_of_stay": str((discharge_date - admission_date).days),
-            # home-health discharge summary fields
             "org_name": _fake.company() + " Home Health Care",
             "document_title": "Discharge Summary",
             "patient_address": patient["address"]["street"],
@@ -1046,11 +895,6 @@ def build_synthetic_data(doc_type: str, scenario: str = "general", anchor_date=N
             "scenario_facts_title": facts_title,
             "scenario_facts": facts,
         })
-        # summary_of_care_plan/goals_achieved_summary/care_plan_notes/assessment_notes/
-        # discharge_instructions: only set for the 4 registered scenarios (see
-        # _discharge_narrative) - anything else leaves these keys unset, so the
-        # template's own `| default(...)` fallback text applies (unchanged behavior for
-        # "general"/an unrecognized scenario).
         if discharge_narrative:
             base.update(discharge_narrative)
         else:
@@ -1058,9 +902,6 @@ def build_synthetic_data(doc_type: str, scenario: str = "general", anchor_date=N
             base.setdefault("assessment_notes", [])
 
     elif doc_type == "medical-bill":
-        # Adjustment (contractual write-off) rate varies by payer/negotiated
-        # rate in reality - was pinned to 15% on every bill, so "balance" was
-        # always exactly 85% of the charge no matter what.
         adjustments = round(total * random.uniform(0.05, 0.30), 2)
         facts_title, facts = _medical_scenario_facts(scenario)
         base.update(_clinical_note_fields(scenario, icd_codes))
@@ -1091,11 +932,6 @@ def build_synthetic_data(doc_type: str, scenario: str = "general", anchor_date=N
             "insured_phone": patient["phone"],
             "relationship_to_insured": "Self",
             "insurance_type": insurance_type,
-            # One-of-seven payer checkbox row (cms_1500.html) - previously
-            # hardcoded to always tick OTHER regardless of insurance_type,
-            # so e.g. "Medicare" printed next to a ticked OTHER box instead
-            # of a ticked MEDICARE box. Precomputed here, not with a
-            # template {% if %}, per the placeholder-pass constraint.
             "payer_mark_medicare": _mark(insurance_type == "Medicare"),
             "payer_mark_medicaid": _mark(insurance_type == "Medicaid"),
             "payer_mark_tricare": _mark(insurance_type == "TRICARE"),
@@ -1137,11 +973,6 @@ def build_synthetic_data(doc_type: str, scenario: str = "general", anchor_date=N
         })
 
     elif doc_type == "eob-explanation":
-        # Allowed-of-billed and paid-of-allowed rates depend on the specific
-        # plan/network - both were pinned to 80% on every EOB, so the ratio
-        # between billed/allowed/paid never actually varied between claims.
-        # Computed once and reused for both the claim total and each line, so
-        # the per-line breakdown still reconciles exactly to the totals.
         allowed_rate = round(random.uniform(0.60, 0.90), 2)
         paid_rate = round(random.uniform(0.70, 0.95), 2)
         allowed = round(total * allowed_rate, 2)
@@ -1159,15 +990,6 @@ def build_synthetic_data(doc_type: str, scenario: str = "general", anchor_date=N
                 "paid": line_paid, "patient_owes": round(line_allowed - line_paid, 2),
                 "reason_code": random.choice(["", "", "CO-45"]),
             })
-        # The template is a full multi-column claims-table EOB (Charges / Provider
-        # Responsibility / Allowed / Patient Non-covered / Paid by Other Ins / Deductible /
-        # Co-pay / Co-Insurance / Paid / Amount You Owe per line, with a totals row and a
-        # Patient Benefit Summary tracking deductible/OOP) - a different, more detailed
-        # document than the old single-ratio eob_lines model (kept below, unused by the
-        # template now, for anything that still reads it). Every column is built so the
-        # totals row is a literal column-wise sum of the claim lines, and each line's own
-        # Charges/Allowed/Paid/Amount-You-Owe reconcile internally (see the running deductible
-        # below - the standard "deductible first, then coinsurance" adjudication order).
         deductible_limit = random.choice([250.0, 500.0, 1000.0, 1500.0])
         coinsurance_rate = round(random.uniform(0.10, 0.30), 2)
         copay_amt = round(random.uniform(20, 50), 2)
@@ -1210,14 +1032,8 @@ def build_synthetic_data(doc_type: str, scenario: str = "general", anchor_date=N
                         "paid_by_other_ins", "deductible", "copay", "coinsurance", "paid_amount", "amount_you_owe")
         }
         deductible_satisfied = deductible_limit - remaining_deductible
-        # eob-explanation is reused by both the litigation packet (slip_and_fall/
-        # medical_malpractice/product_liability) and the pharmacy packet
-        # (chronic_medication/specialty_drug/compounded_medication) - the shared
-        # medical-family facts function already covers exactly those 6 names.
         facts_title, facts = _medical_scenario_facts(scenario)
 
-        # Legacy single-ratio fields - unused by the current template, kept for callers that
-        # might still reference them (validate_document_structure no longer requires these).
         allowed_rate = round(random.uniform(0.60, 0.90), 2)
         paid_rate = round(random.uniform(0.70, 0.95), 2)
         allowed = round(total * allowed_rate, 2)
@@ -1254,7 +1070,6 @@ def build_synthetic_data(doc_type: str, scenario: str = "general", anchor_date=N
             "processed_date": date.today().strftime("%m/%d/%Y"),
             "check_number": "CHK" + "".join(random.choices(string.digits, k=8)),
             "reason_code_legend": "CO-45: Charge exceeds fee schedule/maximum allowable amount",
-            # full claims-table EOB fields
             "document_title": "Explanation of Health Care Benefits",
             "subscriber_name": patient["patient_name"],
             "claim_ref_number": claim_num,
@@ -1288,9 +1103,6 @@ def build_synthetic_data(doc_type: str, scenario: str = "general", anchor_date=N
     elif doc_type == "acord-25":
         eff = dos
         exp = dos + timedelta(days=365)
-        # Which checkbox is ticked in each either/or group - decided here
-        # (never in the template, see _mark's docstring) so acord_25.html
-        # and acord_new.html can both plain-substitute the resulting glyphs.
         gl_claims_basis = random.choice(["occurrence", "claims_made"])
         gl_aggregate_applies_per = random.choices(["policy", "project", "loc"], weights=[70, 20, 10])[0]
         auto_any_auto = random.random() < 0.6
@@ -1315,7 +1127,6 @@ def build_synthetic_data(doc_type: str, scenario: str = "general", anchor_date=N
             "insurer_a_naic": str(random.randint(10000, 99999)),
             "effective_date": eff.strftime("%m/%d/%Y"),
             "expiration_date": exp.strftime("%m/%d/%Y"),
-            # Commercial General Liability
             "gl_policy_number": "GL" + "".join(random.choices(string.digits, k=8)),
             "gl_each_occurrence": f"{gl_occ:,}",
             "gl_damage_rented_premises": f"{gl_rented:,}",
@@ -1328,7 +1139,6 @@ def build_synthetic_data(doc_type: str, scenario: str = "general", anchor_date=N
             "gl_agg_policy_mark": _mark(gl_aggregate_applies_per == "policy"),
             "gl_agg_project_mark": _mark(gl_aggregate_applies_per == "project"),
             "gl_agg_loc_mark": _mark(gl_aggregate_applies_per == "loc"),
-            # Automobile Liability
             "auto_policy_number": "CA" + "".join(random.choices(string.digits, k=8)),
             "auto_combined_single_limit": f"{auto_csl:,}",
             "auto_any_auto_mark": _mark(auto_any_auto),
@@ -1336,7 +1146,6 @@ def build_synthetic_data(doc_type: str, scenario: str = "general", anchor_date=N
             "auto_scheduled_mark": _mark(not auto_any_auto),
             "auto_hired_mark": _mark(not auto_any_auto),
             "auto_non_owned_mark": _mark(not auto_any_auto),
-            # Umbrella Liability
             "umb_policy_number": "UMB" + "".join(random.choices(string.digits, k=8)),
             "umb_each_occurrence": f"{umb_limit:,}",
             "umb_aggregate": f"{umb_limit:,}",
@@ -1346,7 +1155,6 @@ def build_synthetic_data(doc_type: str, scenario: str = "general", anchor_date=N
             "umb_claims_made_mark": _mark(umbrella_basis == "claims_made"),
             "umb_ded_mark": _mark(umb_ded_or_retention == "ded"),
             "umb_retention_mark": _mark(umb_ded_or_retention == "retention"),
-            # Workers Compensation & Employers' Liability
             "wc_policy_number": "WC" + "".join(random.choices(string.digits, k=8)),
             "wc_officer_excluded_y_mark": _mark(wc_officer_excluded == "Y"),
             "wc_officer_excluded_n_mark": _mark(wc_officer_excluded == "N"),
@@ -1370,33 +1178,13 @@ def build_synthetic_data(doc_type: str, scenario: str = "general", anchor_date=N
     elif doc_type == "police-report":
         report_city = _fake.city()
         report_state = random.choice(_STATES)
-        # dispatch/arrival/cleared used to be 3 independently random times with no
-        # ordering guarantee, so a report could show arrival before dispatch, or a
-        # multi-hour dispatch-to-arrival gap for a routine traffic stop. Chained as
-        # dispatch -> +minutes -> arrival -> +minutes -> cleared instead.
         dispatch_minutes = random.randint(6 * 60, 22 * 60)
         arrival_minutes = dispatch_minutes + random.randint(4, 25)
         cleared_minutes = arrival_minutes + random.randint(20, 90)
         dispatch_t = f"{dispatch_minutes // 60:02d}:{dispatch_minutes % 60:02d}"
         arrival_t = f"{arrival_minutes // 60:02d}:{arrival_minutes % 60:02d}"
         cleared_t = f"{cleared_minutes // 60:02d}:{cleared_minutes % 60:02d}"
-        # collision_type/hit_and_run/primary_factor used to be independently
-        # random regardless of which scenario was requested - a
-        # "hit_and_run"-scenario report was no more likely to actually BE a
-        # hit and run than any other scenario. Correlating them here is a
-        # pure data change (no template touch) - see _property_scenario_facts
-        # above for the same principle applied to a doc type that had no
-        # scenario-varying field to correlate at all.
         hit_and_run_flag = random.random() < (0.85 if scenario == "hit_and_run" else 0.05)
-        # collision_type/primary_factor MUST be branched on hit_and_run_flag first, not on
-        # scenario - hit_and_run_flag can land True by its 5% base rate for ANY scenario
-        # string (including one totally unrelated to police-report, e.g. a caller passing
-        # "surgery"), and when that happens collision_type must still never be "Single
-        # Vehicle" (a fleeing second vehicle contradicts "single vehicle" by definition).
-        # Branching on scenario alone (the previous approach) only closed this hole for the
-        # literal "hit_and_run" scenario name and left it open for every other one - this is
-        # what produced a real report with COLLISION TYPE: Single Vehicle and HIT & RUN: Yes
-        # side by side.
         if hit_and_run_flag:
             collision_type = random.choice(["Rear-end", "Sideswipe", "Angle"])
             primary_factor = random.choice(["Unsafe speed for conditions", "Driver inattention"])
@@ -1413,16 +1201,9 @@ def build_synthetic_data(doc_type: str, scenario: str = "general", anchor_date=N
                 "Improper turn", "Driver inattention",
             ])
         cited = True if hit_and_run_flag else random.random() < 0.6
-        # police-report also serves as the "Incident Report" in the property-claim
-        # packet (fire_damage/water_damage/theft/wind_damage) - reuse the same
-        # facts function property-loss-notice uses. Returns ("", []) for the auto
-        # scenarios above, which already have their own dedicated fields.
         facts_title, facts = _property_scenario_facts(scenario)
         _party1_damage_desc, _party2_damage_desc = _vehicle_damage_descriptions(scenario)
         if scenario == "hit_and_run":
-            # In police-report (unlike auto-accident-report) the fleeing vehicle
-            # IS eventually identified per the narrative's witness/registration
-            # canvass, so its damage gets inspected rather than left unknown.
             _party2_damage_desc = random.choice([
                 "Front-end damage consistent with striking another vehicle, later inspected upon identification.",
                 "Paint transfer and front bumper damage matching the collision, documented upon vehicle recovery.",
@@ -1559,14 +1340,7 @@ def build_synthetic_data(doc_type: str, scenario: str = "general", anchor_date=N
 
     elif doc_type == "demand-letter":
         demand_amt = round(random.uniform(25000, 500000), 2)
-        # Special-vs-general damages split depends on the case's own medical
-        # specials, not a fixed formula - was pinned to a 40/60 split on every
-        # letter. special_damages computed first, general_damages takes the
-        # remainder so the two still sum exactly to demand_amt.
         special_damages = round(demand_amt * random.uniform(0.25, 0.55), 2)
-        # demand-letter only ever appears in the litigation packet
-        # (slip_and_fall/medical_malpractice/product_liability) - the shared
-        # medical-family facts function already covers those 3 names.
         facts_title, facts = _medical_scenario_facts(scenario)
         demand_facts_para, _ = _litigation_narrative(
             scenario, patient["patient_name"], "the responsible party", dos.strftime("%m/%d/%Y")
@@ -1588,26 +1362,12 @@ def build_synthetic_data(doc_type: str, scenario: str = "general", anchor_date=N
         })
 
     elif doc_type == "pharmacy-invoice":
-        # Template is an Indian GST tax invoice (GSTIN/HSN/IGST/UPI throughout) - a different
-        # domain from a US pharmacy dispensing receipt, so this branch computes a real GST
-        # invoice rather than reusing the old rx-fill fields (kept below for anything that
-        # still reads them, but nothing in the template does any more).
         drug = random.choice(_NDC_DRUGS)
         pharmacy_legal_name = _fake.company() + " PHARMA PRIVATE LIMITED"
         pharmacy_short_name = pharmacy_legal_name.split()[0].upper() + " PHARMA"
         company_gstin = _gstin()
-        # The template only ever prints IGST (no CGST/SGST split), so intra- vs inter-state
-        # supply is not modeled here - customer_gstin varies only whether the sale is B2B.
         customer_gstin = _gstin() if random.random() < 0.3 else ""
 
-        # Item pool/pricing used to be the same fixed maintenance-drug list
-        # (_NDC_DRUGS) and the same $50-800 price band regardless of scenario,
-        # so a "specialty_drug" invoice looked identical to a routine refill.
-        # Real specialty drugs (biologics) run far higher per fill than a
-        # chronic maintenance med, and a compounded prescription is a custom
-        # mix, not an off-the-shelf NDC product - both are worth a distinct
-        # item pool and price band, not just a different cause_of_loss-style
-        # label on the same numbers.
         _SPECIALTY_DRUGS = [
             ("Humira (Adalimumab) 40mg/0.4mL", "SPEC-HUM40"),
             ("Enbrel (Etanercept) 50mg", "SPEC-ENB50"),
@@ -1672,8 +1432,6 @@ def build_synthetic_data(doc_type: str, scenario: str = "general", anchor_date=N
             })
 
         base.update({
-            # legacy rx-fill fields - unused by the current template, kept for callers that
-            # might still reference them (validate_document_structure no longer requires these)
             "rx_number": _rx_number(),
             "fill_date": dos.strftime("%m/%d/%Y"),
             "drug_name": drug[0],
@@ -1682,7 +1440,6 @@ def build_synthetic_data(doc_type: str, scenario: str = "general", anchor_date=N
             "prescriber_name": physician["physician_name"],
             "prescriber_dea": physician["dea"],
             "prescriber_npi": physician["npi"],
-            # GST tax invoice fields
             "company_name": pharmacy_short_name,
             "company_name_line1": pharmacy_short_name,
             "company_name_line2": "MEDICALS & GENERAL STORE",
@@ -1749,12 +1506,6 @@ def build_synthetic_data(doc_type: str, scenario: str = "general", anchor_date=N
         })
 
     elif doc_type == "auto-accident-report":
-        # Template is a real state-agency "Employee Vehicle Accident Report" (Washington
-        # S.F. 97 style): the reporting party is a STATE EMPLOYEE driving a state vehicle,
-        # with up to 2 other vehicles, an "other property" section, and injured-parties/
-        # witness tables. This branch builds that full shape; the old flat fields below are
-        # kept (nothing else reads them any more, but they're harmless) and vehicle1/employee
-        # are built FROM them so both stay consistent with each other.
         make1, model1 = random.choice([("Toyota", "Camry"), ("Honda", "Accord"), ("Ford", "F-150"),
                                         ("Chevrolet", "Malibu"), ("BMW", "3 Series"), ("Tesla", "Model 3")])
         make2, model2 = random.choice([("Nissan", "Altima"), ("Hyundai", "Elantra"), ("Jeep", "Wrangler"),
@@ -1775,8 +1526,6 @@ def build_synthetic_data(doc_type: str, scenario: str = "general", anchor_date=N
         facts_title, facts = _auto_scenario_facts(scenario)
 
         base.update({
-            # legacy flat fields - unused by the current template, kept for callers that
-            # might still reference them (validate_document_structure no longer requires these)
             "insured_name": patient["patient_name"],
             "accident_location": _fake.street_address() + ", " + _fake.city() + ", " + random.choice(_STATES),
             "vehicle_info": {"year": vehicle1_year, "make": make1, "model": model1, "vin": vehicle1_vin, "license_plate": vehicle1_plate},
@@ -1795,7 +1544,6 @@ def build_synthetic_data(doc_type: str, scenario: str = "general", anchor_date=N
             "bodily_injury": "Yes" if has_injury else "No",
             "witnesses": [{"name": _fake.name(), "phone": _fake.phone_number(),
                            "address": _fake.street_address(), "city": _fake.city()}],
-            # state accident-report form fields
             "accident_date": dos.strftime("%m/%d/%Y"),
             "accident_time": f"{random.randint(0,23):02d}:{random.randint(0,59):02d}",
             "accident_time_ampm": random.choice(["AM", "PM"]),
@@ -1847,8 +1595,6 @@ def build_synthetic_data(doc_type: str, scenario: str = "general", anchor_date=N
                 "insurance_company": other_driver_insurer_val,
                 "policy_no": other_driver_policy_val,
             },
-            # single-other-vehicle scenario is the norm - vehicle3 stays empty rather than
-            # inventing a third party that was never in the collision.
             "vehicle3": {k: "" for k in (
                 "owner_name", "owner_phone", "owner_address", "owner_city", "owner_zip",
                 "driver_name", "driver_age", "driver_phone", "driver_address", "driver_city",
@@ -1879,19 +1625,6 @@ def build_synthetic_data(doc_type: str, scenario: str = "general", anchor_date=N
         forum_county = _fake.city() + " County"
         filing_date_val = date.today()
         prayer_amount = round(random.uniform(50000, 1000000), 0)
-        # causes_of_action used to be a pure random.sample regardless of
-        # scenario, so a product_liability complaint could come back with no
-        # products-liability cause at all. Anchor one cause to the scenario,
-        # then fill out the rest of the sample from what is left - keeps the
-        # variety (2-3 causes) while guaranteeing the scenario is represented.
-        # The extra causes are drawn from a per-scenario COMPATIBLE pool, not
-        # the full list - the full list mixes theories that don't co-occur in
-        # one fact pattern (a fall on a property has no product to be
-        # defective; a botched medical procedure isn't a premises condition),
-        # so sampling it unrestricted could pad a medical-malpractice
-        # complaint with "Strict Product Liability" and "Premises Liability" -
-        # causes of action a real complaint alleging that incident never
-        # would plead together.
         _anchor = {
             "slip_and_fall": "Premises Liability",
             "medical_malpractice": "Negligence",
@@ -1952,7 +1685,6 @@ def build_synthetic_data(doc_type: str, scenario: str = "general", anchor_date=N
             "bar_number": "BAR" + "".join(random.choices(string.digits, k=6)),
             "facts": facts_para,
             "general_allegations": general_allegations,
-            # --- law firm letterhead / recreate-style visual template ---
             "firm_name": ", ".join(firm_last_names) + " LLP",
             "firm_tagline": "Attorneys at Law",
             "firm_practice_areas": "Civil Litigation · Personal Injury · Appellate Practice",
@@ -1999,9 +1731,6 @@ def build_synthetic_data(doc_type: str, scenario: str = "general", anchor_date=N
             "provider_name": physician["hospital"],
             "provider_address": _address(),
             "provider_npi": _npi(),
-            # FL1 prints provider name/address/TELEPHONE - the phone was never
-            # supplied for ub-04 (only cms-1500 had it), so that line rendered
-            # blank on every UB-04.
             "billing_provider_phone": physician["phone"],
             "admission_date": adm_date.strftime("%m/%d/%Y"),
             "discharge_date": dos.strftime("%m/%d/%Y"),
@@ -2035,10 +1764,6 @@ def build_synthetic_data(doc_type: str, scenario: str = "general", anchor_date=N
             "attending_first_name": attending_parts[0] if attending_parts else "",
             "operating_physician_name": physician["physician_name"],
             "treatment_authorization": "AUTH" + "".join(random.choices(string.digits, k=8)),
-            # Remaining CMS-1450 boxes (FL2, FL5, FL29, FL50-65, FL70-71, FL80-81) -
-            # a real UB-04 fills every one of these; leaving them out of the data
-            # is what made the earlier plain-grid template look sparse next to a
-            # genuine specimen.
             "pay_to_name": physician["hospital"],
             "pay_to_address": _address(),
             "federal_tax_id": "".join(random.choices(string.digits, k=9)),

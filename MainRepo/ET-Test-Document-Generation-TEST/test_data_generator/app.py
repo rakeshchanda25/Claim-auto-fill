@@ -1,6 +1,5 @@
 import io
 import json
-import logging
 import zipfile
 from pathlib import Path
 from typing import List, Optional
@@ -20,13 +19,6 @@ from guidewire import GuidewireClient
 from pdf_manager import combine_pdfs, replace_text_in_pdf
 from scanner_simulator import simulate_scan
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    datefmt="%H:%M:%S",
-)
-logger = logging.getLogger(__name__)
-
 app = FastAPI(title="PDF Test Data Generator API")
 app.add_middleware(
     CORSMiddleware,
@@ -38,8 +30,6 @@ app.add_middleware(
 
 FRONTEND_DIR = Path(__file__).resolve().parent / "frontend"
 
-# Guidewire ClaimCenter dev instance. Hardcoded deliberately - there is no .env
-# file; change these here to point at a different environment.
 GUIDEWIRE_BASE_URL = "https://cc-dev-gwcpdev.valuemom.zeta1-andromeda.guidewire.net:443"
 GUIDEWIRE_USERNAME = "su"
 GUIDEWIRE_PASSWORD = "gw"
@@ -67,10 +57,6 @@ def _shutdown():
 async def health_check():
     return {"status": "ok"}
 
-
-# ============================================================================
-# PDF utilities
-# ============================================================================
 
 @app.post("/api/replace")
 async def replace_pdf_text(file: UploadFile = File(...), replacements: str = Form(...)):
@@ -148,15 +134,6 @@ async def api_combine(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-# ============================================================================
-# AI document generation
-#
-# A claim number typed into the free-text input pulls live claim data, which is
-# merged into custom_fields and applied ahead of any generated value. A lookup
-# failure is logged and generation continues with synthetic data only - real
-# claim data is an enrichment, never a requirement. See claim_context.py.
-# ============================================================================
-
 @app.post("/api/ai-generate")
 async def ai_generate_document(
     doc_type: str = Form(...),
@@ -173,34 +150,22 @@ async def ai_generate_document(
         ref_bytes = await reference_file.read()
         ref_ext = Path(reference_file.filename).suffix.lstrip(".").lower()
 
-    logger.info(
-        f"generate: mode={mode} doc_type={doc_type} scenario={scenario!r} seed={seed} "
-        f"reference={ref_ext or 'none'}"
-    )
-
     fields = json.loads(custom_fields)
 
     if claim_id := extract_claim_id(user_input):
-        logger.info(f"looking up claim {claim_id!r} in Guidewire")
         try:
             claim = await run_in_threadpool(fetch_claim_context, _guidewire, claim_id)
-            # User-supplied fields still win over the claim's.
             fields = {**claim_to_fields(claim), **fields}
 
-            # generate/recreate: the model reads the narrative as free text and
-            # decides where it belongs.
             if narrative := claim_narrative(claim):
                 user_input = f"{user_input}\n\n{narrative}" if user_input else narrative
 
-            # packet: there is no per-component model step, so this rides along
-            # under reserved keys build_packet pops off and applies only to the
-            # document types that have somewhere to put it.
             if claim.description:
                 fields["_claim_description"] = claim.description
             if claim.excerpts:
                 fields["_document_excerpts"] = claim.excerpts
-        except Exception as exc:
-            logger.warning(f"claim lookup for {claim_id!r} failed, continuing without it: {exc}")
+        except Exception:
+            pass
 
     req = GenerationRequest(
         doc_type=doc_type,
@@ -218,7 +183,6 @@ async def ai_generate_document(
 
         agent = get_shared_agent()
         prompt = build_generation_prompt(req)
-        logger.info(f"prompt built ({len(prompt)} chars) - running agent")
 
         result = run_generation(
             agent, prompt, req.reference_bytes,
@@ -238,8 +202,6 @@ async def ai_generate_document(
                     zf.writestr(f"{safe_label}.{comp['kind']}", comp["bytes"])
             return "zip", buf.getvalue(), f"{doc_type}_packet.zip"
 
-        # Every mode stages its output, so reaching here means the agent never
-        # completed one. Its final message is the only clue why.
         raise HTTPException(
             status_code=500,
             detail=(
@@ -255,11 +217,9 @@ async def ai_generate_document(
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("ai-generate failed")
         raise HTTPException(status_code=500, detail=str(e))
 
     media_types = {"pdf": "application/pdf", "zip": "application/zip"}
-    logger.info(f"responding with {filename} ({len(content)} bytes)")
     return Response(
         content=content,
         media_type=media_types.get(file_type, "application/octet-stream"),
@@ -292,8 +252,6 @@ async def get_ai_doc_types():
 
 
 class NoCacheStaticFiles(StaticFiles):
-    """Forces browsers to revalidate on every load instead of silently serving a
-    stale main.js after an edit."""
 
     def file_response(self, *args, **kwargs):
         response = super().file_response(*args, **kwargs)

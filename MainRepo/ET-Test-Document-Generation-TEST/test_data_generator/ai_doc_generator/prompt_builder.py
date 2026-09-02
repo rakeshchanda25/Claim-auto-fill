@@ -1,12 +1,3 @@
-"""Builds the per-request prompt for each generation mode.
-
-Claim facts reach the tools two ways at once. The reliable path is server-side
-staging (see tools.begin_run) - the tools read it directly and it cannot be lost.
-The blocks below are the second, additive path: they let the model reason about
-the real values when it writes narrative text, and let it pass anything extra it
-works out on top. Nothing here has to succeed for the claim data to be applied.
-"""
-
 from renderers.synthetic_data import resolve_doc_type
 
 from .config import GenerationRequest
@@ -42,8 +33,6 @@ def _user_input_block(req: GenerationRequest) -> str:
 
 
 def _optional_args(req: GenerationRequest, *, with_anchor: bool) -> str:
-    """The `custom_fields=`/`anchor_date=` fragment for a tool call. Optional -
-    these are staged server-side too, so omitting them changes nothing."""
     args = ""
     if with_anchor and req.custom_fields.get("loss_date"):
         args += f", anchor_date={req.custom_fields['loss_date']!r}"
