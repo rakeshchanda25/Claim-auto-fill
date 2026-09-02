@@ -1,7 +1,6 @@
 import io
 import json
 import logging
-import os
 import re
 import zipfile
 from pathlib import Path
@@ -39,12 +38,21 @@ app.add_middleware(
 
 FRONTEND_DIR = Path(__file__).resolve().parent / "frontend"
 
+# Guidewire ClaimCenter dev instance. Hardcoded deliberately - there is no .env
+# file; change these here to point at a different environment.
+GUIDEWIRE_BASE_URL = "https://cc-dev-gwcpdev.valuemom.zeta1-andromeda.guidewire.net:443"
+GUIDEWIRE_USERNAME = "su"
+GUIDEWIRE_PASSWORD = "gw"
+GUIDEWIRE_TIMEOUT = 60
+
+APP_HOST = "127.0.0.1"
+APP_PORT = 8420
+
 _guidewire = GuidewireClient(
-    base_url=os.getenv("GUIDEWIRE_BASE_URL",
-                       "https://cc-dev-gwcpdev.valuemom.zeta1-andromeda.guidewire.net:443"),
-    username=os.getenv("GUIDEWIRE_USERNAME", "su"),
-    password=os.getenv("GUIDEWIRE_PASSWORD", "gw"),
-    timeout_seconds=int(os.getenv("GUIDEWIRE_TIMEOUT", "60")),
+    base_url=GUIDEWIRE_BASE_URL,
+    username=GUIDEWIRE_USERNAME,
+    password=GUIDEWIRE_PASSWORD,
+    timeout_seconds=GUIDEWIRE_TIMEOUT,
 )
 
 
@@ -362,9 +370,4 @@ class NoCacheStaticFiles(StaticFiles):
 app.mount("/", NoCacheStaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
 
 if __name__ == "__main__":
-    uvicorn.run(
-        "app:app",
-        host=os.getenv("APP_HOST", "127.0.0.1"),
-        port=int(os.getenv("APP_PORT", "8420")),
-        reload=True,
-    )
+    uvicorn.run("app:app", host=APP_HOST, port=APP_PORT, reload=True)

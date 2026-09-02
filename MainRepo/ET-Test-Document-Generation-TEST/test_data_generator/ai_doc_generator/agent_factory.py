@@ -6,7 +6,6 @@ seed - and owns the run lifecycle.
 """
 
 import logging
-import os
 import threading
 import time
 from dataclasses import dataclass
@@ -20,15 +19,26 @@ logger = logging.getLogger(__name__)
 _PROJECT_ROOT = Path(__file__).parent.parent
 _AGENT_CONFIG = _PROJECT_ROOT / ".andromeda" / "agents" / "doc-generator.yaml"
 
-# Fallbacks for the ${VAR} placeholders in doc-generator.yaml. Andromeda has no
-# default syntax of its own and raises on an unset variable, so every variable
-# the YAML references needs an entry here. Real environment values win.
-AGENT_ENV_DEFAULTS = {
-    "DOC_AGENT_MODEL": "openai/qwen3.6:27b",
-    "DOC_AGENT_PROVIDER": "litellm",
-    # "auto" = bubblewrap sandbox where the host supports it, else ephemeral_fs.
-    "WORKSPACE_BACKEND": "auto",
-}
+
+def _resolve_backend(backend: str) -> str:
+    """Turns the config's "auto" into a concrete backend name.
+
+    WorkspaceSession.create only accepts real backend names - "auto" is a
+    WorkspaceAgentConfig-level default that the framework expands only when it
+    creates the session itself. We pass our own session (to seed skills/ into
+    the sandbox), so we have to expand it here, using the same rule the
+    framework uses: the bubblewrap sandbox when the host can run it, otherwise
+    the unisolated local workspace.
+    """
+    if backend != "auto":
+        return backend
+
+    from andromeda.workspace import check_provider_availability
+
+    if check_provider_availability("bubblewrap_process").available:
+        return "bubblewrap_process"
+    logger.info("bubblewrap unavailable on this host - using ephemeral_fs (no isolation)")
+    return "ephemeral_fs"
 
 
 @dataclass(frozen=True)
@@ -80,12 +90,10 @@ def create_agent():
     # resolve_tools=False: the YAML declares no tools, because tool functions are
     # Python objects. Everything else - model, prompt, guardrails, backend - is
     # read from the file.
-    config = WorkspaceAgentConfig.load_from_file(
-        str(_AGENT_CONFIG),
-        resolve_tools=False,
-        env={**AGENT_ENV_DEFAULTS, **os.environ},
-    )
+    config = WorkspaceAgentConfig.load_from_file(str(_AGENT_CONFIG), resolve_tools=False)
     config.tools = tool_objects
+
+    backend = _resolve_backend(config.workspace_backend)
 
     policy = WorkspacePolicy(
         read_only=False,
@@ -93,18 +101,18 @@ def create_agent():
         file=FilePolicy(max_file_size_mb=20, allow_symlinks=False, protect_root=True),
     )
     settings = None
-    if config.workspace_backend == "bubblewrap_process":
+    if backend == "bubblewrap_process":
         settings = BubblewrapProcessSettings(network_mode="none", inherit_host_env=False)
 
     session = WorkspaceSession.create(
-        backend=config.workspace_backend,
+        backend=backend,
         seed=ScopedDirectorySeed(source_dir=str(_PROJECT_ROOT), subpaths=("skills",)),
         policy=policy,
         settings=settings,
     )
 
     agent = WorkspaceAgent(config, agents=[], session=session, min_agents=1)
-    logger.info(f"agent ready in {time.monotonic() - t0:.1f}s (backend={config.workspace_backend})")
+    logger.info(f"agent ready in {time.monotonic() - t0:.1f}s (backend={backend})")
     return agent
 
 

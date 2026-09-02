@@ -57,7 +57,9 @@ distributions; on Windows and macOS see the
 [WeasyPrint install guide](https://doc.courtbouillon.org/weasyprint/stable/first_steps.html#installation).
 Only PDF rendering needs them — everything else, including the test suite, runs without.
 
-Copy `.env.example` to `.env` and adjust if you need to. Every variable has a working default.
+There is no `.env` file — configuration is hardcoded. Agent settings (model, sandbox,
+guardrails, prompt) live in `test_data_generator/.andromeda/agents/doc-generator.yaml`;
+the Guidewire host and credentials are constants at the top of `test_data_generator/app.py`.
 
 ```bash
 python run_server.py
@@ -160,11 +162,11 @@ cd test_data_generator
 python -m pytest tests/ -q
 ```
 
-291 checks. Every document type renders through its real template with
+292 checks. Every document type renders through its real template with
 `StrictUndefined`, so a field the template reads and the data layer never sets fails the build
 rather than leaving a blank space in a PDF. Packets are checked for internal agreement, claim data
 is checked end-to-end against a captured API response, and the agent config is checked to load
-with every placeholder resolved.
+and to resolve its sandbox backend to one the framework actually accepts.
 
 PDF generation itself is not covered — WeasyPrint is the one step with no project logic in it, and
 requiring its system libraries would make the suite unrunnable on most dev machines.

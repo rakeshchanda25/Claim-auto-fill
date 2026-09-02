@@ -7,8 +7,6 @@ many dev machines, and it is the one step with no project logic in it.
 """
 
 import json
-import os
-import re
 from pathlib import Path
 
 import pytest
@@ -300,41 +298,29 @@ def test_claim_notes_are_available_as_narrative(claim_fixture):
 # Agent configuration
 # ---------------------------------------------------------------------------
 
-def test_agent_yaml_placeholders_all_have_defaults():
-    """Andromeda substitutes ${VAR} only, has no default syntax, and raises on an
-    unset variable - so a placeholder with no entry in AGENT_ENV_DEFAULTS breaks
-    startup on a machine that has not exported it."""
-    from ai_doc_generator.agent_factory import AGENT_ENV_DEFAULTS, _AGENT_CONFIG
+def test_agent_config_has_no_env_placeholders():
+    """Config values are literal by design - there is no .env file. A ${VAR} here
+    would not be substituted and would reach the model client as raw text."""
+    from ai_doc_generator.agent_factory import _AGENT_CONFIG
 
-    # Comment lines are dropped: interpolation runs on the parsed YAML, so a
-    # ${VAR} mentioned in a comment is never substituted.
     config_lines = [
         line for line in _AGENT_CONFIG.read_text(encoding="utf-8").splitlines()
         if not line.lstrip().startswith("#")
     ]
-    placeholders = set(re.findall(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}", "\n".join(config_lines)))
-    assert placeholders, "expected the config to use ${VAR} placeholders"
-    assert placeholders <= set(AGENT_ENV_DEFAULTS), (
-        f"no default for {placeholders - set(AGENT_ENV_DEFAULTS)}"
-    )
+    assert "${" not in chr(10).join(config_lines)
 
 
-def test_agent_config_loads_with_defaults_and_honours_overrides():
+def test_agent_config_loads_and_is_usable():
     andromeda_config = pytest.importorskip(
         "andromeda.config", reason="Andromeda framework not installed"
     )
-    from ai_doc_generator.agent_factory import AGENT_ENV_DEFAULTS, _AGENT_CONFIG
+    from ai_doc_generator.agent_factory import _AGENT_CONFIG
 
-    def load(**overrides):
-        return andromeda_config.WorkspaceAgentConfig.load_from_file(
-            str(_AGENT_CONFIG), resolve_tools=False,
-            env={**AGENT_ENV_DEFAULTS, **os.environ, **overrides},
-        )
-
-    config = load()
+    config = andromeda_config.WorkspaceAgentConfig.load_from_file(
+        str(_AGENT_CONFIG), resolve_tools=False
+    )
     assert config.name == "doc-generator"
-    assert "${" not in config.model.name, "placeholder was not substituted"
-    assert config.prompt.strip()
+    assert config.model.name and config.prompt.strip()
     # These reach the model client and must not arrive as strings.
     assert isinstance(config.model.other_args["temperature"], float)
     assert isinstance(config.model.other_args["timeout"], int)
@@ -342,7 +328,25 @@ def test_agent_config_loads_with_defaults_and_honours_overrides():
     # matches any bare 10-digit number, i.e. every policy and claim number.
     assert config.middleware.guardrails.data_patterns.phone == "(?!)"
 
-    assert load(DOC_AGENT_MODEL="openai/other:1b").model.name == "openai/other:1b"
+
+def test_configured_backend_resolves_to_one_the_framework_accepts():
+    """WorkspaceSession.create rejects "auto" - it is a config-level default the
+    framework only expands when it builds the session itself. We build our own,
+    so _resolve_backend has to expand it first. Shipping "auto" straight through
+    raised WorkspaceCompatibilityError at runtime.
+    """
+    pytest.importorskip("andromeda.workspace", reason="Andromeda framework not installed")
+    from andromeda.workspace.backends import get_backend_capabilities
+
+    from ai_doc_generator.agent_factory import _AGENT_CONFIG, _resolve_backend
+    from andromeda.config import WorkspaceAgentConfig
+
+    config = WorkspaceAgentConfig.load_from_file(str(_AGENT_CONFIG), resolve_tools=False)
+    backend = _resolve_backend(config.workspace_backend)
+
+    assert backend != "auto"
+    # Raises WorkspaceCompatibilityError for a name the framework does not know.
+    assert get_backend_capabilities(backend).supports_file_tools
 
 
 def test_claim_id_is_found_in_free_text():

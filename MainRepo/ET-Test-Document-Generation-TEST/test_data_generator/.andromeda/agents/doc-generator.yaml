@@ -4,27 +4,26 @@
 # only thing Python adds afterwards is the `tools` list - those are function
 # objects, which YAML cannot express. Everything else is here, and nowhere else.
 #
-# ${VAR} is substituted from the environment. Andromeda supports no default
-# syntax and raises on an unset variable, so agent_factory.AGENT_ENV_DEFAULTS
-# supplies a fallback for each one - keep the two in step.
+# Values are literal on purpose: there is no .env file and no ${VAR}
+# interpolation. To point at a different model or sandbox, edit it here.
 
 name: doc-generator
 recursion_limit: 300
 read_only: false
 
 model:
-  name: "${DOC_AGENT_MODEL}"
-  provider: "${DOC_AGENT_PROVIDER}"
+  name: "openai/qwen3.6:27b"
+  provider: litellm
   other_args:
-    # Left literal rather than interpolated: env values arrive as strings, and
-    # these two have to stay numeric for the model client.
     temperature: 0.3
     timeout: 120
 
-# "auto" picks the bubblewrap sandbox for real isolation where the host supports
-# it (Linux) and falls back to ephemeral_fs elsewhere, so the same config works
-# on a developer's Mac/Windows machine and on the deployed Linux box.
-workspace_backend: "${WORKSPACE_BACKEND}"
+# "auto" = the bubblewrap sandbox for real isolation where the host supports it
+# (Linux), falling back to ephemeral_fs elsewhere, so the same config works on a
+# developer's Mac/Windows machine and on the deployed Linux box.
+# agent_factory._resolve_backend turns this into a concrete backend name -
+# WorkspaceSession.create does not accept "auto" itself.
+workspace_backend: auto
 skill_sources:
   - /skills
 skills_backend: filesystem
