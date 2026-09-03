@@ -1,0 +1,360 @@
+# Provenance for every per-state layout.
+#
+# fidelity: field-level | page-level | unsourced
+# A state stays 'unsourced' until its official form and instructions have been
+# retrieved and its field list recorded in
+# skills/police-report/references/states/<CODE>.md. Layouts must not be authored
+# from an unsourced entry - that is how invented field names get in.
+
+doc_type: police-report
+states:
+  AL:
+    form_number: null
+    revision: null
+    agency: null
+    source_url: null
+    retrieved: null
+    fidelity: unsourced
+  AK:
+    form_number: null
+    revision: null
+    agency: null
+    source_url: null
+    retrieved: null
+    fidelity: unsourced
+  AZ:
+    form_number: null
+    revision: null
+    agency: null
+    source_url: null
+    retrieved: null
+    fidelity: unsourced
+  AR:
+    form_number: null
+    revision: null
+    agency: null
+    source_url: null
+    retrieved: null
+    fidelity: unsourced
+  CA:
+    form_number: "CHP 555"
+    revision: ""
+    agency: "California Highway Patrol"
+    source_url: ""
+    retrieved: "2026-09-03"
+    fidelity: page-level
+  CO:
+    form_number: null
+    revision: null
+    agency: null
+    source_url: null
+    retrieved: null
+    fidelity: unsourced
+  CT:
+    form_number: null
+    revision: null
+    agency: null
+    source_url: null
+    retrieved: null
+    fidelity: unsourced
+  DE:
+    form_number: null
+    revision: null
+    agency: null
+    source_url: null
+    retrieved: null
+    fidelity: unsourced
+  FL:
+    form_number: null
+    revision: null
+    agency: null
+    source_url: null
+    retrieved: null
+    fidelity: unsourced
+  GA:
+    form_number: null
+    revision: null
+    agency: null
+    source_url: null
+    retrieved: null
+    fidelity: unsourced
+  HI:
+    form_number: null
+    revision: null
+    agency: null
+    source_url: null
+    retrieved: null
+    fidelity: unsourced
+  ID:
+    form_number: null
+    revision: null
+    agency: null
+    source_url: null
+    retrieved: null
+    fidelity: unsourced
+  IL:
+    form_number: null
+    revision: null
+    agency: null
+    source_url: null
+    retrieved: null
+    fidelity: unsourced
+  IN:
+    form_number: null
+    revision: null
+    agency: null
+    source_url: null
+    retrieved: null
+    fidelity: unsourced
+  IA:
+    form_number: null
+    revision: null
+    agency: null
+    source_url: null
+    retrieved: null
+    fidelity: unsourced
+  KS:
+    form_number: null
+    revision: null
+    agency: null
+    source_url: null
+    retrieved: null
+    fidelity: unsourced
+  KY:
+    form_number: null
+    revision: null
+    agency: null
+    source_url: null
+    retrieved: null
+    fidelity: unsourced
+  LA:
+    form_number: null
+    revision: null
+    agency: null
+    source_url: null
+    retrieved: null
+    fidelity: unsourced
+  ME:
+    form_number: null
+    revision: null
+    agency: null
+    source_url: null
+    retrieved: null
+    fidelity: unsourced
+  MD:
+    form_number: null
+    revision: null
+    agency: null
+    source_url: null
+    retrieved: null
+    fidelity: unsourced
+  MA:
+    form_number: null
+    revision: null
+    agency: null
+    source_url: null
+    retrieved: null
+    fidelity: unsourced
+  MI:
+    form_number: null
+    revision: null
+    agency: null
+    source_url: null
+    retrieved: null
+    fidelity: unsourced
+  MN:
+    form_number: null
+    revision: null
+    agency: null
+    source_url: null
+    retrieved: null
+    fidelity: unsourced
+  MS:
+    form_number: null
+    revision: null
+    agency: null
+    source_url: null
+    retrieved: null
+    fidelity: unsourced
+  MO:
+    form_number: null
+    revision: null
+    agency: null
+    source_url: null
+    retrieved: null
+    fidelity: unsourced
+  MT:
+    form_number: null
+    revision: null
+    agency: null
+    source_url: null
+    retrieved: null
+    fidelity: unsourced
+  NE:
+    form_number: null
+    revision: null
+    agency: null
+    source_url: null
+    retrieved: null
+    fidelity: unsourced
+  NV:
+    form_number: null
+    revision: null
+    agency: null
+    source_url: null
+    retrieved: null
+    fidelity: unsourced
+  NH:
+    form_number: null
+    revision: null
+    agency: null
+    source_url: null
+    retrieved: null
+    fidelity: unsourced
+  NJ:
+    form_number: null
+    revision: null
+    agency: null
+    source_url: null
+    retrieved: null
+    fidelity: unsourced
+  NM:
+    form_number: null
+    revision: null
+    agency: null
+    source_url: null
+    retrieved: null
+    fidelity: unsourced
+  NY:
+    form_number: null
+    revision: null
+    agency: null
+    source_url: null
+    retrieved: null
+    fidelity: unsourced
+  NC:
+    form_number: null
+    revision: null
+    agency: null
+    source_url: null
+    retrieved: null
+    fidelity: unsourced
+  ND:
+    form_number: null
+    revision: null
+    agency: null
+    source_url: null
+    retrieved: null
+    fidelity: unsourced
+  OH:
+    form_number: null
+    revision: null
+    agency: null
+    source_url: null
+    retrieved: null
+    fidelity: unsourced
+  OK:
+    form_number: null
+    revision: null
+    agency: null
+    source_url: null
+    retrieved: null
+    fidelity: unsourced
+  OR:
+    form_number: null
+    revision: null
+    agency: null
+    source_url: null
+    retrieved: null
+    fidelity: unsourced
+  PA:
+    form_number: null
+    revision: null
+    agency: null
+    source_url: null
+    retrieved: null
+    fidelity: unsourced
+  RI:
+    form_number: null
+    revision: null
+    agency: null
+    source_url: null
+    retrieved: null
+    fidelity: unsourced
+  SC:
+    form_number: null
+    revision: null
+    agency: null
+    source_url: null
+    retrieved: null
+    fidelity: unsourced
+  SD:
+    form_number: null
+    revision: null
+    agency: null
+    source_url: null
+    retrieved: null
+    fidelity: unsourced
+  TN:
+    form_number: null
+    revision: null
+    agency: null
+    source_url: null
+    retrieved: null
+    fidelity: unsourced
+  TX:
+    form_number: "CR-3"
+    revision: "4/1/2023"
+    agency: "Texas Department of Transportation"
+    source_url: "https://www.txdot.gov/data-maps/crash-reports-records/forms-law-enforcement.html"
+    retrieved: "2026-09-03"
+    fidelity: field-level
+  UT:
+    form_number: null
+    revision: null
+    agency: null
+    source_url: null
+    retrieved: null
+    fidelity: unsourced
+  VT:
+    form_number: null
+    revision: null
+    agency: null
+    source_url: null
+    retrieved: null
+    fidelity: unsourced
+  VA:
+    form_number: null
+    revision: null
+    agency: null
+    source_url: null
+    retrieved: null
+    fidelity: unsourced
+  WA:
+    form_number: null
+    revision: null
+    agency: null
+    source_url: null
+    retrieved: null
+    fidelity: unsourced
+  WV:
+    form_number: null
+    revision: null
+    agency: null
+    source_url: null
+    retrieved: null
+    fidelity: unsourced
+  WI:
+    form_number: null
+    revision: null
+    agency: null
+    source_url: null
+    retrieved: null
+    fidelity: unsourced
+  WY:
+    form_number: null
+    revision: null
+    agency: null
+    source_url: null
+    retrieved: null
+    fidelity: unsourced

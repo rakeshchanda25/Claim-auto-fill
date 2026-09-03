@@ -1,0 +1,25 @@
+# Web
+fastapi
+uvicorn
+python-multipart
+
+# PDF editing / combining / scan simulation
+PyMuPDF
+opencv-python-headless
+numpy
+
+# Document rendering
+jinja2
+weasyprint
+
+# Synthetic data + reference-document parsing
+faker
+python-docx
+
+# Text extraction from PDFs attached to a Guidewire claim. Optional: without it
+# claim lookup still works, it just returns no document excerpts.
+pypdf
+
+# The agent framework itself is installed separately (editable install from the
+# Andromeda repo) - it is not published to PyPI, so it is deliberately not pinned
+# here. The app imports it lazily and reports a clear error if it is missing.

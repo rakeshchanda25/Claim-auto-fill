@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Property Loss Notice – {{ policy_number }}</title>
+<style>
+  @page { size: letter portrait; margin: 0.85in; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 10pt; color: #000; line-height: 1.5; }
+  .header { text-align: center; border-bottom: 3px solid #7b2d00; padding-bottom: 10px; margin-bottom: 14px; }
+  .insurer { font-size: 16pt; font-weight: bold; color: #7b2d00; }
+  .form-title { font-size: 13pt; font-weight: bold; margin-top: 4px; }
+  h2 { font-size: 11pt; background: #7b2d00; color: #fff; padding: 3px 8px; margin: 14px 0 6px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 24px; margin-bottom: 10px; }
+  .label { font-weight: bold; font-size: 9pt; color: #444; }
+  table { width: 100%; border-collapse: collapse; font-size: 9pt; margin-top: 6px; }
+  th { background: #e8d5cc; padding: 4px 8px; border: 1px solid #aaa; font-weight: bold; text-align: left; }
+  td { padding: 4px 8px; border: 1px solid #ccc; }
+  .sig-block { margin-top: 28px; border-top: 1px solid #aaa; padding-top: 12px; }
+  .sig-line { width: 220px; border-bottom: 1px solid #000; margin: 18px 0 4px; display: inline-block; }
+</style>
+</head>
+<body>
+
+{% macro header(data) %}
+<div class="header">
+  <div class="insurer">{{ data.insurer_name }}</div>
+  <div class="form-title">PROPERTY LOSS NOTICE</div>
+  <div style="font-size:9pt;color:#555;">Claim Number: {{ data.claim_number }}</div>
+</div>
+{% endmacro %}
+
+{% macro insured_information(data) %}
+<h2>Insured Information</h2>
+<div class="grid2">
+  <div><span class="label">Insured Name:</span> {{ data.insured_name }}</div>
+  <div><span class="label">Policy Number:</span> {{ data.policy_number }}</div>
+  <div><span class="label">Phone:</span> {{ data.phone }}</div>
+  <div><span class="label">Loss Date:</span> {{ data.loss_date }}</div>
+  <div><span class="label">Coverage Type:</span> {{ data.coverage_type }}</div>
+  <div><span class="label">Deductible:</span> ${{ "%.2f"|format(data.deductible) }}</div>
+</div>
+{% endmacro %}
+
+{% macro loss_information(data) %}
+<h2>Loss Information</h2>
+<div class="grid2">
+  <div><span class="label">Loss Location:</span> {{ data.loss_location }}</div>
+  <div><span class="label">Cause of Loss:</span> {{ data.cause_of_loss }}</div>
+  <div><span class="label">Property Description:</span> {{ data.property_description }}</div>
+  <div><span class="label">Estimated Loss:</span> ${{ "%.2f"|format(data.estimated_loss) }}</div>
+</div>
+{% endmacro %}
+
+{% macro scenario_details(data) %}
+{% if data.scenario_facts %}
+<h2>{{ data.scenario_facts_title }}</h2>
+<div class="grid2">
+  {% for fact in data.scenario_facts %}
+  <div><span class="label">{{ fact.label }}:</span> {{ fact.value }}</div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endmacro %}
+
+{% macro mortgage_lienholder(data) %}
+<h2>Mortgage / Lienholder</h2>
+<div class="grid2">
+  <div><span class="label">Mortgagee Name:</span> {{ data.mortgagee_name }}</div>
+  <div><span class="label">Loan Number:</span> {{ data.loan_number }}</div>
+</div>
+{% endmacro %}
+
+{% macro adjuster_assignment(data) %}
+<h2>Adjuster Assignment</h2>
+<div class="grid2">
+  <div><span class="label">Adjuster Name:</span> {{ data.adjuster_name }}</div>
+  <div><span class="label">Adjuster Phone:</span> {{ data.adjuster_phone }}</div>
+</div>
+{% endmacro %}
+
+{% macro signature(data) %}
+<div class="sig-block">
+  <div class="grid2">
+    <div>
+      <div class="label">Insured Signature</div>
+      <div class="sig-line"></div>
+      <div>{{ data.insured_name }}</div>
+    </div>
+    <div>
+      <div class="label">Date</div>
+      <div class="sig-line"></div>
+      <div>{{ data.loss_date }}</div>
+    </div>
+  </div>
+</div>
+{% endmacro %}
+
+{% set component_map = {
+  "header": header, "insured_information": insured_information, "loss_information": loss_information,
+  "scenario_details": scenario_details, "mortgage_lienholder": mortgage_lienholder,
+  "adjuster_assignment": adjuster_assignment, "signature": signature,
+} %}
+{% for c in components %}{{ component_map[c](data) }}{% endfor %}
+
+</body>
+</html>

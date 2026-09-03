@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Test Data Manipulator</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="background-elements">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+    </div>
+
+    <div class="container">
+        <header>
+            <h1><span class="gradient-text">Test Data</span> Manipulator</h1>
+            <p>Replace text in digital PDFs and optionally apply scanned effects.</p>
+        </header>
+
+        <main class="glass-panel">
+            <div class="tabs">
+                <button class="tab-btn active" data-target="generator-tab">Generator &amp; Converter</button>
+                <button class="tab-btn" data-target="combiner-tab">Combiner Utility</button>
+                <button class="tab-btn" data-target="ai-generator-tab">✨ AI Generator</button>
+            </div>
+
+
+            <!-- GENERATOR TAB -->
+            <div id="generator-tab" class="tab-content">
+                <form id="editor-form">
+                    <div class="file-upload-wrapper drop-zone">
+                        <input type="file" class="pdf-file" accept="application/pdf" multiple required hidden>
+                        <div class="upload-content">
+                            <svg class="upload-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12">
+                                </path>
+                            </svg>
+                            <p class="upload-text">Drag & drop PDF here</p>
+                            <p class="file-name"></p>
+                        </div>
+                    </div>
+
+                    <div class="replacements-container">
+                        <h3>Text Replacements</h3>
+                        <div class="replacement-rows">
+                            <div class="replacement-row">
+                                <input type="text" class="old-text" placeholder="Target Text" required>
+                                <svg class="arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M17 8l4 4m0 0l-4 4m4-4H3"></path>
+                                </svg>
+                                <input type="text" class="new-text" placeholder="New Text" required>
+                                <button type="button" class="btn-remove-row" title="Remove row">✕</button>
+                            </div>
+                        </div>
+                        <button type="button" class="btn-secondary add-row-btn">+ Add Row</button>
+                    </div>
+
+                    <div class="actions" id="editor-actions-container">
+                        <button type="submit" class="btn-primary" id="editor-submit-btn">
+                            <span class="btn-text">Replace Text</span>
+                            <div class="spinner hidden"></div>
+                        </button>
+                        <button type="button" class="btn-primary" id="skip-to-scanner-btn">
+                            Skip to Scanner
+                        </button>
+                    </div>
+                </form>
+
+                <div id="success-stage" class="hidden">
+                    <div class="success-header">
+                        <svg class="success-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        <h3>Text Replaced Successfully!</h3>
+                    </div>
+
+                    <button type="button" class="btn-primary success-btn" id="btn-download-edited">
+                        <svg style="width:20px;height:20px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                        </svg>
+                        Download Clean PDF
+                    </button>
+
+                    <div class="converter-section">
+                        <h3>Optional: Convert to Scanned Document</h3>
+                        <p class="section-desc">Add realistic degradations to the replaced PDF to simulate a physical
+                            scan.</p>
+
+                        <form id="scanner-form">
+                            <div class="controls-grid">
+                                <div class="toggle-control">
+                                    <label class="control-header">
+                                        <input type="checkbox" name="skew">
+                                        <div class="header-text">
+                                            <span class="control-label">Skew Document</span>
+                                            <span class="control-desc">Adds a slight random rotation.</span>
+                                        </div>
+                                    </label>
+                                    <div class="slider-container">
+                                        <input type="range" name="skew_angle" min="0.5" max="5.0" step="0.5"
+                                            value="1.5">
+                                        <span class="slider-val">1.5°</span>
+                                    </div>
+                                </div>
+                                <div class="toggle-control">
+                                    <label class="control-header">
+                                        <input type="checkbox" name="blur">
+                                        <div class="header-text">
+                                            <span class="control-label">Apply Blur</span>
+                                            <span class="control-desc">Simulates out-of-focus capture.</span>
+                                        </div>
+                                    </label>
+                                    <div class="slider-container">
+                                        <input type="range" name="blur_strength" min="1" max="15" step="2" value="5">
+                                        <span class="slider-val">5 px</span>
+                                    </div>
+                                </div>
+                                <div class="toggle-control">
+                                    <label class="control-header">
+                                        <input type="checkbox" name="noise">
+                                        <div class="header-text">
+                                            <span class="control-label">Add Noise</span>
+                                            <span class="control-desc">Simulates scanner sensor noise.</span>
+                                        </div>
+                                    </label>
+                                    <div class="slider-container">
+                                        <input type="range" name="noise_intensity" min="5" max="50" step="5" value="15">
+                                        <span class="slider-val">15</span>
+                                    </div>
+                                </div>
+                                <div class="toggle-control">
+                                    <label class="control-header">
+                                        <input type="checkbox" name="low_dpi">
+                                        <div class="header-text">
+                                            <span class="control-label">Low DPI</span>
+                                            <span class="control-desc">Reduces resolution heavily.</span>
+                                        </div>
+                                    </label>
+                                </div>
+                                <div class="toggle-control" style="grid-column: span 2;">
+                                    <label class="control-header">
+                                        <input type="checkbox" name="add_image" id="add-image-cb">
+                                        <div class="header-text">
+                                            <span class="control-label">Add Image Overlay</span>
+                                            <span class="control-desc">Stamp an image (like a signature or logo) onto
+                                                the PDF before degrading.</span>
+                                        </div>
+                                    </label>
+                                    <div id="image-upload-container" class="hidden" style="margin-top: 1rem;">
+                                        <input type="file" name="overlay_image" accept="image/*" class="image-file">
+                                    </div>
+                                </div>
+                                <div class="toggle-control" style="grid-column: span 2;">
+                                    <label class="control-header">
+                                        <input type="checkbox" name="rotation">
+                                        <div class="header-text">
+                                            <span class="control-label">Rotate Specific Pages</span>
+                                            <span class="control-desc">Rotate selected pages by a specific angle. Add
+                                                multiple rules for different angles.</span>
+                                        </div>
+                                    </label>
+                                    <div id="rotation-settings-container" class="hidden" style="margin-top: 1rem;">
+                                        <div id="rotation-rules"
+                                            style="margin-bottom: 1rem; display: flex; flex-direction: column; gap: 1rem;">
+                                            <div class="rotation-rule"
+                                                style="display: grid; grid-template-columns: 1fr 1fr auto; gap: 0.75rem; align-items: end; padding: 0.75rem; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px;">
+                                                <div>
+                                                    <label
+                                                        style="display: block; margin-bottom: 0.4rem; font-size: 0.8rem; color: var(--text-muted);">Pages
+                                                        (e.g., "1,3,5" or "1-3")</label>
+                                                    <input type="text" class="rotation-pages"
+                                                        placeholder="e.g., 1,2,5 or 1-3,5-7"
+                                                        style="width: 100%; padding: 0.5rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; color: var(--text-main); font-size: 0.85rem;">
+                                                </div>
+                                                <div>
+                                                    <label
+                                                        style="display: block; margin-bottom: 0.4rem; font-size: 0.8rem; color: var(--text-muted);">Angle
+                                                        (degrees)</label>
+                                                    <input type="number" class="rotation-angle" min="-360" max="360"
+                                                        step="1" value="90"
+                                                        style="width: 100%; padding: 0.5rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; color: var(--text-main); font-size: 0.85rem;">
+                                                </div>
+                                                <button type="button" class="btn-remove-rotation"
+                                                    title="Remove rotation rule"
+                                                    style="padding: 0.5rem 0.75rem; background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.4); color: #ef4444; border-radius: 4px; cursor: pointer; font-weight: 500;">✕</button>
+                                            </div>
+                                        </div>
+                                        <button type="button" id="add-rotation-rule-btn" class="btn-secondary"
+                                            style="width: 100%; padding: 0.5rem; margin-top: 0.5rem;">+ Add Rotation
+                                            Rule</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="actions">
+                                <button type="submit" class="btn-primary" id="converter-submit-btn">
+                                    <span class="btn-text">Generate & Download Scanned PDF</span>
+                                    <div class="spinner hidden"></div>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- COMBINER TAB -->
+            <div id="combiner-tab" class="tab-content hidden">
+                <div class="info-banner"
+                    style="background: rgba(99, 102, 241, 0.1); border-left: 4px solid var(--primary); padding: 1rem; margin-bottom: 1.5rem; border-radius: 4px;">
+                    <strong>PDF Combiner:</strong> Select multiple PDFs. Specify page ranges per file (e.g.
+                    <code>1-3, 5</code>) and reorder files using ↑↓ buttons.
+                </div>
+
+                <form id="combiner-form">
+                    <div class="upload-zone drop-zone" id="combine-upload-zone"
+                        style="margin-bottom: 1.5rem; cursor: pointer;">
+                        <div style="font-size: 2.5rem; margin-bottom: 1rem;">📄📄</div>
+                        <h3>Click to Select PDFs</h3>
+                        <p style="color: var(--text-muted); font-size: 0.9rem;">Hold Ctrl/Cmd to select multiple files
+                        </p>
+                        <input type="file" id="combine-file-input" accept=".pdf,image/*" multiple class="file-input"
+                            hidden>
+                    </div>
+
+                    <div id="combine-file-list" class="file-list hidden">
+                    </div>
+
+                    <div class="actions" style="margin-top: 1.5rem;">
+                        <button type="submit" class="btn-primary" id="combine-submit-btn" disabled>
+                            <span class="btn-text">Combine PDFs</span>
+                            <div class="spinner hidden"></div>
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- AI GENERATOR TAB -->
+            <div id="ai-generator-tab" class="tab-content hidden">
+                <div class="ai-header-row">
+                    <div>
+                        <h3>AI Document Generator</h3>
+                        <p class="section-desc">Generate synthetic insurance documents for IDP pipeline testing using
+                            AI.</p>
+                    </div>
+                    <div id="ai-status-indicator" class="ai-status-idle">
+                        <span class="ai-status-dot"></span>
+                        <span class="ai-status-text">Ready</span>
+                    </div>
+                </div>
+
+                <!-- Mode Pills -->
+                <div class="ai-mode-pills" id="ai-mode-pills">
+                    <button class="ai-mode-pill active" data-mode="generate">🪄 Generate</button>
+                    <button class="ai-mode-pill" data-mode="recreate">🔄 Recreate</button>
+                    <button class="ai-mode-pill" data-mode="packet">📦 Build Packet</button>
+                </div>
+
+                <!-- Doc Type / Packet Cards -->
+                <h3 id="ai-doc-section-label">Select Document Type</h3>
+                <div class="ai-card-grid" id="ai-doc-type-grid">
+                    <div class="ai-card-loading">Loading document types...</div>
+                </div>
+
+                <!-- Scenario Selection -->
+                <div id="ai-scenario-section">
+                    <h3>Scenario</h3>
+                    <div class="ai-scenario-pills" id="ai-scenario-pills"></div>
+                </div>
+
+                <!-- Reference Upload (Recreate mode) -->
+                <div id="ai-reference-section" class="hidden">
+                    <h3>Reference Document</h3>
+                    <div class="ai-ref-drop-zone" id="ai-ref-drop">
+                        <svg class="upload-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12">
+                            </path>
+                        </svg>
+                        <span id="ai-ref-filename" class="upload-text">Drop PDF / JPG / PNG / TIFF / DOC / DOCX here, or
+                            click to browse</span>
+                        <input type="file" id="ai-ref-file" hidden accept=".pdf,.jpg,.jpeg,.png,.tiff,.tif,.doc,.docx">
+                        <button type="button" class="btn-secondary hidden" id="ai-analyze-btn">🔍 Analyze
+                            Reference</button>
+                    </div>
+                    <div id="ai-analysis-result" class="hidden"></div>
+                </div>
+
+                <!-- Free-form user input (all modes): plain guidance text, and/or a Guidewire
+                     claim ID/number to pull real claim data for the fields it covers. -->
+                <div id="ai-user-input-section">
+                    <h3>User Input <span class="section-desc" style="display:inline; font-weight:400;">(optional)</span></h3>
+                    <textarea id="ai-user-input" class="ai-user-input-textarea"
+                        placeholder="Describe what you want, and/or paste a claim ID or number (e.g. 000-00-053109) to pull real claim data from Guidewire - any field it doesn't cover is still filled in automatically."></textarea>
+                </div>
+
+                <!-- Options Row -->
+                <div class="ai-options-row">
+                    <div class="ai-option-group" id="ai-jurisdiction-group" style="display:none">
+                        <label class="ai-option-label" for="ai-jurisdiction">State / Form</label>
+                        <select id="ai-jurisdiction" class="ai-seed-input" style="min-width:9rem">
+                            <option value="">Random</option>
+                        </select>
+                    </div>
+                    <div class="ai-option-group">
+                        <label class="ai-option-label" for="ai-seed">Seed</label>
+                        <input type="number" id="ai-seed" class="ai-seed-input" placeholder="auto">
+                    </div>
+                    <div class="ai-option-group">
+                        <label class="ai-option-label"
+                            style="display:flex; align-items:center; gap:0.4rem; cursor:pointer;">
+                            <input type="checkbox" id="ai-pipe-scanner"
+                                style="accent-color:var(--primary); width:16px; height:16px;"> Auto-pipe to Scanner
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Progress + Generate Button -->
+                <div class="ai-generate-row">
+                    <div id="ai-progress-bar-wrap" class="hidden">
+                        <div class="ai-progress-bar">
+                            <div class="ai-progress-fill" id="ai-progress-fill"></div>
+                        </div>
+                        <div class="ai-progress-label" id="ai-progress-label">Initializing agent...</div>
+                    </div>
+                    <button type="button" class="btn-primary" id="ai-generate-btn" disabled>
+                        <span class="btn-text">✨ Generate Document</span>
+                        <div class="spinner hidden"></div>
+                    </button>
+                </div>
+
+                <!-- Result -->
+                <div id="ai-result-area" class="hidden">
+                    <div class="ai-result-box">
+                        <svg width="22" height="22" fill="none" stroke="var(--success)" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span id="ai-result-label">Document generated!</span>
+                        <button type="button" class="btn-primary success-btn" id="ai-download-btn"
+                            style="margin-bottom:0; padding: 0.6rem 1.2rem; font-size: 0.95rem;">⬇ Download</button>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <script src="main.js"></script>
+
+    <div id="preview-modal" class="hidden" style="
+        position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:9999;
+        display:flex; flex-direction:column; align-items:center; justify-content:center;
+        padding: 1.5rem;">
+        <div style="width:100%; max-width:860px; background: var(--panel-bg);
+             border-radius:16px; overflow:hidden; display:flex; flex-direction:column;
+             box-shadow: 0 30px 80px rgba(0,0,0,0.5);">
+            <div style="display:flex; align-items:center; justify-content:space-between;
+                        padding:1rem 1.25rem; border-bottom:1px solid rgba(255,255,255,0.1);">
+                <span id="preview-title" style="font-weight:600; font-size:0.95rem;
+                      overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></span>
+                <button id="preview-close" style="background:rgba(255,255,255,0.1); border:none;
+                        color:var(--text-main); border-radius:6px; padding:0.4rem 0.9rem;
+                        cursor:pointer; font-size:0.9rem;">✕ Close</button>
+            </div>
+            <iframe id="preview-iframe" src="" style="width:100%; height:70vh; border:none;"></iframe>
+        </div>
+    </div>
+
+    <style>
+        .tabs {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 1rem;
+        }
+
+        .tab-btn {
+            background: none;
+            border: none;
+            color: var(--text-main);
+            font-size: 1.1rem;
+            cursor: pointer;
+            padding: 0.5rem 1rem;
+            opacity: 0.6;
+            transition: 0.3s;
+        }
+
+        .tab-btn:hover {
+            opacity: 0.8 !important;
+        }
+
+        .tab-btn.active {
+            opacity: 1 !important;
+            font-weight: 600;
+            border-bottom: 2px solid var(--primary) !important;
+        }
+    </style>
+</body>
+
+</html>

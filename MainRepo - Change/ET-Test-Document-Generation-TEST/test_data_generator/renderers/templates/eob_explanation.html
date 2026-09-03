@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Explanation of Health Care Benefits – {{ claim_number or '' }}</title>
+<style>
+  @page { size: letter landscape; margin: 0.35in; }
+  * { box-sizing: border-box; }
+
+  :root {
+    --navy: #1c3457;
+    --navy-soft: #2f4a73;
+    --ink: #262626;
+    --muted: #667085;
+    --hairline: #d8dce3;
+    --structural: #b7bfcc;
+    --zebra: #f6f7f9;
+    --warn: #7a2331;
+  }
+
+  body {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 9.3pt;
+    color: var(--ink);
+    margin: 0;
+  }
+  .sheet { border: 1px solid var(--structural); padding: 26px 28px; }
+
+  /* ---------- Top claim-info box ---------- */
+  .claim-box {
+    border: 1px solid var(--hairline);
+    border-left: 4px solid var(--navy);
+    padding: 16px 24px 18px;
+    margin-bottom: 22px;
+  }
+
+  .claim-box-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--hairline);
+    margin-bottom: 12px;
+  }
+  .doc-title {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 21pt;
+    font-weight: bold;
+    color: var(--navy);
+    margin: 0;
+    letter-spacing: 0.2px;
+  }
+  .claim-info-block { text-align: left; }
+  .claim-info-title {
+    font-weight: bold;
+    font-size: 8.5pt;
+    color: var(--navy);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-bottom: 6px;
+    padding-bottom: 3px;
+    border-bottom: 1px solid var(--hairline);
+  }
+  .claim-info-row { display: flex; margin-bottom: 2px; font-size: 9.3pt; }
+  .claim-info-row .lbl { width: 115px; flex: none; color: var(--muted); }
+  .claim-info-row .val { flex: 1; }
+  .claim-top-right { text-align: right; font-size: 9.3pt; line-height: 1.5; white-space: nowrap; color: var(--muted); }
+
+  .not-a-bill { margin: 0 0 12px; font-size: 9.8pt; line-height: 1.45; }
+  .not-a-bill b { color: var(--warn); }
+
+  .claim-meta-row { display: flex; flex-wrap: wrap; font-size: 9.3pt; margin-bottom: 4px; }
+  .claim-meta-row > span { margin-right: 30px; }
+  .claim-meta-row .lbl { color: var(--muted); }
+  .claim-meta-lines { font-size: 9.3pt; line-height: 1.55; margin-top: 4px; }
+  .claim-meta-lines .lbl { color: var(--muted); }
+
+  /* ---------- Claims table ---------- */
+  table.claims-table { width: 100%; border-collapse: collapse; table-layout: fixed; margin-bottom: 4px; font-size: 8.5pt; }
+  table.claims-table th {
+    border: 1px solid var(--navy);
+    background: var(--navy);
+    color: #fff;
+    font-weight: bold;
+    text-align: left;
+    padding: 6px 6px;
+    vertical-align: top;
+  }
+  table.claims-table td {
+    border: 1px solid var(--hairline);
+    padding: 6px 6px;
+    text-align: right;
+    vertical-align: top;
+  }
+  table.claims-table td.desc-cell { text-align: left; }
+  table.claims-table td.notes-cell { text-align: left; color: var(--muted); }
+  .zebra { background: var(--zebra); }
+  tr.total-row td {
+    font-weight: bold;
+    border-top: 2px solid var(--navy);
+    background: #fff;
+  }
+  tr.total-row td.desc-cell { text-align: left; color: var(--navy); text-transform: uppercase; letter-spacing: 0.4px; font-size: 8.6pt; }
+
+  /* ---------- Notes legend ---------- */
+  .notes-legend { margin-top: 16px; margin-bottom: 22px; }
+  .notes-legend .legend-title {
+    font-weight: bold;
+    font-size: 8.5pt;
+    color: var(--navy);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-bottom: 6px;
+    padding-bottom: 3px;
+    border-bottom: 1px solid var(--hairline);
+  }
+  table.legend-table { border-collapse: collapse; font-size: 9.3pt; }
+  table.legend-table td { padding: 2px 12px 2px 0; vertical-align: top; }
+  table.legend-table td.code { font-weight: bold; color: var(--navy); white-space: nowrap; }
+
+  /* ---------- Patient benefit summary ---------- */
+  .benefit-box { border: 1px solid var(--hairline); }
+  .benefit-header {
+    background: var(--navy);
+    color: #fff;
+    text-align: left;
+    font-weight: bold;
+    font-size: 9.5pt;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    padding: 8px 20px;
+  }
+  .benefit-body { background: #fff; padding: 14px 22px 16px; font-size: 9.5pt; line-height: 1.65; }
+  .benefit-body p { margin: 2px 0; }
+</style>
+</head>
+<body>
+<div class="sheet">
+
+{% macro claim_box(data) %}
+  <div class="claim-box">
+    <div class="claim-box-top">
+      <h1 class="doc-title">{{ data.document_title or 'Explanation of Health Care Benefits' }}</h1>
+      <div class="claim-info-block">
+        <div class="claim-info-title">Claim Information</div>
+        <div class="claim-info-row"><span class="lbl">Subscriber Name</span><span class="val">{{ data.subscriber_name }}</span></div>
+        <div class="claim-info-row"><span class="lbl">Patient Name</span><span class="val">{{ data.patient_name }}</span></div>
+      </div>
+      <div class="claim-top-right">
+        {{ data.claim_ref_number }}<br>
+        {{ data.claim_ref_date }}
+      </div>
+    </div>
+
+    <div class="not-a-bill">
+      <b>THIS IS NOT A BILL.</b> {{ data.disclaimer_text or 'This is an explanation of the claim processed based on your plan benefits in effect when the service was performed. Please keep this form for your tax records.' }}
+    </div>
+
+    <div class="claim-meta-row">
+      <span><span class="lbl">Claim Number:</span> {{ data.claim_number }}</span>
+      <span><span class="lbl">Patient ID:</span> {{ data.patient_id }}</span>
+      <span><span class="lbl">Patient Control Number:</span> {{ data.patient_control_number }}</span>
+      <span><span class="lbl">Group Number:</span> {{ data.group_number }}</span>
+    </div>
+    <div class="claim-meta-lines">
+      <span class="lbl">Group Name:</span> {{ data.group_name }}<br>
+      <span class="lbl">Provider:</span> {{ data.provider_name }}
+    </div>
+  </div>
+{% endmacro %}
+
+{% macro claims_table(data) %}
+  <table class="claims-table">
+    <colgroup>
+      <col style="width:17%"><col style="width:7%"><col style="width:8%"><col style="width:7%">
+      <col style="width:9%"><col style="width:8%"><col style="width:8%"><col style="width:7%">
+      <col style="width:8%"><col style="width:7%"><col style="width:8%"><col style="width:6%">
+    </colgroup>
+    <tr>
+      <th>Dates of Service/ Description</th>
+      <th>Charges</th>
+      <th>Provider Responsibility Amount</th>
+      <th>Allowed Amount</th>
+      <th>Patient Non-covered Amount</th>
+      <th>Amount Pd by Other Ins</th>
+      <th>Deductible Amount</th>
+      <th>Co-pay Amount</th>
+      <th>Co-Insurance Amount</th>
+      <th>Paid Amount</th>
+      <th>Amount You Owe</th>
+      <th>Notes ID</th>
+    </tr>
+    {% for c in data.claims %}
+    <tr>
+      <td class="desc-cell">{{ c.dates_of_service }}<br><br>{{ c.description }}</td>
+      <td class="zebra">{{ '%.2f'|format(c.charges or 0) }}</td>
+      <td class="zebra">{{ '%.2f'|format(c.provider_responsibility or 0) }}</td>
+      <td class="zebra">{{ '%.2f'|format(c.allowed_amount or 0) }}</td>
+      <td>{{ '%.2f'|format(c.patient_noncovered or 0) }}</td>
+      <td>{{ '%.2f'|format(c.paid_by_other_ins or 0) }}</td>
+      <td>{{ '%.2f'|format(c.deductible or 0) }}</td>
+      <td class="zebra">{{ '%.2f'|format(c.copay or 0) }}</td>
+      <td class="zebra">{{ '%.2f'|format(c.coinsurance or 0) }}</td>
+      <td class="zebra">{{ '%.2f'|format(c.paid_amount or 0) }}</td>
+      <td>{{ '%.2f'|format(c.amount_you_owe or 0) }}</td>
+      <td class="notes-cell">{{ c.notes_id }}</td>
+    </tr>
+    {% endfor %}
+    <tr class="total-row">
+      <td class="desc-cell">Total</td>
+      <td>{{ '%.2f'|format(data.totals.charges or 0) }}</td>
+      <td>{{ '%.2f'|format(data.totals.provider_responsibility or 0) }}</td>
+      <td>{{ '%.2f'|format(data.totals.allowed_amount or 0) }}</td>
+      <td>{{ '%.2f'|format(data.totals.patient_noncovered or 0) }}</td>
+      <td>{{ '%.2f'|format(data.totals.paid_by_other_ins or 0) }}</td>
+      <td>{{ '%.2f'|format(data.totals.deductible or 0) }}</td>
+      <td>{{ '%.2f'|format(data.totals.copay or 0) }}</td>
+      <td>{{ '%.2f'|format(data.totals.coinsurance or 0) }}</td>
+      <td>{{ '%.2f'|format(data.totals.paid_amount or 0) }}</td>
+      <td>{{ '%.2f'|format(data.totals.amount_you_owe or 0) }}</td>
+      <td class="notes-cell">&nbsp;</td>
+    </tr>
+  </table>
+{% endmacro %}
+
+{% macro notes_legend(data) %}
+  <div class="notes-legend">
+    <div class="legend-title">Note</div>
+    <table class="legend-table">
+      {% for n in data.notes %}
+      <tr>
+        <td class="code">{{ n.code }}</td>
+        <td>{{ n.description }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+{% endmacro %}
+
+{% macro scenario_details(data) %}
+  {% if data.scenario_facts %}
+  <div class="benefit-box" style="margin-bottom:16px;">
+    <div class="benefit-header">{{ data.scenario_facts_title }}</div>
+    <div class="benefit-body">
+      {% for fact in data.scenario_facts %}
+      <p>{{ fact.label }}: {{ fact.value }}</p>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+{% endmacro %}
+
+{% macro benefit_summary(data) %}
+  <div class="benefit-box">
+    <div class="benefit-header">Patient Benefit Summary</div>
+    <div class="benefit-body">
+      <p>Patient: {{ data.benefit_patient_name or data.patient_name }}</p>
+      <p>Benefit Period: {{ data.benefit_period_start }} - {{ data.benefit_period_end }}</p>
+      <p>You have satisfied ${{ '%.2f'|format(data.deductible_satisfied or 0) }} of your ${{ '%.2f'|format(data.deductible_limit or 0) }} individual deductible.</p>
+      <p>${{ '%.2f'|format(data.oop_applied or 0) }} has been applied to your ${{ '%.2f'|format(data.oop_limit or 0) }} individual out-of-pocket limit.</p>
+      <p>&nbsp;</p>
+      <p>{{ data.benefit_summary_note or 'Please refer to your benefit booklet or agreement for further information. Amount(s) shown may include totals from claims which are still being processed and for which you have not been notified.' }}</p>
+    </div>
+  </div>
+{% endmacro %}
+
+{% set component_map = {
+  "claim_box": claim_box, "claims_table": claims_table, "notes_legend": notes_legend,
+  "scenario_details": scenario_details, "benefit_summary": benefit_summary,
+} %}
+{% for c in components %}{{ component_map[c](data) }}{% endfor %}
+
+</div>
+</body>
+</html>

@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Health History – {{ patient_name }}</title>
+<style>
+  @page { size: letter portrait; margin: 0; }
+  *{ box-sizing:border-box; }
+  body{
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 9.6pt;
+    color:#1a1a1a;
+    margin:0;
+    background:#dff2c8;
+  }
+  .top-bar{ height:14px; background:#3fae1e; }
+  .page{ padding: 18px 34px 24px; }
+
+  /* ---------- Masthead ---------- */
+  .masthead{ display:flex; justify-content:space-between; align-items:flex-start; }
+  .doc-title{ font-family: Georgia, 'Times New Roman', serif; font-size:32pt; color:#1a1a1a; font-weight:400; }
+  .org-block{ text-align:right; }
+  .org-mark{ font-family: Georgia, serif; font-size:19pt; font-weight:800; color:#1a1a1a; letter-spacing:.02em; }
+  .org-mark .reg{ font-size:10pt; vertical-align: super; }
+  .org-name{ font-size:9.5pt; font-weight:700; margin-top:4px; }
+  .org-url{ font-size:9pt; }
+
+  .email-box{
+    border:1.5px solid #3fae1e;
+    border-radius:4px;
+    display:flex;
+    margin-top:10px;
+    overflow:hidden;
+  }
+  .email-box .cell{ flex:1; padding:6px 12px; font-size:9.3pt; }
+  .email-box .cell:first-child{ border-right:1.5px solid #3fae1e; }
+
+  .disclaimer{ font-size:9.1pt; line-height:1.5; margin: 12px 0 14px; }
+
+  /* ---------- Card / box ---------- */
+  .card{ border:1.5px solid #3fae1e; border-radius:4px; margin-bottom:14px; background:#f4faee; }
+  .card .row{ display:flex; border-bottom:1px solid #3fae1e; padding:5px 12px; }
+  .card .row:last-child{ border-bottom:none; }
+  .card .col{ flex:1; padding-right:14px; }
+  .card .col:last-child{ padding-right:0; }
+  .flabel{ font-size:8.5pt; color:#333; }
+  .fval{ font-weight:700; border-bottom:1px dotted #666; display:inline-block; min-width:70%; }
+  .sub{ font-size:7.6pt; color:#555; font-style:italic; }
+
+  /* ---------- Section titles ---------- */
+  .section-title{ font-family: Georgia, 'Times New Roman', serif; font-size:22pt; margin: 18px 0 2px; }
+  .section-title .instr{ font-family:Arial; font-size:9.3pt; font-style:italic; font-weight:400; margin-left:10px; }
+
+  /* ---------- Question rows ---------- */
+  .qhead{ display:flex; font-weight:700; font-size:8.8pt; padding: 2px 0; }
+  .qhead .sp{ flex:1; }
+  .qhead .chkhdr{ width:26px; text-align:center; }
+  .qrow{ display:flex; align-items:baseline; padding:2px 0; font-size:8.8pt; }
+  .qrow .qtext{ flex:1; }
+  .qrow .dots{ flex:0 0 auto; width:14px; }
+  .qtext .leader{ border-bottom:1px dotted #555; margin: 0 4px; }
+  .qrow .chk{ width:26px; text-align:center; }
+  .checkbox{
+    width:9px; height:9px; border:1px solid #000; display:inline-block; vertical-align:middle;
+  }
+  .two-col{ display:flex; gap:22px; }
+  .two-col > div{ flex:1; }
+  .note-bold{ font-weight:700; font-size:8.8pt; margin-top:6px; }
+
+  .fill-row{ display:flex; padding:5px 12px; border-bottom:1px solid #3fae1e; font-size:8.8pt; }
+  .fill-row:last-child{ border-bottom:none; }
+  .fill-row .flabel{ margin-right:6px; }
+  .fill-row .fval-line{ flex:1; border-bottom:1px dotted #666; font-weight:700; min-height:12px; }
+
+  /* ---------- Vitals grid ---------- */
+  .vitals-grid{ display:flex; flex-wrap:wrap; padding:8px 12px; }
+  .vitals-grid .v{ width:33%; margin-bottom:6px; font-size:9pt; }
+  .vitals-grid .v .flabel{ margin-right:4px; }
+
+  /* ---------- Tables ---------- */
+  table.datatable{ width:100%; border-collapse:collapse; }
+  table.datatable th{ background:#3fae1e; color:#fff; font-size:8.6pt; padding:4px 8px; text-align:left; }
+  table.datatable td{ padding:4px 8px; font-size:8.8pt; border-bottom:1px solid #cfe8bd; }
+
+  /* ---------- Signature ---------- */
+  .sig-wrap{ display:flex; gap:24px; margin-top:10px; }
+  .sig-col{ flex:1; }
+  .sig-line{ border-bottom:1px solid #333; height:26px; margin-bottom:4px; }
+
+  .footer{ font-size:7.8pt; color:#333; margin-top:16px; }
+</style>
+</head>
+<body>
+<div class="top-bar"></div>
+<div class="page">
+
+{% macro masthead(data) %}
+  <div class="masthead">
+    <div class="doc-title">Health History Form</div>
+    <div class="org-block">
+      <div class="org-mark">{{ data.hospital }}</div>
+      <div class="org-name">Medical Record Department</div>
+      <div class="org-url">Tel: {{ data.phone }}</div>
+    </div>
+  </div>
+
+  <div class="email-box">
+    <div class="cell"><span class="flabel">Date of Service:</span> <span class="fval">{{ data.dos }}</span></div>
+    <div class="cell"><span class="flabel">MRN:</span> <span class="fval">{{ data.mrn }}</span></div>
+  </div>
+
+  <div class="disclaimer">
+    As required by law, our office adheres to written policies and procedures to protect the privacy of information
+    about you that we create, receive or maintain. Your answers are for our records only and will be kept
+    confidential subject to applicable laws. This information is vital to allow us to provide appropriate care for you.
+    This office does not use this information to discriminate.
+  </div>
+{% endmacro %}
+
+{% macro patient_demographics(data) %}
+  <div class="card">
+    <div class="row">
+      <div class="col" style="flex:2;"><span class="flabel">Name:</span> <span class="fval">{{ data.patient_name }}</span><br><span class="sub">Last, First, Middle</span></div>
+      <div class="col"><span class="flabel">Phone:</span> <span class="fval">{{ data.phone }}</span><br><span class="sub">Include area code</span></div>
+      <div class="col"><span class="flabel">Gender:</span> <span class="fval">{{ data.gender }}</span></div>
+    </div>
+    <div class="row">
+      <div class="col" style="flex:2;"><span class="flabel">Address:</span> <span class="fval">{{ data.address.street }}</span><br><span class="sub">Mailing address</span></div>
+      <div class="col"><span class="flabel">City:</span> <span class="fval">{{ data.address.city }}</span></div>
+      <div class="col"><span class="flabel">State:</span> <span class="fval">{{ data.address.state }}</span> &nbsp; <span class="flabel">Zip:</span> <span class="fval">{{ data.address.zip }}</span></div>
+    </div>
+    <div class="row">
+      <div class="col"><span class="flabel">Date of Birth:</span> <span class="fval">{{ data.dob }}</span></div>
+      <div class="col"><span class="flabel">SS# / Patient ID:</span> <span class="fval">{{ data.mrn }}</span></div>
+      <div class="col"><span class="flabel">Insurer:</span> <span class="fval">{{ data.insurer_name }}</span></div>
+    </div>
+    <div class="row">
+      <div class="col"><span class="flabel">Insurance ID:</span> <span class="fval">{{ data.insurance_id }}</span></div>
+      <div class="col"><span class="flabel">Group Number:</span> <span class="fval">{{ data.group_number }}</span></div>
+      <div class="col"><span class="flabel">Date of Service:</span> <span class="fval">{{ data.dos }}</span></div>
+    </div>
+  </div>
+{% endmacro %}
+
+{% macro chief_complaint(data) %}
+  <div class="card">
+    <div class="fill-row" style="border-bottom:1px solid #3fae1e;">
+      <span class="flabel" style="font-weight:700;">Chief Complaint — reason for today's visit:</span>
+    </div>
+    <div class="fill-row"><span class="fval-line">{{ data.chief_complaint }}</span></div>
+  </div>
+{% endmacro %}
+
+{% macro hpi(data) %}
+  <div class="section-title">History of Present Illness <span class="instr">In the patient's own words and clinical observation</span></div>
+  <div class="card">
+    <div class="fill-row"><span class="fval-line">{{ data.hpi }}</span></div>
+  </div>
+{% endmacro %}
+
+{% macro vitals(data) %}
+  <div class="section-title">Vital Signs <span class="instr">Recorded at the start of this visit</span></div>
+  <div class="card">
+    <div class="vitals-grid">
+      <div class="v"><span class="flabel">BP:</span> {{ data.vitals.bp }} mmHg</div>
+      <div class="v"><span class="flabel">HR:</span> {{ data.vitals.hr }} bpm</div>
+      <div class="v"><span class="flabel">Temp:</span> {{ data.vitals.temp }}</div>
+      <div class="v"><span class="flabel">RR:</span> {{ data.vitals.rr }} /min</div>
+      <div class="v"><span class="flabel">SpO2:</span> {{ data.vitals.spo2 }}</div>
+      <div class="v"><span class="flabel">Weight:</span> {{ data.vitals.weight }}</div>
+    </div>
+  </div>
+{% endmacro %}
+
+{% macro physical_exam(data) %}
+  <div class="section-title">Physical Examination <span class="instr">Findings from today's exam</span></div>
+  <div class="card">
+    <div class="fill-row"><span class="fval-line">{{ data.physical_exam }}</span></div>
+  </div>
+{% endmacro %}
+
+{% macro assessment(data) %}
+  <div class="section-title">Assessment &amp; Diagnoses <span class="instr">Please mark (X) — codes recorded by the attending clinician</span></div>
+  <div class="card">
+    <table class="datatable">
+      <thead><tr><th style="width:22%;">ICD-10 Code</th><th>Description</th></tr></thead>
+      <tbody>
+        {% for code, desc in data.diagnosis_codes %}
+        <tr><td>{{ code }}</td><td>{{ desc }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div class="fill-row" style="border-top:1px solid #3fae1e;"><span class="fval-line">{{ data.assessment }}</span></div>
+  </div>
+{% endmacro %}
+
+{% macro plan(data) %}
+  <div class="section-title">Plan <span class="instr">Treatment plan and next steps</span></div>
+  <div class="card">
+    <div class="fill-row"><span class="fval-line">{{ data.plan }}</span></div>
+    <table class="datatable">
+      <thead><tr><th style="width:22%;">CPT Code</th><th>Description</th></tr></thead>
+      <tbody>
+        {% for code in data.procedure_codes %}
+        <tr><td>{{ code }}</td><td>Procedure {{ code }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endmacro %}
+
+{% macro scenario_details(data) %}
+  {% if data.scenario_facts %}
+  <div class="section-title">{{ data.scenario_facts_title }}</div>
+  <div class="card">
+    {% for fact in data.scenario_facts %}
+    <div class="fill-row"><span class="flabel">{{ fact.label }}:</span> <span class="fval-line" style="flex:none; min-width:0;">{{ fact.value }}</span></div>
+    {% endfor %}
+  </div>
+  {% endif %}
+{% endmacro %}
+
+{% macro signature(data) %}
+  <div class="card" style="padding:12px 14px;">
+    <div class="sig-wrap">
+      <div class="sig-col">
+        <div class="flabel" style="font-weight:700;">Attending Physician</div>
+        <div class="sig-line"></div>
+        <div style="font-weight:700;">{{ data.physician_name }}</div>
+        <div class="sub">NPI: {{ data.npi }} &nbsp;|&nbsp; Specialty: {{ data.specialty }}</div>
+      </div>
+      <div class="sig-col">
+        <div class="flabel" style="font-weight:700;">Date Signed</div>
+        <div class="sig-line"></div>
+        <div style="font-weight:700;">{{ data.dos }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    &copy; {{ data.hospital }} &nbsp;|&nbsp; MRN: {{ data.mrn }} &nbsp;|&nbsp; Confidential Medical Record
+  </div>
+{% endmacro %}
+
+{% set component_map = {
+  "masthead": masthead, "patient_demographics": patient_demographics, "chief_complaint": chief_complaint,
+  "hpi": hpi, "vitals": vitals, "physical_exam": physical_exam, "assessment": assessment,
+  "plan": plan, "scenario_details": scenario_details, "signature": signature,
+} %}
+{% for c in components %}{{ component_map[c](data) }}{% endfor %}
+
+</div>
+</body>
+</html>

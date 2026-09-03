@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Texas Peace Officer's Crash Report (CR-3) &mdash; {{ incident_number }}</title>
+<style>
+  @page { size: letter portrait; margin: 0.35in 0.32in 0.5in 0.32in;
+    @bottom-left { content: "CR-3 (Rev. 4/1/2023)  Case ID {{ incident_number }}"; font: 6.2pt "DejaVu Sans", Arial; color:#333; }
+    @bottom-right { content: "SPECIMEN \00B7 SYNTHETIC TEST DATA \00B7 NOT A GENUINE CRASH REPORT  \00B7  Page " counter(page) " of " counter(pages); font: 6.2pt "DejaVu Sans", Arial; color:#333; }
+  }
+  body { font-family: "DejaVu Sans", Arial, sans-serif; font-size: 6.9pt; color:#000; margin:0; }
+  .page { page-break-after: always; position: relative; }
+  .page:last-child { page-break-after: auto; }
+  .wm { position: fixed; top: 44%; left: 12%; font-size: 62pt; font-weight: 700;
+        color: rgba(40,40,40,0.07); transform: rotate(-28deg); letter-spacing: 6px; z-index:0; }
+  .masthead { display:flex; align-items:flex-start; border:1.4pt solid #000; }
+  .masthead .cell { padding:2px 4px; }
+  .masthead .title { flex:1; text-align:center; border-left:1pt solid #000; border-right:1pt solid #000; }
+  .masthead .title b { font-size:10.5pt; letter-spacing:0.4px; display:block; }
+  .masthead .title span { font-size:6.4pt; }
+  .agency { font-size:6.3pt; width:1.55in; line-height:1.25; }
+  .idbox { width:1.35in; font-size:6.3pt; line-height:1.3; }
+  table.grid { width:100%; border-collapse:collapse; table-layout:fixed; }
+  table.grid td { border:0.6pt solid #000; padding:0 3px 2px 3px; vertical-align:top; height:0.30in; }
+  .lbl { font-size:5.3pt; text-transform:uppercase; letter-spacing:0.2px; color:#000; display:block; }
+  .val { font-size:7.4pt; }
+  .band { background:#000; color:#fff; font-size:6.6pt; font-weight:700; letter-spacing:0.7px;
+          padding:1.5px 5px; text-transform:uppercase; }
+  .subband { background:#dcdcdc; font-size:6.2pt; font-weight:700; letter-spacing:0.4px;
+             padding:1.5px 5px; text-transform:uppercase; border-left:0.6pt solid #000; border-right:0.6pt solid #000; }
+  .cls { display:flex; border:0.6pt solid #000; border-top:none; }
+  .cls div { flex:1; border-right:0.6pt solid #000; padding:1px 3px; font-size:5.6pt; text-transform:uppercase; }
+  .cls div:last-child { border-right:none; }
+  .cls b { font-size:7.6pt; }
+  .narr { border:0.6pt solid #000; border-top:none; padding:4px 5px; font-size:7.2pt; line-height:1.42; text-align:justify; }
+  .diagram { border:0.6pt solid #000; border-top:none; height:2.5in; position:relative; }
+  .diagram .note { position:absolute; bottom:3px; right:5px; font-size:5.4pt; color:#444; }
+  .sig { font-family:"Segoe Script","Brush Script MT",cursive; font-size:11pt; }
+  .codes { font-size:5.4pt; color:#222; padding:2px 4px; border:0.6pt solid #000; border-top:none; }
+</style>
+</head>
+<body>
+
+<div class="page">
+  <div class="wm">SPECIMEN</div>
+
+  <div class="masthead">
+    <div class="cell agency">
+      <b>TEXAS DEPARTMENT OF TRANSPORTATION</b><br>
+      {{ department }}<br>
+      {{ department_address }}<br>
+      ORI {{ department_ori }} &nbsp; NCIC {{ department_ncic }}
+    </div>
+    <div class="cell title">
+      <b>TEXAS PEACE OFFICER'S CRASH REPORT</b>
+      <span>FORM CR-3 (Rev. 4/1/2023) &mdash; Submit to TxDOT within 10 days</span>
+    </div>
+    <div class="cell idbox">
+      <span class="lbl">TxDOT Crash ID</span><b>{{ local_report_number }}</b><br>
+      <span class="lbl">Page</span>1 of {{ page_count }}
+    </div>
+  </div>
+
+  <div class="band">3.1 &nbsp; Classification Identifiers</div>
+  <div class="cls">
+    <div>Fatal <b>N</b></div>
+    <div>CMV <b>N</b></div>
+    <div>School Bus <b>N</b></div>
+    <div>Railroad <b>N</b></div>
+    <div>MAB <b>N</b></div>
+    <div>Supplement <b>N</b></div>
+    <div>Active School Zone <b>N</b></div>
+  </div>
+
+  <div class="band">3.2 &nbsp; Identification and Location</div>
+  <table class="grid">
+    <tr>
+      <td style="width:16%"><span class="lbl">Case ID</span><span class="val">{{ incident_number }}</span></td>
+      <td style="width:14%"><span class="lbl">Local Use</span><span class="val">{{ local_report_number }}</span></td>
+      <td style="width:12%"><span class="lbl">{% if 'auto_parties' in components %}Crash{% else %}Incident{% endif %} Date</span><span class="val">{{ incident_date }}</span></td>
+      <td style="width:10%"><span class="lbl">{% if 'auto_parties' in components %}Crash{% else %}Incident{% endif %} Time</span><span class="val">{{ incident_time }}</span></td>
+      <td style="width:20%"><span class="lbl">County</span><span class="val">{{ county }}</span></td>
+      <td style="width:18%"><span class="lbl">City Name</span><span class="val">{{ city }}</span></td>
+      <td style="width:10%"><span class="lbl">Outside City Limit</span><span class="val">No</span></td>
+    </tr>
+    {% if 'auto_parties' in components %}
+    <tr>
+      <td colspan="4"><span class="lbl">Road on Which Crash Occurred (3.2.10)</span><span class="val">{{ location }}</span></td>
+      <td><span class="lbl">Speed Limit</span><span class="val">{{ speed_limit }}</span></td>
+      <td><span class="lbl">Toll Road / Toll Lane</span><span class="val">No</span></td>
+      <td><span class="lbl">Latitude / Longitude</span><span class="val">&nbsp;</span></td>
+    </tr>
+    <tr>
+      <td colspan="3"><span class="lbl">Traffic Control</span><span class="val">{{ traffic_control }}</span></td>
+      <td colspan="2"><span class="lbl">Manner of Collision</span><span class="val">{{ collision_type }}</span></td>
+      <td><span class="lbl">Units Involved</span><span class="val">{{ num_vehicles }}</span></td>
+      <td><span class="lbl">Hit and Run</span><span class="val">{{ hit_and_run }}</span></td>
+    </tr>
+    {% else %}
+    <tr>
+      <td colspan="5"><span class="lbl">Location of Incident (3.2.10)</span><span class="val">{{ location }}</span></td>
+      <td><span class="lbl">Latitude / Longitude</span><span class="val">&nbsp;</span></td>
+      <td><span class="lbl">Reported</span><span class="val">{{ report_date }}</span></td>
+    </tr>
+    {% endif %}
+  </table>
+
+  {% if 'auto_parties' in components %}
+  <div class="band">3.3 &nbsp; Vehicle, Driver &amp; Persons</div>
+  {% for party in parties_involved %}
+  <div class="subband">Unit {{ loop.index }} &mdash; {{ party.role }}{% if party.at_fault %} &nbsp;(Investigator's opinion: contributing){% endif %}</div>
+  <table class="grid">
+    <tr>
+      <td style="width:26%"><span class="lbl">Name (Last, First, Middle)</span><span class="val">{{ party.name }}</span></td>
+      <td style="width:11%"><span class="lbl">DOB (3.3.23)</span><span class="val">{{ party.dob }}</span></td>
+      <td style="width:11%"><span class="lbl">Sex</span><span class="val">{{ party.sex }}</span></td>
+      <td style="width:16%"><span class="lbl">DL/ID No.</span><span class="val">{{ party.license_number }}</span></td>
+      <td style="width:10%"><span class="lbl">DL/ID State (3.3.18)</span><span class="val">{{ party.license_state }}</span></td>
+      <td style="width:10%"><span class="lbl">DL Class (3.3.20)</span><span class="val">{{ party.license_class }}</span></td>
+      <td style="width:16%"><span class="lbl">Phone</span><span class="val">{{ party.phone }}</span></td>
+    </tr>
+    <tr>
+      <td colspan="4"><span class="lbl">Address (Street, City, State, ZIP) (3.3.24)</span><span class="val">{{ party.address }}</span></td>
+      <td><span class="lbl">Injury Severity (3.3.29)</span><span class="val">{{ party.injured }}</span></td>
+      <td><span class="lbl">Restraint</span><span class="val">{{ party.restraint }}</span></td>
+      <td><span class="lbl">Seat Position</span><span class="val">{{ party.seat_position }}</span></td>
+    </tr>
+    <tr>
+      <td><span class="lbl">VIN (3.3.7)</span><span class="val">{{ party.vehicle_vin }}</span></td>
+      <td><span class="lbl">Year</span><span class="val">{{ party.vehicle_year }}</span></td>
+      <td><span class="lbl">Make</span><span class="val">{{ party.vehicle_make }}</span></td>
+      <td><span class="lbl">Model</span><span class="val">{{ party.vehicle_model }}</span></td>
+      <td><span class="lbl">License Plate</span><span class="val">{{ party.vehicle_plate }}</span></td>
+      <td><span class="lbl">Plate State (3.3.5)</span><span class="val">{{ party.vehicle_plate_state }}</span></td>
+      <td><span class="lbl">Parked Vehicle (3.3.3)</span><span class="val">No</span></td>
+    </tr>
+    <tr>
+      <td colspan="2"><span class="lbl">Owner or Lessee Name (3.3.44)</span><span class="val">{{ party.registered_owner }}</span></td>
+      <td colspan="2"><span class="lbl">Proof of Financial Responsibility</span><span class="val">{{ party.insurer }} / {{ party.policy_number }}</span></td>
+      <td><span class="lbl">Vehicle Damage Rating (3.3.50)</span><span class="val">{{ party.damage_severity }}</span></td>
+      <td colspan="2"><span class="lbl">Towed By / Towed To (3.3.52&ndash;53)</span><span class="val">{{ party.towed }}</span></td>
+    </tr>
+    <tr>
+      <td colspan="7"><span class="lbl">Damage Description</span><span class="val">{{ party.damage_description }}</span></td>
+    </tr>
+  </table>
+  {% endfor %}
+  {% else %}
+  <div class="band">3.3 &nbsp; Reporting Party and Property Incident</div>
+  <table class="grid">
+    <tr>
+      <td style="width:30%"><span class="lbl">Reporting Party</span><span class="val">{{ parties_involved[0].name }}</span></td>
+      <td style="width:34%"><span class="lbl">Address (Street, City, State, ZIP)</span><span class="val">{{ parties_involved[0].address }}</span></td>
+      <td style="width:18%"><span class="lbl">Phone</span><span class="val">{{ parties_involved[0].phone }}</span></td>
+      <td style="width:18%"><span class="lbl">Incident Type</span><span class="val">{{ scenario_facts_title }}</span></td>
+    </tr>
+  </table>
+  <div class="subband">{{ scenario_facts_title }}</div>
+  <table class="grid">
+    {% for f in scenario_facts %}
+    <tr>
+      <td style="width:32%"><span class="lbl">{{ f.label }}</span></td>
+      <td><span class="val">{{ f.value }}</span></td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% endif %}
+</div>
+
+<div class="page">
+  <div class="wm">SPECIMEN</div>
+
+  <div class="masthead">
+    <div class="cell agency"><b>BACK OF BASIC REPORT</b><br>{{ department }}</div>
+    <div class="cell title"><b>TEXAS PEACE OFFICER'S CRASH REPORT</b><span>FORM CR-3 (Rev. 4/1/2023)</span></div>
+    <div class="cell idbox"><span class="lbl">Case ID (4.1.1)</span><b>{{ incident_number }}</b><br><span class="lbl">Page</span>2 of {{ page_count }}</div>
+  </div>
+
+  {% if 'auto_parties' in components %}
+  <div class="band">4.2 &nbsp; Disposition of Injured / Killed</div>
+  <table class="grid">
+    <tr>
+      <td style="width:6%"><span class="lbl">Unit</span></td>
+      <td style="width:30%"><span class="lbl">Name</span></td>
+      <td style="width:14%"><span class="lbl">Injury Severity</span></td>
+      <td style="width:28%"><span class="lbl">Taken To (4.2.3)</span></td>
+      <td style="width:22%"><span class="lbl">Taken By (4.2.4)</span></td>
+    </tr>
+    {% for party in parties_involved %}
+    <tr>
+      <td><span class="val">{{ loop.index }}</span></td>
+      <td><span class="val">{{ party.name }}</span></td>
+      <td><span class="val">{{ party.injured }}</span></td>
+      <td><span class="val">{{ party.transported_to }}</span></td>
+      <td><span class="val">{% if party.transported_to and party.transported_to not in ('-', 'N/A', 'None') %}EMS{% else %}Not transported{% endif %}</span></td>
+    </tr>
+    {% endfor %}
+  </table>
+
+  <div class="band">4.3 &nbsp; Charges</div>
+  <table class="grid">
+    <tr>
+      <td style="width:6%"><span class="lbl">Unit</span><span class="val">{{ enforcement_party_cited }}</span></td>
+      <td style="width:34%"><span class="lbl">Charge (4.3.3)</span><span class="val">{{ enforcement_sections_charged }}</span></td>
+      <td style="width:22%"><span class="lbl">Citation No.</span><span class="val">{{ enforcement_citation_number }}</span></td>
+      <td style="width:22%"><span class="lbl">Court</span><span class="val">{{ enforcement_court_name }}</span></td>
+      <td style="width:16%"><span class="lbl">Court Date</span><span class="val">{{ enforcement_court_date }}</span></td>
+    </tr>
+  </table>
+
+  {% endif %}
+
+  <div class="band">4.4 &nbsp; Damage &mdash; Property Other Than Vehicles</div>
+  <table class="grid">
+    <tr>
+      <td style="width:38%"><span class="lbl">Damaged Property (4.4.1)</span></td>
+      <td style="width:32%"><span class="lbl">Owner's Name (4.4.2)</span></td>
+      <td style="width:30%"><span class="lbl">Estimated Value</span></td>
+    </tr>
+    {% for item in property_damage_items %}
+    <tr>
+      <td><span class="val">{{ item.item }}</span></td>
+      <td><span class="val">{{ item.owner }}</span></td>
+      <td><span class="val">{{ item.est_value }}</span></td>
+    </tr>
+    {% endfor %}
+  </table>
+
+  <div class="band">4.6 &nbsp; {% if 'auto_parties' in components %}Factors and Conditions{% else %}Environmental Conditions{% endif %}</div>
+  <table class="grid">
+    {% if 'auto_parties' in components %}
+    <tr>
+      <td style="width:34%"><span class="lbl">Contributing Factors (4.6.1)</span><span class="val">{{ primary_factor }}</span></td>
+      <td style="width:22%"><span class="lbl">Vehicle Defects (4.6.2)</span><span class="val">{{ other_factors }}</span></td>
+      <td style="width:14%"><span class="lbl">Weather</span><span class="val">{{ weather_conditions }}</span></td>
+      <td style="width:15%"><span class="lbl">Surface Condition</span><span class="val">{{ road_conditions }}</span></td>
+      <td style="width:15%"><span class="lbl">Light Condition</span><span class="val">{{ lighting_conditions }}</span></td>
+    </tr>
+    {% else %}
+    <tr>
+      <td style="width:34%"><span class="lbl">Weather at Time of Incident</span><span class="val">{{ weather_conditions }}</span></td>
+      <td style="width:33%"><span class="lbl">Light Condition</span><span class="val">{{ lighting_conditions }}</span></td>
+      <td style="width:33%"><span class="lbl">Case Status</span><span class="val">{{ case_status }}</span></td>
+    </tr>
+    {% endif %}
+  </table>
+  {% if 'auto_parties' in components %}
+  <div class="codes">4.6.3 Environmental and Roadway Conditions &mdash; coded per CR-3 Code Sheet (CR-3CS). Chemical test: {{ chemical_test }}</div>
+  {% endif %}
+
+  <div class="band">Witnesses</div>
+  <table class="grid">
+    <tr><td style="width:30%"><span class="lbl">Name</span></td><td style="width:44%"><span class="lbl">Address</span></td><td style="width:26%"><span class="lbl">Phone</span></td></tr>
+    {% for w in witnesses %}
+    <tr><td><span class="val">{{ w.name }}</span></td><td><span class="val">{{ w.address }}</span></td><td><span class="val">{{ w.phone }}</span></td></tr>
+    {% endfor %}
+  </table>
+  {% if scenario_facts and 'auto_parties' in components %}
+  <div class="band">Supplemental Detail</div>
+  <table class="grid">
+    {% for f in scenario_facts %}
+    <tr><td style="width:30%"><span class="lbl">{{ f.label }}</span></td><td><span class="val">{{ f.value }}</span></td></tr>
+    {% endfor %}
+  </table>
+  {% endif %}
+</div>
+
+<div class="page">
+  <div class="wm">SPECIMEN</div>
+
+  <div class="masthead">
+    <div class="cell agency"><b>NARRATIVE &amp; DIAGRAM</b><br>{{ department }}</div>
+    <div class="cell title"><b>TEXAS PEACE OFFICER'S CRASH REPORT</b><span>FORM CR-3 (Rev. 4/1/2023)</span></div>
+    <div class="cell idbox"><span class="lbl">Case ID</span><b>{{ incident_number }}</b><br><span class="lbl">Page</span>{{ page_count }} of {{ page_count }}</div>
+  </div>
+
+  <div class="band">4.7 &nbsp; Investigator's Narrative Opinion of What Happened</div>
+  <div class="narr">
+    {% for para in narrative_paragraphs %}<p style="margin:0 0 6px 0">{{ para }}</p>{% endfor %}
+  </div>
+
+  <div class="band">4.7 &nbsp; Field Diagram (not to scale)</div>
+  <div class="diagram">
+    <svg width="100%" height="230" viewBox="0 0 700 230" xmlns="http://www.w3.org/2000/svg">
+      <rect x="0" y="0" width="700" height="230" fill="#fff"/>
+      <line x1="40" y1="95" x2="660" y2="95" stroke="#000" stroke-width="1.2"/>
+      <line x1="40" y1="150" x2="660" y2="150" stroke="#000" stroke-width="1.2"/>
+      <line x1="40" y1="122" x2="660" y2="122" stroke="#000" stroke-width="0.9" stroke-dasharray="12 9"/>
+      <rect x="250" y="100" width="74" height="34" fill="none" stroke="#000" stroke-width="1.1"/>
+      <text x="272" y="122" font-size="12" font-family="Arial">U1</text>
+      <rect x="345" y="100" width="74" height="34" fill="none" stroke="#000" stroke-width="1.1"/>
+      <text x="367" y="122" font-size="12" font-family="Arial">U2</text>
+      <path d="M330 117 l12 -5 v10 z" fill="#000"/>
+      <text x="46" y="88" font-size="9" font-family="Arial">{{ location }}</text>
+      <text x="540" y="171" font-size="9" font-family="Arial">N &#8593;</text>
+    </svg>
+    <div class="note">Illustrative diagram &mdash; synthetic test data</div>
+  </div>
+
+  <div class="band">4.8 &nbsp; Investigator</div>
+  <table class="grid">
+    <tr>
+      <td style="width:34%"><span class="lbl">Investigator's Name</span><span class="val sig">{{ officer_name }}</span></td>
+      <td style="width:14%"><span class="lbl">Badge / ID</span><span class="val">{{ badge_number }}</span></td>
+      <td style="width:14%"><span class="lbl">Unit</span><span class="val">{{ reporting_officer_unit }}</span></td>
+      <td style="width:14%"><span class="lbl">Date</span><span class="val">{{ reporting_officer_date }}</span></td>
+      <td style="width:12%"><span class="lbl">Time</span><span class="val">{{ reporting_officer_time }}</span></td>
+      <td style="width:12%"><span class="lbl">Status</span><span class="val">{{ report_status }}</span></td>
+    </tr>
+    <tr>
+      <td colspan="2"><span class="lbl">Supervisor Approval</span><span class="val sig">{{ supervisor_name }}</span></td>
+      <td><span class="lbl">Badge</span><span class="val">{{ supervisor_badge }}</span></td>
+      <td colspan="3"><span class="lbl">Approval Date</span><span class="val">{{ supervisor_approval_date }}</span></td>
+    </tr>
+    <tr>
+      <td colspan="3"><span class="lbl">Records Custodian</span><span class="val">{{ records_custodian }}</span></td>
+      <td colspan="3"><span class="lbl">Release / Request No.</span><span class="val">{{ records_release_date }} &nbsp; {{ records_request_number }}</span></td>
+    </tr>
+  </table>
+  <div class="codes">
+    Coded values on this report reference the CR-3 Code Sheet (Form CR-3CS). This document is
+    SPECIMEN synthetic test data generated for document-processing evaluation and is not a
+    genuine Texas Peace Officer's Crash Report.
+  </div>
+</div>
+
+</body>
+</html>
