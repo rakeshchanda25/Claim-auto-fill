@@ -4,6 +4,7 @@ from datetime import date, datetime, timedelta
 from faker import Faker
 
 from renderers.components import get_components, shape_for
+from renderers.state_forms import state_form
 
 _fake = Faker()
 
@@ -829,6 +830,7 @@ def build_synthetic_data(doc_type: str, scenario: str = "general", anchor_date=N
         "components": get_components(doc_type, scenario),
         "layout_key": jurisdiction,
         "layout_shape": shape_for(doc_type, scenario),
+        "state_form": state_form(jurisdiction),
     }
 
     if doc_type == "medical-record":

@@ -1,360 +1,419 @@
-# Provenance for every per-state layout.
+# Provenance for every per-state police-report layout.
 #
-# fidelity: field-level | page-level | unsourced
-# A state stays 'unsourced' until its official form and instructions have been
-# retrieved and its field list recorded in
-# skills/police-report/references/states/<CODE>.md. Layouts must not be authored
-# from an unsourced entry - that is how invented field names get in.
+# fidelity:
+#   field-level     - field names sourced from the state's own instructions manual
+#   page-level      - page/section structure sourced, box numbering NOT verified
+#   form-identified - real form number and issuing agency sourced; field-level
+#                     layout NOT verified, rendered from a shared archetype
+#   unsourced       - no official form identified; archetype only, generic naming
+#
+# Most entries come from ACTAR's published table of state traffic crash report
+# forms. That table lists historical revisions, so a form number here may lag the
+# state's current revision - verify before relying on it for field-level work.
+#
+# Raising a state to field-level: obtain its form and instructions manual, record
+# the fields in skills/police-report/references/states/<CODE>.md, author
+# renderers/layouts/police-report/<CODE>.html, then update fidelity here.
 
 doc_type: police-report
 states:
-  AL:
-    form_number: null
-    revision: null
-    agency: null
-    source_url: null
-    retrieved: null
-    fidelity: unsourced
   AK:
-    form_number: null
-    revision: null
-    agency: null
-    source_url: null
-    retrieved: null
-    fidelity: unsourced
-  AZ:
-    form_number: null
-    revision: null
-    agency: null
-    source_url: null
-    retrieved: null
-    fidelity: unsourced
-  AR:
-    form_number: null
-    revision: null
-    agency: null
-    source_url: null
-    retrieved: null
-    fidelity: unsourced
-  CA:
-    form_number: "CHP 555"
-    revision: ""
-    agency: "California Highway Patrol"
-    source_url: ""
+    form_number: 'Form 12-200'
+    agency: "Alaska Department of Transportation"
+    title: "Alaska Traffic Collision Report"
+    fidelity: form-identified
+    archetype: ruled
+    source_url: "https://actar.org/resources/reports"
     retrieved: "2026-09-03"
+  AL:
+    form_number: 'AST-27'
+    agency: "Alabama Department of Public Safety"
+    title: "Alabama Uniform Traffic Crash Report"
+    fidelity: form-identified
+    archetype: boxed
+    source_url: "https://actar.org/resources/reports"
+    retrieved: "2026-09-03"
+  AR:
+    form_number: 'Form 5-2000'
+    agency: "Arkansas State Police"
+    title: "Arkansas Motor Vehicle Crash Report"
+    fidelity: form-identified
+    archetype: compact
+    source_url: "https://actar.org/resources/reports"
+    retrieved: "2026-09-03"
+  AZ:
+    form_number: 'Form 01-2704'
+    agency: "Arizona Department of Public Safety"
+    title: "Arizona Traffic Crash Report"
+    fidelity: form-identified
+    archetype: boxed
+    source_url: "https://actar.org/resources/reports"
+    retrieved: "2026-09-03"
+  CA:
+    form_number: 'CHP 555'
+    agency: "California Highway Patrol"
+    title: "Traffic Collision Report"
     fidelity: page-level
+    archetype: ruled
+    source_url: "https://actar.org/resources/reports"
+    retrieved: "2026-09-03"
   CO:
-    form_number: null
-    revision: null
-    agency: null
-    source_url: null
-    retrieved: null
-    fidelity: unsourced
+    form_number: 'DR 2447'
+    agency: "Colorado State Patrol"
+    title: "Colorado Traffic Accident Report"
+    fidelity: form-identified
+    archetype: boxed
+    source_url: "https://actar.org/resources/reports"
+    retrieved: "2026-09-03"
   CT:
-    form_number: null
-    revision: null
-    agency: null
-    source_url: null
-    retrieved: null
-    fidelity: unsourced
+    form_number: 'PR-1'
+    agency: "Connecticut Department of Transportation"
+    title: "Connecticut Uniform Police Crash Report"
+    fidelity: form-identified
+    archetype: ruled
+    source_url: "https://actar.org/resources/reports"
+    retrieved: "2026-09-03"
   DE:
-    form_number: null
-    revision: null
-    agency: null
-    source_url: null
-    retrieved: null
-    fidelity: unsourced
+    form_number: 'Form 438'
+    agency: "Delaware State Police"
+    title: "Delaware Uniform Collision Report"
+    fidelity: form-identified
+    archetype: compact
+    source_url: "https://actar.org/resources/reports"
+    retrieved: "2026-09-03"
   FL:
-    form_number: null
-    revision: null
-    agency: null
-    source_url: null
-    retrieved: null
-    fidelity: unsourced
+    form_number: 'HSMV 90003'
+    agency: "Florida Department of Highway Safety and Motor Vehicles"
+    title: "Florida Traffic Crash Report"
+    fidelity: form-identified
+    archetype: boxed
+    source_url: "https://actar.org/resources/reports"
+    retrieved: "2026-09-03"
   GA:
-    form_number: null
-    revision: null
-    agency: null
-    source_url: null
-    retrieved: null
-    fidelity: unsourced
+    form_number: 'GDOT-523'
+    agency: "Georgia Department of Transportation"
+    title: "Georgia Motor Vehicle Crash Report"
+    fidelity: form-identified
+    archetype: ruled
+    source_url: "https://actar.org/resources/reports"
+    retrieved: "2026-09-03"
   HI:
     form_number: null
-    revision: null
-    agency: null
+    agency: "Hawaii Department of Transportation"
+    title: "Hawaii Motor Vehicle Crash Report"
+    fidelity: unsourced
+    archetype: compact
     source_url: null
     retrieved: null
-    fidelity: unsourced
-  ID:
-    form_number: null
-    revision: null
-    agency: null
-    source_url: null
-    retrieved: null
-    fidelity: unsourced
-  IL:
-    form_number: null
-    revision: null
-    agency: null
-    source_url: null
-    retrieved: null
-    fidelity: unsourced
-  IN:
-    form_number: null
-    revision: null
-    agency: null
-    source_url: null
-    retrieved: null
-    fidelity: unsourced
   IA:
     form_number: null
-    revision: null
-    agency: null
+    agency: "Iowa Department of Transportation"
+    title: "Iowa Investigating Officer's Crash Report"
+    fidelity: unsourced
+    archetype: boxed
     source_url: null
     retrieved: null
-    fidelity: unsourced
+  ID:
+    form_number: 'IDT-90'
+    agency: "Idaho Transportation Department"
+    title: "Idaho Vehicle Collision Report"
+    fidelity: form-identified
+    archetype: boxed
+    source_url: "https://actar.org/resources/reports"
+    retrieved: "2026-09-03"
+  IL:
+    form_number: 'SR 1050'
+    agency: "Illinois Department of Transportation"
+    title: "Illinois Traffic Crash Report"
+    fidelity: form-identified
+    archetype: ruled
+    source_url: "https://actar.org/resources/reports"
+    retrieved: "2026-09-03"
+  IN:
+    form_number: 'Form 23558'
+    agency: "Indiana State Police"
+    title: "Indiana Officer's Standard Crash Report"
+    fidelity: form-identified
+    archetype: compact
+    source_url: "https://actar.org/resources/reports"
+    retrieved: "2026-09-03"
   KS:
-    form_number: null
-    revision: null
-    agency: null
-    source_url: null
-    retrieved: null
-    fidelity: unsourced
+    form_number: 'Form 852'
+    agency: "Kansas Department of Transportation"
+    title: "Kansas Motor Vehicle Accident Report"
+    fidelity: form-identified
+    archetype: ruled
+    source_url: "https://actar.org/resources/reports"
+    retrieved: "2026-09-03"
   KY:
-    form_number: null
-    revision: null
-    agency: null
-    source_url: null
-    retrieved: null
-    fidelity: unsourced
+    form_number: 'KSP-74'
+    agency: "Kentucky State Police"
+    title: "Kentucky Uniform Police Traffic Collision Report"
+    fidelity: form-identified
+    archetype: compact
+    source_url: "https://actar.org/resources/reports"
+    retrieved: "2026-09-03"
   LA:
-    form_number: null
-    revision: null
-    agency: null
-    source_url: null
-    retrieved: null
-    fidelity: unsourced
+    form_number: 'DPSSP 3105'
+    agency: "Louisiana State Police"
+    title: "Louisiana Uniform Motor Vehicle Traffic Crash Report"
+    fidelity: form-identified
+    archetype: boxed
+    source_url: "https://actar.org/resources/reports"
+    retrieved: "2026-09-03"
+  MA:
+    form_number: 'CRA-65'
+    agency: "Massachusetts Registry of Motor Vehicles"
+    title: "Massachusetts Motor Vehicle Crash Operator Report"
+    fidelity: form-identified
+    archetype: boxed
+    source_url: "https://actar.org/resources/reports"
+    retrieved: "2026-09-03"
+  MD:
+    form_number: 'MSP-1'
+    agency: "Maryland State Police"
+    title: "Maryland Motor Vehicle Crash Report"
+    fidelity: form-identified
+    archetype: compact
+    source_url: "https://actar.org/resources/reports"
+    retrieved: "2026-09-03"
   ME:
     form_number: null
-    revision: null
-    agency: null
+    agency: "Maine State Police"
+    title: "Maine Uniform Crash Report"
+    fidelity: unsourced
+    archetype: ruled
     source_url: null
     retrieved: null
-    fidelity: unsourced
-  MD:
-    form_number: null
-    revision: null
-    agency: null
-    source_url: null
-    retrieved: null
-    fidelity: unsourced
-  MA:
-    form_number: null
-    revision: null
-    agency: null
-    source_url: null
-    retrieved: null
-    fidelity: unsourced
   MI:
-    form_number: null
-    revision: null
-    agency: null
-    source_url: null
-    retrieved: null
-    fidelity: unsourced
+    form_number: 'UD-10'
+    agency: "Michigan State Police"
+    title: "Michigan Traffic Crash Report"
+    fidelity: form-identified
+    archetype: ruled
+    source_url: "https://actar.org/resources/reports"
+    retrieved: "2026-09-03"
   MN:
-    form_number: null
-    revision: null
-    agency: null
-    source_url: null
-    retrieved: null
-    fidelity: unsourced
+    form_number: 'PS32003'
+    agency: "Minnesota Department of Public Safety"
+    title: "Minnesota Motor Vehicle Crash Report"
+    fidelity: form-identified
+    archetype: compact
+    source_url: "https://actar.org/resources/reports"
+    retrieved: "2026-09-03"
+  MO:
+    form_number: 'SHP-2P'
+    agency: "Missouri State Highway Patrol"
+    title: "Missouri Uniform Crash Report"
+    fidelity: form-identified
+    archetype: ruled
+    source_url: "https://actar.org/resources/reports"
+    retrieved: "2026-09-03"
   MS:
     form_number: null
-    revision: null
-    agency: null
+    agency: "Mississippi Department of Public Safety"
+    title: "Mississippi Uniform Crash Report"
+    fidelity: unsourced
+    archetype: boxed
     source_url: null
     retrieved: null
-    fidelity: unsourced
-  MO:
-    form_number: null
-    revision: null
-    agency: null
-    source_url: null
-    retrieved: null
-    fidelity: unsourced
   MT:
     form_number: null
-    revision: null
-    agency: null
+    agency: "Montana Highway Patrol"
+    title: "Montana Vehicle Crash Report"
+    fidelity: unsourced
+    archetype: compact
     source_url: null
     retrieved: null
-    fidelity: unsourced
+  NC:
+    form_number: 'DMV-349'
+    agency: "North Carolina Division of Motor Vehicles"
+    title: "North Carolina Crash Report"
+    fidelity: form-identified
+    archetype: boxed
+    source_url: "https://actar.org/resources/reports"
+    retrieved: "2026-09-03"
+  ND:
+    form_number: 'SFN 2355'
+    agency: "North Dakota Department of Transportation"
+    title: "North Dakota Crash Report"
+    fidelity: form-identified
+    archetype: ruled
+    source_url: "https://actar.org/resources/reports"
+    retrieved: "2026-09-03"
   NE:
-    form_number: null
-    revision: null
-    agency: null
-    source_url: null
-    retrieved: null
-    fidelity: unsourced
+    form_number: 'Form 40'
+    agency: "Nebraska Department of Transportation"
+    title: "Nebraska Investigator's Motor Vehicle Crash Report"
+    fidelity: form-identified
+    archetype: boxed
+    source_url: "https://actar.org/resources/reports"
+    retrieved: "2026-09-03"
+  NH:
+    form_number: 'DSMV 159'
+    agency: "New Hampshire Division of Motor Vehicles"
+    title: "New Hampshire Uniform Police Traffic Accident Report"
+    fidelity: form-identified
+    archetype: compact
+    source_url: "https://actar.org/resources/reports"
+    retrieved: "2026-09-03"
+  NJ:
+    form_number: 'NJTR-1'
+    agency: "New Jersey Department of Transportation"
+    title: "New Jersey Police Crash Investigation Report"
+    fidelity: form-identified
+    archetype: boxed
+    source_url: "https://actar.org/resources/reports"
+    retrieved: "2026-09-03"
+  NM:
+    form_number: 'SH10074'
+    agency: "New Mexico Department of Transportation"
+    title: "New Mexico Uniform Crash Report"
+    fidelity: form-identified
+    archetype: ruled
+    source_url: "https://actar.org/resources/reports"
+    retrieved: "2026-09-03"
   NV:
     form_number: null
-    revision: null
-    agency: null
+    agency: "Nevada Department of Public Safety"
+    title: "Nevada Traffic Crash Report"
+    fidelity: unsourced
+    archetype: ruled
     source_url: null
     retrieved: null
-    fidelity: unsourced
-  NH:
-    form_number: null
-    revision: null
-    agency: null
-    source_url: null
-    retrieved: null
-    fidelity: unsourced
-  NJ:
-    form_number: null
-    revision: null
-    agency: null
-    source_url: null
-    retrieved: null
-    fidelity: unsourced
-  NM:
-    form_number: null
-    revision: null
-    agency: null
-    source_url: null
-    retrieved: null
-    fidelity: unsourced
   NY:
-    form_number: null
-    revision: null
-    agency: null
-    source_url: null
-    retrieved: null
-    fidelity: unsourced
-  NC:
-    form_number: null
-    revision: null
-    agency: null
-    source_url: null
-    retrieved: null
-    fidelity: unsourced
-  ND:
-    form_number: null
-    revision: null
-    agency: null
-    source_url: null
-    retrieved: null
-    fidelity: unsourced
+    form_number: 'MV-104A'
+    agency: "New York State Department of Motor Vehicles"
+    title: "Police Accident Report"
+    fidelity: form-identified
+    archetype: compact
+    source_url: "https://actar.org/resources/reports"
+    retrieved: "2026-09-03"
   OH:
-    form_number: null
-    revision: null
-    agency: null
-    source_url: null
-    retrieved: null
-    fidelity: unsourced
+    form_number: 'OH-1'
+    agency: "Ohio Department of Public Safety"
+    title: "Ohio Traffic Crash Report"
+    fidelity: form-identified
+    archetype: compact
+    source_url: "https://actar.org/resources/reports"
+    retrieved: "2026-09-03"
   OK:
-    form_number: null
-    revision: null
-    agency: null
-    source_url: null
-    retrieved: null
-    fidelity: unsourced
+    form_number: 'DPS 0192-1'
+    agency: "Oklahoma Department of Public Safety"
+    title: "Oklahoma Official Traffic Collision Report"
+    fidelity: form-identified
+    archetype: boxed
+    source_url: "https://actar.org/resources/reports"
+    retrieved: "2026-09-03"
   OR:
-    form_number: null
-    revision: null
-    agency: null
-    source_url: null
-    retrieved: null
-    fidelity: unsourced
+    form_number: 'Form 73546-A'
+    agency: "Oregon Department of Transportation"
+    title: "Oregon Police Traffic Crash Report"
+    fidelity: form-identified
+    archetype: ruled
+    source_url: "https://actar.org/resources/reports"
+    retrieved: "2026-09-03"
   PA:
     form_number: null
-    revision: null
-    agency: null
+    agency: "Pennsylvania State Police"
+    title: "Pennsylvania Police Crash Reporting Form"
+    fidelity: unsourced
+    archetype: compact
     source_url: null
     retrieved: null
-    fidelity: unsourced
   RI:
-    form_number: null
-    revision: null
-    agency: null
-    source_url: null
-    retrieved: null
-    fidelity: unsourced
+    form_number: 'DMVSAF'
+    agency: "Rhode Island Division of Motor Vehicles"
+    title: "Rhode Island Uniform Crash Report"
+    fidelity: form-identified
+    archetype: boxed
+    source_url: "https://actar.org/resources/reports"
+    retrieved: "2026-09-03"
   SC:
-    form_number: null
-    revision: null
-    agency: null
-    source_url: null
-    retrieved: null
-    fidelity: unsourced
+    form_number: 'TR-310'
+    agency: "South Carolina Department of Public Safety"
+    title: "South Carolina Traffic Collision Report"
+    fidelity: form-identified
+    archetype: ruled
+    source_url: "https://actar.org/resources/reports"
+    retrieved: "2026-09-03"
   SD:
     form_number: null
-    revision: null
-    agency: null
+    agency: "South Dakota Highway Patrol"
+    title: "South Dakota Motor Vehicle Traffic Accident Report"
+    fidelity: unsourced
+    archetype: compact
     source_url: null
     retrieved: null
-    fidelity: unsourced
   TN:
-    form_number: null
-    revision: null
-    agency: null
-    source_url: null
-    retrieved: null
-    fidelity: unsourced
+    form_number: 'SF-1203'
+    agency: "Tennessee Department of Safety"
+    title: "Tennessee Uniform Crash Report"
+    fidelity: form-identified
+    archetype: boxed
+    source_url: "https://actar.org/resources/reports"
+    retrieved: "2026-09-03"
   TX:
-    form_number: "CR-3"
-    revision: "4/1/2023"
+    form_number: 'CR-3'
     agency: "Texas Department of Transportation"
+    title: "Texas Peace Officer's Crash Report"
+    fidelity: field-level
+    archetype: boxed
     source_url: "https://www.txdot.gov/data-maps/crash-reports-records/forms-law-enforcement.html"
     retrieved: "2026-09-03"
-    fidelity: field-level
   UT:
-    form_number: null
-    revision: null
-    agency: null
-    source_url: null
-    retrieved: null
-    fidelity: unsourced
-  VT:
-    form_number: null
-    revision: null
-    agency: null
-    source_url: null
-    retrieved: null
-    fidelity: unsourced
+    form_number: 'DI-9'
+    agency: "Utah Department of Public Safety"
+    title: "Utah Traffic Collision Report"
+    fidelity: form-identified
+    archetype: ruled
+    source_url: "https://actar.org/resources/reports"
+    retrieved: "2026-09-03"
   VA:
     form_number: null
-    revision: null
-    agency: null
+    agency: "Virginia Department of Motor Vehicles"
+    title: "Virginia Police Crash Report"
+    fidelity: unsourced
+    archetype: boxed
     source_url: null
     retrieved: null
+  VT:
+    form_number: null
+    agency: "Vermont Department of Motor Vehicles"
+    title: "Vermont Uniform Crash Report"
     fidelity: unsourced
+    archetype: compact
+    source_url: null
+    retrieved: null
   WA:
-    form_number: null
-    revision: null
-    agency: null
-    source_url: null
-    retrieved: null
-    fidelity: unsourced
-  WV:
-    form_number: null
-    revision: null
-    agency: null
-    source_url: null
-    retrieved: null
-    fidelity: unsourced
+    form_number: 'Form 30034513'
+    agency: "Washington State Patrol"
+    title: "Washington Police Traffic Collision Report"
+    fidelity: form-identified
+    archetype: ruled
+    source_url: "https://actar.org/resources/reports"
+    retrieved: "2026-09-03"
   WI:
-    form_number: null
-    revision: null
-    agency: null
-    source_url: null
-    retrieved: null
-    fidelity: unsourced
+    form_number: 'MV4000'
+    agency: "Wisconsin Department of Transportation"
+    title: "Wisconsin Motor Vehicle Crash Report"
+    fidelity: form-identified
+    archetype: boxed
+    source_url: "https://actar.org/resources/reports"
+    retrieved: "2026-09-03"
+  WV:
+    form_number: 'DMV-17F'
+    agency: "West Virginia Division of Motor Vehicles"
+    title: "West Virginia Uniform Traffic Crash Report"
+    fidelity: form-identified
+    archetype: compact
+    source_url: "https://actar.org/resources/reports"
+    retrieved: "2026-09-03"
   WY:
-    form_number: null
-    revision: null
-    agency: null
-    source_url: null
-    retrieved: null
-    fidelity: unsourced
+    form_number: 'PR-902'
+    agency: "Wyoming Department of Transportation"
+    title: "Wyoming Investigator's Traffic Crash Report"
+    fidelity: form-identified
+    archetype: ruled
+    source_url: "https://actar.org/resources/reports"
+    retrieved: "2026-09-03"

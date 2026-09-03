@@ -30,10 +30,26 @@ adjuster's notes, and excerpts from documents already attached to the claim. Rea
 priority; anything the claim does not cover is still generated. If the lookup fails, generation
 continues with synthetic data.
 
-**Per-state forms.** Every US state publishes its own crash report form, so a police report can be
-generated as a specific state's form rather than one generic layout. Pick the state in the UI;
-Texas renders as the TxDOT CR-3 and California as the CHP 555. States without a layout fall back
-to the generic template, and the agent can author a new one on first use via `author_layout`.
+**Per-state forms — all 50 states.** Every US state publishes its own crash report form, so a
+police report renders as that state's form rather than one generic layout. Texas is the TxDOT
+CR-3, New York the MV-104A, California the CHP 555, and so on.
+
+The state is resolved in this order: the UI picker, then the Guidewire claim (`jurisdiction`,
+then `loss_location`, then `policy_address`), then the text of the prompt. So asking for
+"a police report for claim 000-00-052594" produces that claim's state without anyone choosing it.
+
+Fidelity is tracked per state in `sourcing/state_forms.yaml`, and shown in the picker:
+
+| Fidelity | States | Meaning |
+|---|---|---|
+| `field-level` ★ | 1 (TX) | field names taken from the state's own instructions manual |
+| `page-level` ✓ | 1 (CA) | page structure sourced, box numbering **not** verified |
+| `form-identified` | 38 | real form number and agency sourced; rendered from a shared archetype |
+| `unsourced` | 10 | no official form identified; archetype with generic naming |
+
+Only Texas is field-level faithful. The rest carry a real form number and agency but are **not**
+field-verified — the file says so per state, so an unverified layout is never mistaken for a
+faithful one. Raising a state is a documented three-step process in that file.
 
 The national standard forms — ACORD 25, CMS-1500, UB-04 — deliberately **never** vary. Their box
 layout is fixed by OMB/NUBC/ACORD, so varying them would produce invalid test data, not diverse

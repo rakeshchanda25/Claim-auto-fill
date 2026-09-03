@@ -134,3 +134,86 @@ def test_jurisdiction_reaches_the_document_body():
     data = tools.current_run().doc_data
     assert data["layout_key"] == "TX"
     assert data["location"].endswith("TX")
+
+
+ALL_STATES = [s["code"] for s in US_STATES]
+AUTO_ONLY_LABELS = ["Manner of Collision", "Hit and Run", "Hit &amp; Run", "Units Involved",
+                    "Units", "Speed Limit", "Traffic Control", "Collision Type",
+                    "Primary Factor", "Primary Contributing Factor", "VIN"]
+
+
+@pytest.mark.parametrize("state", ALL_STATES)
+def test_every_state_renders_its_own_form(state):
+    from renderers.state_forms import state_form
+
+    meta = state_form(state)
+    assert meta, f"{state} missing from STATE_FORMS"
+    data = build_synthetic_data("police-report", "rear_end_collision", jurisdiction=state)
+    out = render_html("police-report", data).lower()
+    assert meta["agency"].lower() in out
+    if meta["form_number"]:
+        assert meta["form_number"].lower() in out
+    out = render_html("police-report", data)
+    for name in tools._REQUIRED_FIELDS["police-report"]:
+        assert str(data[name]) in out, f"{state} dropped {name}"
+    assert "SPECIMEN" in out
+
+
+@pytest.mark.parametrize("state", ALL_STATES)
+def test_every_state_handles_a_property_scenario(state):
+    data = build_synthetic_data("police-report", "fire_damage", jurisdiction=state)
+    out = render_html("police-report", data)
+    leaked = [label for label in AUTO_ONLY_LABELS if label in out]
+    assert not leaked, f"{state} fire report shows auto-only fields: {leaked}"
+    assert "SPECIMEN" in out
+
+
+def test_states_do_not_all_look_the_same():
+    import random
+
+    from faker import Faker
+
+    shapes = set()
+    for state in ALL_STATES:
+        Faker.seed(5)
+        random.seed(5)
+        data = build_synthetic_data("police-report", "rear_end_collision", jurisdiction=state)
+        shapes.add(render_html("police-report", data))
+    assert len(shapes) == len(ALL_STATES)
+
+
+def test_fidelity_is_recorded_for_every_state():
+    from renderers.state_forms import STATE_FORMS, UNSOURCED
+
+    assert len(STATE_FORMS) == 50
+    for code, entry in STATE_FORMS.items():
+        form_number, agency, title, fidelity, archetype = entry
+        assert agency and title and archetype
+        if fidelity == UNSOURCED:
+            assert form_number is None, f"{code} is unsourced but claims a form number"
+        else:
+            assert form_number, f"{code} claims fidelity {fidelity} with no form number"
+
+
+def test_jurisdiction_comes_from_guidewire_then_prompt():
+    from claim_context import ClaimContext
+    from jurisdiction import resolve_jurisdiction
+
+    claim = ClaimContext(details={"jurisdiction": "Ohio"})
+    assert resolve_jurisdiction("police-report", None, claim, "") == "OH"
+
+    by_location = ClaimContext(details={"loss_location": "900 Main St, Dallas, TX 75201"})
+    assert resolve_jurisdiction("police-report", None, by_location, "") == "TX"
+
+    assert resolve_jurisdiction("police-report", None, None, "a Texas police report") == "TX"
+    assert resolve_jurisdiction("police-report", "CA", claim, "") == "CA"
+    assert resolve_jurisdiction("police-report", None, None, "no state here") is None
+
+
+def test_jurisdiction_is_ignored_for_fixed_national_forms():
+    from claim_context import ClaimContext
+    from jurisdiction import resolve_jurisdiction
+
+    claim = ClaimContext(details={"jurisdiction": "Ohio"})
+    for doc_type in FIXED_FORM_DOC_TYPES:
+        assert resolve_jurisdiction(doc_type, "CA", claim, "Texas") is None

@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>{{ state_form.title }} &mdash; {{ incident_number }}</title>
+<style>
+  @page { size: letter portrait; margin: 0.5in 0.5in 0.62in 0.5in;
+    @bottom-left { content: "{% if state_form.form_number %}{{ state_form.form_number }}{% endif %}"; font: 6pt "DejaVu Sans", Arial; color:#555; }
+    @bottom-right { content: "SPECIMEN \00B7 SYNTHETIC TEST DATA \00B7 NOT A GENUINE REPORT \00B7 " counter(page) "/" counter(pages); font: 6pt "DejaVu Sans", Arial; color:#555; }
+  }
+  body { font-family:"DejaVu Sans", Arial, sans-serif; font-size:7.4pt; color:#1a1a1a; margin:0; }
+  .page { page-break-after: always; }
+  .page:last-child { page-break-after: auto; }
+  .wm { position: fixed; top:46%; left:22%; font-size:54pt; font-weight:700;
+        color: rgba(60,40,40,0.06); transform: rotate(-24deg); letter-spacing:8px; }
+  .top { border-top:3pt solid #3a2f2a; border-bottom:0.8pt solid #3a2f2a; padding:5px 0 4px 0; }
+  .top .ag { font-size:6.6pt; letter-spacing:2px; text-transform:uppercase; color:#6b5b52; }
+  .top h1 { font-size:12.5pt; margin:2px 0 1px 0; letter-spacing:0.6px; }
+  .top .meta { font-size:6.5pt; color:#555; }
+  .kv { display:flex; flex-wrap:wrap; margin-top:6px; }
+  .kv .i { width:33.33%; padding:2.5px 8px 3.5px 0; box-sizing:border-box; }
+  .kv .i .k { font-size:5.5pt; text-transform:uppercase; letter-spacing:0.4px; color:#6b5b52; display:block; }
+  .kv .i .v { font-size:8.2pt; border-bottom:0.5pt dotted #9a8d85; display:block; padding-bottom:1px; }
+  .cap { margin-top:10px; font-size:7.4pt; font-weight:700; text-transform:uppercase;
+         letter-spacing:1.4px; color:#3a2f2a; border-bottom:1.2pt solid #3a2f2a; padding-bottom:1.5px; }
+  .unit { margin-top:6px; border-left:2.4pt solid #3a2f2a; padding-left:8px; }
+  .unit .uh { font-size:7pt; font-weight:700; text-transform:uppercase; letter-spacing:0.7px; margin-bottom:2px; }
+  table.l { width:100%; border-collapse:collapse; margin-top:3px; }
+  table.l td { padding:2px 6px 2px 0; vertical-align:top; border-bottom:0.4pt dotted #b9aca4; }
+  table.l td.k { width:26%; font-size:5.8pt; text-transform:uppercase; color:#6b5b52; letter-spacing:0.3px; }
+  table.l td.v { font-size:7.8pt; }
+  .nar { margin-top:5px; font-size:7.8pt; line-height:1.58; text-align:justify; }
+  .sig { font-family:"Segoe Script","Brush Script MT",cursive; font-size:11.5pt; }
+  .pv { margin-top:8px; font-size:5.6pt; color:#6b5b52; line-height:1.4; border-top:0.5pt solid #cbbfb8; padding-top:3px; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="wm">SPECIMEN</div>
+  <div class="top">
+    <div class="ag">{{ state_form.agency }}</div>
+    <h1>{{ state_form.title }}</h1>
+    <div class="meta">{% if state_form.form_number %}Form {{ state_form.form_number }} &nbsp;&middot;&nbsp; {% endif %}{{ department }} &nbsp;&middot;&nbsp; ORI {{ department_ori }} &nbsp;&middot;&nbsp; NCIC {{ department_ncic }}</div>
+  </div>
+
+  <div class="kv">
+    <div class="i"><span class="k">Report Number</span><span class="v">{{ incident_number }}</span></div>
+    <div class="i"><span class="k">Local Report</span><span class="v">{{ local_report_number }}</span></div>
+    <div class="i"><span class="k">{% if 'auto_parties' in components %}Crash{% else %}Incident{% endif %} Date</span><span class="v">{{ incident_date }}</span></div>
+    <div class="i"><span class="k">Time</span><span class="v">{{ incident_time }}</span></div>
+    <div class="i"><span class="k">County</span><span class="v">{{ county }}</span></div>
+    <div class="i"><span class="k">City</span><span class="v">{{ city }}</span></div>
+    <div class="i" style="width:100%"><span class="k">Location</span><span class="v">{{ location }}</span></div>
+    {% if 'auto_parties' in components %}
+    <div class="i"><span class="k">Manner of Collision</span><span class="v">{{ collision_type }}</span></div>
+    <div class="i"><span class="k">Speed Limit</span><span class="v">{{ speed_limit }}</span></div>
+    <div class="i"><span class="k">Traffic Control</span><span class="v">{{ traffic_control }}</span></div>
+    <div class="i"><span class="k">Units Involved</span><span class="v">{{ num_vehicles }}</span></div>
+    <div class="i"><span class="k">Hit and Run</span><span class="v">{{ hit_and_run }}</span></div>
+    <div class="i"><span class="k">Surface</span><span class="v">{{ road_conditions }}</span></div>
+    {% else %}
+    <div class="i"><span class="k">Incident Type</span><span class="v">{{ scenario_facts_title }}</span></div>
+    <div class="i"><span class="k">Case Status</span><span class="v">{{ case_status }}</span></div>
+    {% endif %}
+    <div class="i"><span class="k">Weather</span><span class="v">{{ weather_conditions }}</span></div>
+    <div class="i"><span class="k">Lighting</span><span class="v">{{ lighting_conditions }}</span></div>
+    <div class="i"><span class="k">Reported</span><span class="v">{{ report_date }}</span></div>
+  </div>
+
+  {% if 'auto_parties' in components %}
+  <div class="cap">Units and Drivers</div>
+  {% for party in parties_involved %}
+  <div class="unit">
+    <div class="uh">Unit {{ loop.index }} &mdash; {{ party.role }}{% if party.at_fault %} &middot; contributing{% endif %}</div>
+    <table class="l">
+      <tr><td class="k">Driver</td><td class="v">{{ party.name }} &nbsp;&middot;&nbsp; DOB {{ party.dob }} &nbsp;&middot;&nbsp; {{ party.sex }}</td></tr>
+      <tr><td class="k">Address</td><td class="v">{{ party.address }} &nbsp;&middot;&nbsp; {{ party.phone }}</td></tr>
+      <tr><td class="k">Licence</td><td class="v">{{ party.license_number }} ({{ party.license_state }}) &nbsp;&middot;&nbsp; Class {{ party.license_class }}</td></tr>
+      <tr><td class="k">Vehicle</td><td class="v">{{ party.vehicle_year }} {{ party.vehicle_make }} {{ party.vehicle_model }} &nbsp;&middot;&nbsp; Plate {{ party.vehicle_plate }} ({{ party.vehicle_plate_state }})</td></tr>
+      <tr><td class="k">VIN</td><td class="v">{{ party.vehicle_vin }}</td></tr>
+      <tr><td class="k">Owner / Insurer</td><td class="v">{{ party.registered_owner }} &nbsp;&middot;&nbsp; {{ party.insurer }} {{ party.policy_number }}</td></tr>
+      <tr><td class="k">Injury / Restraint</td><td class="v">{{ party.injured }} &nbsp;&middot;&nbsp; {{ party.restraint }} &nbsp;&middot;&nbsp; {{ party.seat_position }}</td></tr>
+      <tr><td class="k">Damage</td><td class="v">{{ party.damage_severity }} &mdash; {{ party.damage_description }}</td></tr>
+    </table>
+  </div>
+  {% endfor %}
+  {% else %}
+  <div class="cap">Reporting Party</div>
+  <div class="unit">
+    <table class="l">
+      <tr><td class="k">Name</td><td class="v">{{ parties_involved[0].name }}</td></tr>
+      <tr><td class="k">Address</td><td class="v">{{ parties_involved[0].address }}</td></tr>
+      <tr><td class="k">Telephone</td><td class="v">{{ parties_involved[0].phone }}</td></tr>
+    </table>
+  </div>
+  <div class="cap">{{ scenario_facts_title }}</div>
+  <table class="l">
+    {% for f in scenario_facts %}
+    <tr><td class="k">{{ f.label }}</td><td class="v">{{ f.value }}</td></tr>
+    {% endfor %}
+  </table>
+  {% endif %}
+</div>
+
+<div class="page">
+  <div class="wm">SPECIMEN</div>
+  <div class="top">
+    <div class="ag">{{ state_form.agency }}</div>
+    <h1>Narrative and Supplemental</h1>
+    <div class="meta">Report {{ incident_number }}</div>
+  </div>
+
+  <div class="cap">Property Damage Other Than Vehicles</div>
+  <table class="l">
+    {% for item in property_damage_items %}
+    <tr><td class="k">{{ item.item }}</td><td class="v">{{ item.owner }} &nbsp;&middot;&nbsp; {{ item.est_value }}</td></tr>
+    {% endfor %}
+  </table>
+
+  {% if 'auto_parties' in components %}
+  <div class="cap">Contributing Factors</div>
+  <table class="l">
+    <tr><td class="k">Primary Factor</td><td class="v">{{ primary_factor }}</td></tr>
+    <tr><td class="k">Other Factors</td><td class="v">{{ other_factors }}</td></tr>
+    <tr><td class="k">Citation</td><td class="v">{{ enforcement_citation_number }} &nbsp;&middot;&nbsp; {{ enforcement_court_name }}</td></tr>
+  </table>
+  {% endif %}
+
+  <div class="cap">Witnesses</div>
+  <table class="l">
+    {% for w in witnesses %}
+    <tr><td class="k">{{ w.name }}</td><td class="v">{{ w.address }} &nbsp;&middot;&nbsp; {{ w.phone }}</td></tr>
+    {% endfor %}
+  </table>
+
+  <div class="cap">Officer's Narrative</div>
+  <div class="nar">{% for para in narrative_paragraphs %}<p style="margin:0 0 7px 0">{{ para }}</p>{% endfor %}</div>
+
+  <div class="cap">Certification</div>
+  <table class="l">
+    <tr><td class="k">Reporting Officer</td><td class="v sig">{{ officer_name }}</td></tr>
+    <tr><td class="k">Badge / Unit</td><td class="v">{{ badge_number }} &nbsp;&middot;&nbsp; {{ reporting_officer_unit }} &nbsp;&middot;&nbsp; {{ reporting_officer_date }}</td></tr>
+    <tr><td class="k">Supervisor</td><td class="v sig">{{ supervisor_name }}</td></tr>
+  </table>
+  <div class="pv">
+    {{ state_form.title }}{% if state_form.form_number %} (Form {{ state_form.form_number }}){% endif %},
+    {{ state_form.agency }}. Fidelity: {{ state_form.fidelity }} &mdash; see sourcing/state_forms.yaml.
+    SPECIMEN synthetic test data, not a genuine police record.
+  </div>
+</div>
+</body>
+</html>

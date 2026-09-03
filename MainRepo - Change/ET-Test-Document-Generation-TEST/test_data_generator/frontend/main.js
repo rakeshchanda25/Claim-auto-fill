@@ -546,6 +546,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const jurisdictionGroup = document.getElementById('ai-jurisdiction-group');
     let layoutAxis = {};
     let knownLayouts = {};
+    let knownFidelity = {};
 
     function refreshJurisdiction() {
         const axis = layoutAxis[selectedDocId];
@@ -567,11 +568,13 @@ document.addEventListener('DOMContentLoaded', () => {
             aiScenarios = data.scenarios || {};
             layoutAxis = data.layout_axis || {};
             knownLayouts = data.layouts || {};
+            knownFidelity = data.state_fidelity || {};
             (data.states || []).forEach(st => {
                 const opt = document.createElement('option');
                 opt.value = st.code;
-                const have = (knownLayouts['police-report'] || []).includes(st.code);
-                opt.textContent = `${st.code} — ${st.name}${have ? ' ✓' : ''}`;
+                const fid = (knownFidelity[st.code] || '');
+                const mark = fid === 'field-level' ? ' ★' : (fid === 'page-level' ? ' ✓' : '');
+                opt.textContent = `${st.code} — ${st.name}${mark}`;
                 jurisdictionSelect.appendChild(opt);
             });
             renderDocCards();

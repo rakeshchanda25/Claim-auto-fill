@@ -22,8 +22,10 @@ from ai_doc_generator.registry import (
 )
 from claim_context import claim_narrative, claim_to_fields, extract_claim_id, fetch_claim_context
 from guidewire import GuidewireClient
+from jurisdiction import resolve_issuer, resolve_jurisdiction
 from pdf_manager import combine_pdfs, replace_text_in_pdf
 from renderers.layouts import all_layouts
+from renderers.state_forms import STATE_FORMS
 from scanner_simulator import simulate_scan
 
 app = FastAPI(title="PDF Test Data Generator API")
@@ -159,6 +161,7 @@ async def ai_generate_document(
         ref_ext = Path(reference_file.filename).suffix.lstrip(".").lower()
 
     fields = json.loads(custom_fields)
+    claim = None
 
     if claim_id := extract_claim_id(user_input):
         try:
@@ -173,7 +176,10 @@ async def ai_generate_document(
             if claim.excerpts:
                 fields["_document_excerpts"] = claim.excerpts
         except Exception:
-            pass
+            claim = None
+
+    jurisdiction = (resolve_jurisdiction(doc_type, jurisdiction, claim, user_input)
+                    or resolve_issuer(doc_type, jurisdiction, claim, user_input))
 
     req = GenerationRequest(
         doc_type=doc_type,
@@ -262,6 +268,7 @@ async def get_ai_doc_types():
         "layout_axis": LAYOUT_AXIS,
         "states": US_STATES,
         "layouts": all_layouts(),
+        "state_fidelity": {code: entry[3] for code, entry in STATE_FORMS.items()},
     })
 
 
