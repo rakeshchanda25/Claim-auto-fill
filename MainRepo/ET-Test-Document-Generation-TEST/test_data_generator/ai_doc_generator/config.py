@@ -5,8 +5,12 @@ from pydantic import BaseModel, Field
 
 class GenerationRequest(BaseModel):
 
-    doc_type: str
+    # Required for generate/recreate. For packet mode this doubles as the
+    # packet name, and may be omitted entirely - an empty doc_type in packet
+    # mode means "let the model choose which documents this claim needs".
+    doc_type: Optional[str] = None
     mode: Literal["generate", "recreate", "packet"]
+    # "auto" (packet mode only) means "let the model choose the scenario too".
     scenario: str = "general"
     seed: Optional[int] = None
 

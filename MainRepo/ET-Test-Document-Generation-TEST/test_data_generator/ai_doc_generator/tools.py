@@ -8,7 +8,9 @@ from renderers import render_html_to_pdf
 from renderers.docx_parser import extract_docx_layout
 from renderers.synthetic_data import _parse_anchor_date, build_synthetic_data, resolve_doc_type
 
-from .registry import PACKET_REGISTRY
+from .registry import DOC_TYPES, PACKET_REGISTRY
+
+_DOC_TYPE_LABELS = {d["id"]: d["label"] for d in DOC_TYPES}
 
 
 @dataclass
@@ -375,18 +377,45 @@ def analyze_uploaded_reference(file_type: str) -> dict:
     return analyze_reference_document(reference, file_type)
 
 
-def build_packet(packet_name: str, scenario: str = "general", seed: int = None,
-                 custom_fields: dict = None) -> dict:
-    """Plan every component of a named packet, giving them one shared claimant,
+def build_packet(packet_name: str = None, scenario: str = "general", seed: int = None,
+                 custom_fields: dict = None, components: list = None) -> dict:
+    """Plan a document packet, giving every component one shared claimant,
     claim number and incident date.
+
+    Pass EXACTLY ONE of:
+    - packet_name: one of the pre-defined named packets, when one genuinely
+      fits the claim.
+    - components: a list of document type ids you have chosen yourself, when
+      no named packet fits - e.g. the claim's loss type, cause, description
+      and adjuster notes call for a different combination of documents than
+      any fixed packet offers. Every id must be one this system can actually
+      generate (see load_skill / the document type list in your prompt) -
+      inventing a type that is not in that list is rejected.
 
     Claim facts are applied to every component here - a packet has no
     per-component step where they could otherwise land. The loss date, if there
     is one, anchors every component's generated dates.
     """
-    spec = PACKET_REGISTRY.get(packet_name)
-    if not spec:
-        raise ValueError(f"Unknown packet: {packet_name}. Available: {list(PACKET_REGISTRY)}")
+    if packet_name:
+        spec = PACKET_REGISTRY.get(packet_name)
+        if not spec:
+            raise ValueError(f"Unknown packet: {packet_name}. Available: {list(PACKET_REGISTRY)}")
+        component_specs = spec["components"]
+    elif components:
+        unknown = [c for c in components if c not in _DOC_TYPE_LABELS]
+        if unknown:
+            raise ValueError(
+                f"Unknown document type(s): {unknown}. Known types: {sorted(_DOC_TYPE_LABELS)}"
+            )
+        component_specs = [
+            {"doc_type": doc_type, "label": _DOC_TYPE_LABELS[doc_type], "order": i}
+            for i, doc_type in enumerate(components)
+        ]
+    else:
+        raise ValueError(
+            "build_packet needs either packet_name (a pre-defined packet) or "
+            "components (a list of document type ids you chose for this claim)."
+        )
 
     if seed is not None:
         Faker.seed(seed)
@@ -404,9 +433,9 @@ def build_packet(packet_name: str, scenario: str = "general", seed: int = None,
         if claim_fields.get(key):
             shared[concept] = claim_fields[key]
 
-    components = sorted(spec["components"], key=lambda c: c["order"])
+    component_specs = sorted(component_specs, key=lambda c: c["order"])
     plan = []
-    for comp in components:
+    for comp in component_specs:
         doc_type = comp["doc_type"]
         data = build_synthetic_data(doc_type, scenario, anchor_date=anchor_date)
         _sync_component(data, doc_type, shared, fields, claim_description, excerpts)
@@ -424,7 +453,7 @@ def build_packet(packet_name: str, scenario: str = "general", seed: int = None,
 
     current_run().packet_plan = plan
     return {
-        "packet": packet_name,
+        "packet": packet_name or "custom",
         "scenario": scenario,
         "component_count": len(plan),
         "components": [{k: c[k] for k in ("label", "doc_type", "template_name")} for c in plan],

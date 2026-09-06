@@ -1,6 +1,7 @@
 from renderers.synthetic_data import resolve_doc_type
 
 from .config import GenerationRequest
+from .registry import DOC_TYPES, PACKET_REGISTRY, SCENARIO_REGISTRY
 
 _JSON_FOOTER = (
     "\n\nOUTPUT: reply with a single raw JSON object and nothing else - no text "
@@ -45,13 +46,23 @@ def _seed_arg(req: GenerationRequest) -> str:
     return f", seed={req.seed}" if req.seed is not None else ""
 
 
-def build_generation_prompt(req: GenerationRequest) -> str:
-    tail = _claim_facts_block(req) + _user_input_block(req) + _JSON_FOOTER
+def _doc_type_menu() -> str:
+    return "\n".join(f"- {d['id']}: {d['label']} ({d['category']})" for d in DOC_TYPES)
 
-    if req.mode == "packet":
+
+def _scenario_menu() -> str:
+    return "\n".join(f"- {sid}: {label}" for sid, label in SCENARIO_REGISTRY.items())
+
+
+def _packet_prompt(req: GenerationRequest, tail: str) -> str:
+    packet_name = req.doc_type
+    auto_scenario = req.scenario == "auto"
+
+    if packet_name and not auto_scenario:
+        # The common case, unchanged: a named packet and a fixed scenario.
         return (
-            f"Generate the '{req.doc_type}' document packet for scenario '{req.scenario}'.\n"
-            f"1. build_packet(packet_name='{req.doc_type}', scenario='{req.scenario}'"
+            f"Generate the '{packet_name}' document packet for scenario '{req.scenario}'.\n"
+            f"1. build_packet(packet_name='{packet_name}', scenario='{req.scenario}'"
             f"{_seed_arg(req)}{_optional_args(req, with_anchor=False)})\n"
             "2. render_packet()\n"
             "That is the whole job. build_packet already gives every document the same "
@@ -60,6 +71,56 @@ def build_generation_prompt(req: GenerationRequest) -> str:
             '{"status": "ok", "components": <count>}.'
             + tail
         )
+
+    if packet_name and auto_scenario:
+        # A named packet, but let the model pick which of its scenarios fits.
+        choices = PACKET_REGISTRY.get(packet_name, {}).get("compatible_scenarios") or ["general"]
+        return (
+            f"Generate the '{packet_name}' document packet.\n"
+            f"1. This packet fits several scenarios. Based on the claim facts and narrative "
+            f"below, pick the single best-fitting one from: {', '.join(choices)}.\n"
+            f"2. build_packet(packet_name='{packet_name}', scenario=<your pick>"
+            f"{_seed_arg(req)}{_optional_args(req, with_anchor=False)})\n"
+            "3. render_packet()\n"
+            "build_packet already gives every document the same claimant, claim number and "
+            "incident date - do not adjust them, and do not loop over components. When "
+            "render_packet returns, reply with {\"status\": \"ok\", \"components\": <count>}."
+            + tail
+        )
+
+    # No named packet fits (or none was chosen) - the model decides which
+    # documents this claim actually needs, from what this system can generate.
+    scenario_step = (
+        f"3. Pick the scenario that best matches from:\n{_scenario_menu()}\n"
+        if auto_scenario else
+        f"3. Use scenario='{req.scenario}'.\n"
+    )
+    scenario_arg = "<the scenario you picked>" if auto_scenario else f"'{req.scenario}'"
+    return (
+        "No pre-defined packet was chosen for this claim - decide the right set of documents "
+        "yourself.\n"
+        "1. Read the claim facts and narrative below: loss type, loss cause, the adjuster's "
+        "description, and any document excerpts.\n"
+        "2. Based on standard US insurance claims practice for this kind of loss, choose every "
+        "document type from this list that this claim would realistically need on file - not "
+        "just one document, and not the whole list regardless of relevance:\n"
+        f"{_doc_type_menu()}\n"
+        + scenario_step +
+        f"4. build_packet(components=[<your chosen document type ids>], scenario={scenario_arg}"
+        f"{_seed_arg(req)}{_optional_args(req, with_anchor=False)})\n"
+        "5. render_packet()\n"
+        "build_packet gives every document the same claimant, claim number and incident date "
+        "automatically - do not adjust them, and do not loop over components yourself. When "
+        "render_packet returns, reply with {\"status\": \"ok\", \"components\": <count>}."
+        + tail
+    )
+
+
+def build_generation_prompt(req: GenerationRequest) -> str:
+    tail = _claim_facts_block(req) + _user_input_block(req) + _JSON_FOOTER
+
+    if req.mode == "packet":
+        return _packet_prompt(req, tail)
 
     if req.mode == "recreate":
         ext = req.reference_file_type or "pdf"

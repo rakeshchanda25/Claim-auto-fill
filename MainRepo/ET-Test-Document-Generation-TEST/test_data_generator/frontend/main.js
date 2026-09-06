@@ -558,16 +558,23 @@ document.addEventListener('DOMContentLoaded', () => {
             grid.innerHTML = '<div class="ai-card-loading" style="color:#f87171;">Failed to load. Is the server running?</div>';
         });
 
+    // Selecting a packet/scenario is optional: leaving both unset (or picking
+    // this card/pill explicitly) tells build_packet to work out which
+    // documents this claim needs itself, from the claim data and narrative.
+    const AI_DECIDES_PACKET = { id: '__auto__', icon: '🤖', label: 'Let AI Decide',
+                               description: 'Based on the claim, choose which documents are needed.' };
+    const AI_DECIDES_SCENARIO = ['auto', '🤖 Auto (from claim)'];
+
     function renderDocCards() {
         const isPacket = activeMode === 'packet';
-        const items = isPacket ? aiPackets : aiDocTypes;
-        docSectionLabel.textContent = isPacket ? 'Select Packet Type' : 'Select Document Type';
+        const items = isPacket ? [AI_DECIDES_PACKET, ...aiPackets] : aiDocTypes;
+        docSectionLabel.textContent = isPacket ? 'Select Packet Type (optional)' : 'Select Document Type';
         grid.innerHTML = items.map(item => `
             <div class="ai-doc-card${selectedDocId === item.id ? ' selected' : ''}"
                  data-id="${item.id}" title="${item.description || item.label}">
                 <span class="ai-card-icon">${item.icon}</span>
                 <span class="ai-card-label">${item.label}</span>
-                ${isPacket ? '<span class="ai-card-badge ai-card-badge-packet">PKT</span>' : ''}
+                ${isPacket && item.id !== '__auto__' ? '<span class="ai-card-badge ai-card-badge-packet">PKT</span>' : ''}
             </div>`).join('');
         grid.querySelectorAll('.ai-doc-card').forEach(card => {
             card.addEventListener('click', () => selectDoc(card.dataset.id));
@@ -575,7 +582,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderScenarioPills() {
-        scenarioPills.innerHTML = Object.entries(aiScenarios).map(([id, label]) => `
+        const isPacket = activeMode === 'packet';
+        const entries = isPacket ? [AI_DECIDES_SCENARIO, ...Object.entries(aiScenarios)] : Object.entries(aiScenarios);
+        scenarioPills.innerHTML = entries.map(([id, label]) => `
             <button class="ai-scenario-pill${selectedScenario === id ? ' active' : ''}" data-sc="${id}">
                 ${label}
             </button>`).join('');
@@ -594,8 +603,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateGenerateBtn() {
-        generateBtn.disabled = !selectedDocId;
         const isPacket = activeMode === 'packet';
+        // Packet mode never needs a selection - no pick (or "Let AI Decide")
+        // both mean the model chooses the documents itself.
+        generateBtn.disabled = !isPacket && !selectedDocId;
         generateBtn.querySelector('.btn-text').textContent = isPacket
             ? '📦 Build Packet'
             : '✨ Generate Document';
@@ -608,9 +619,14 @@ document.addEventListener('DOMContentLoaded', () => {
         pill.classList.add('active');
         activeMode = pill.dataset.mode;
         selectedDocId = null;
+        // Packet mode gets its own "Auto" scenario pill; other modes must
+        // never show it. Was previously rendered once at page load, so
+        // switching into/out of packet mode never picked it up.
+        selectedScenario = 'general';
         const needsRef = activeMode === 'recreate';
         refSection.classList.toggle('hidden', !needsRef);
         renderDocCards();
+        renderScenarioPills();
         updateGenerateBtn();
         setStatus('idle', 'Ready');
         resultArea.classList.add('hidden');
@@ -697,7 +713,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     generateBtn.addEventListener('click', async () => {
-        if (!selectedDocId) return;
+        if (activeMode !== 'packet' && !selectedDocId) return;
 
         setStatus('running', 'Running agent...');
         const span = generateBtn.querySelector('.btn-text');
@@ -710,7 +726,11 @@ document.addEventListener('DOMContentLoaded', () => {
         startProgressSimulation();
 
         const fd = new FormData();
-        fd.append('doc_type', selectedDocId);
+        // In packet mode, no selection (or "Let AI Decide") means the model
+        // picks the documents itself - omit doc_type entirely for that.
+        if (activeMode !== 'packet' || (selectedDocId && selectedDocId !== '__auto__')) {
+            fd.append('doc_type', selectedDocId);
+        }
         fd.append('mode', activeMode === 'packet' ? 'packet' : activeMode);
         fd.append('scenario', selectedScenario);
         if (seedInput.value) fd.append('seed', seedInput.value);

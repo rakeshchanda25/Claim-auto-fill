@@ -382,3 +382,124 @@ def test_claim_id_is_found_in_free_text():
     assert extract_claim_id("please use claim 000-00-053109 for this") == "000-00-053109"
     assert extract_claim_id("cc:12345 needs a police report") == "cc:12345"
     assert extract_claim_id("just a normal request") is None
+
+
+# ---------------------------------------------------------------------------
+# Dynamic packets - the model chooses which documents a claim needs, instead
+# of a pre-defined named packet.
+# ---------------------------------------------------------------------------
+
+def test_build_packet_accepts_a_model_chosen_component_list():
+    result = tools.build_packet(components=["police-report", "medical-record", "acord-25"],
+                                scenario="rear_end_collision")
+    assert result["packet"] == "custom"
+    assert result["component_count"] == 3
+    plan = tools.current_run().packet_plan
+    assert [c["doc_type"] for c in plan] == ["police-report", "medical-record", "acord-25"]
+
+
+def test_dynamic_packet_components_sync_identity_like_a_named_packet():
+    """The sync engine (_sync_component / _seed_shared) must not care whether
+    the component list came from PACKET_REGISTRY or the model - same identity
+    agreement either way."""
+    tools.build_packet(components=["police-report", "auto-accident-report", "medical-record"],
+                       scenario="rear_end_collision", custom_fields={"insured_name": "Aditya Krishna"})
+    plan = tools.current_run().packet_plan
+    for comp in plan:
+        name = tools._read_concept(comp["data"], comp["doc_type"], "claimant")
+        assert name == "Aditya Krishna", f"{comp['doc_type']} disagrees"
+
+
+def test_build_packet_rejects_a_document_type_this_system_cannot_generate():
+    with pytest.raises(ValueError, match="Unknown document type"):
+        tools.build_packet(components=["police-report", "not-a-real-doc-type"])
+
+
+def test_build_packet_requires_either_a_packet_name_or_components():
+    with pytest.raises(ValueError, match="needs either packet_name"):
+        tools.build_packet()
+
+
+def test_named_packet_path_is_unaffected_by_the_dynamic_addition():
+    result = tools.build_packet(packet_name="medical-packet", scenario="surgery")
+    assert result["packet"] == "medical-packet"
+    assert result["component_count"] == len(PACKET_REGISTRY["medical-packet"]["components"])
+
+
+# ---------------------------------------------------------------------------
+# Packet prompts: named vs. dynamic, fixed vs. auto scenario
+# ---------------------------------------------------------------------------
+
+def _packet_request(doc_type, scenario, **kw):
+    from ai_doc_generator.config import GenerationRequest
+
+    return GenerationRequest(doc_type=doc_type, mode="packet", scenario=scenario, **kw)
+
+
+def test_named_packet_with_fixed_scenario_prompt_is_unchanged():
+    """The common case must not change at all - this is the exact text the
+    original single-branch implementation produced."""
+    from ai_doc_generator.prompt_builder import build_generation_prompt
+
+    req = _packet_request("auto-accident-packet", "rear_end_collision")
+    prompt = build_generation_prompt(req)
+    assert "build_packet(packet_name='auto-accident-packet', scenario='rear_end_collision'" in prompt
+    assert "render_packet()" in prompt
+    assert "decide the right set of documents" not in prompt
+
+
+def test_named_packet_with_auto_scenario_lets_model_pick_from_its_own_list():
+    from ai_doc_generator.prompt_builder import build_generation_prompt
+
+    req = _packet_request("auto-accident-packet", "auto")
+    prompt = build_generation_prompt(req)
+    for scenario in PACKET_REGISTRY["auto-accident-packet"]["compatible_scenarios"]:
+        assert scenario in prompt
+    assert "build_packet(packet_name='auto-accident-packet', scenario=<your pick>" in prompt
+
+
+def test_no_packet_with_fixed_scenario_lists_every_document_type():
+    from ai_doc_generator.prompt_builder import build_generation_prompt
+
+    req = _packet_request(None, "fire_damage")
+    prompt = build_generation_prompt(req)
+    for doc_id in DOC_TYPE_IDS:
+        assert doc_id in prompt
+    assert "build_packet(components=[<your chosen document type ids>], scenario='fire_damage'" in prompt
+    assert "standard US insurance claims practice" in prompt
+
+
+def test_no_packet_with_auto_scenario_lists_documents_and_scenarios():
+    from ai_doc_generator.prompt_builder import build_generation_prompt
+
+    req = _packet_request(None, "auto")
+    prompt = build_generation_prompt(req)
+    for doc_id in DOC_TYPE_IDS:
+        assert doc_id in prompt
+    for scenario_id in SCENARIO_REGISTRY:
+        assert scenario_id in prompt
+    assert "build_packet(components=[<your chosen document type ids>], scenario=<the scenario you picked>" in prompt
+
+
+def test_packet_prompt_still_carries_claim_facts_for_the_model_to_reason_on():
+    """The model can only decide sensibly if it can see the claim's loss type,
+    cause and narrative - both already flow through the shared tail block."""
+    from ai_doc_generator.prompt_builder import build_generation_prompt
+
+    req = _packet_request(None, "auto",
+                          custom_fields={"loss_type": "Property", "loss_cause": "Fire"},
+                          user_input="Adjuster's claim description: kitchen fire, smoke damage")
+    prompt = build_generation_prompt(req)
+    assert "loss_type" in prompt and "Property" in prompt
+    assert "kitchen fire" in prompt
+
+
+# ---------------------------------------------------------------------------
+# The route: doc_type is optional for packets, required for generate/recreate
+# ---------------------------------------------------------------------------
+
+def test_generation_request_allows_no_doc_type_for_packet_mode():
+    from ai_doc_generator.config import GenerationRequest
+
+    req = GenerationRequest(doc_type=None, mode="packet", scenario="auto")
+    assert req.doc_type is None

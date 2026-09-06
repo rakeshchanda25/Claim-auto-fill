@@ -136,7 +136,10 @@ async def api_combine(
 
 @app.post("/api/ai-generate")
 async def ai_generate_document(
-    doc_type: str = Form(...),
+    # Optional: for packet mode this is the packet name, and may be omitted -
+    # an empty doc_type there means "let the model choose the documents".
+    # Required for generate/recreate, checked below.
+    doc_type: Optional[str] = Form(None),
     mode: str = Form("generate"),
     scenario: str = Form("general"),
     seed: Optional[int] = Form(None),
@@ -144,6 +147,9 @@ async def ai_generate_document(
     custom_fields: str = Form("{}"),
     user_input: str = Form(""),
 ):
+    if not doc_type and mode != "packet":
+        raise HTTPException(status_code=400, detail="doc_type is required for generate/recreate mode.")
+
     ref_bytes = None
     ref_ext = None
     if reference_file and reference_file.filename:
@@ -200,7 +206,7 @@ async def ai_generate_document(
                 for comp in result.packet:
                     safe_label = comp["label"].replace(" ", "_").replace("/", "-")
                     zf.writestr(f"{safe_label}.{comp['kind']}", comp["bytes"])
-            return "zip", buf.getvalue(), f"{doc_type}_packet.zip"
+            return "zip", buf.getvalue(), f"{doc_type or 'claim'}_packet.zip"
 
         raise HTTPException(
             status_code=500,
