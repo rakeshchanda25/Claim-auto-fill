@@ -1,0 +1,284 @@
+{#
+  render_document_to_pdf (renderers/html_renderer.py) renders this the same simple way as
+  every other template: template.render(**data) once, no AcroForm/placeholder-substitution
+  pass. (An earlier version of that pipeline rendered standardized forms like this one TWICE
+  - once with every value replaced by a placeholder token - which meant arithmetic/
+  conditionals in this template would have operated on a placeholder STRING, not the real
+  value. That constraint is gone along with the two-pass render, but the convention it left
+  behind is still worth keeping: compute derived values in synthetic_data.py (e.g. balance_due
+  is precomputed, not total_charge minus amount_paid inline) rather than in the template.)
+
+  Box layout is fixed regardless of scenario - a real CMS-1500's numbered boxes can't
+  restructure - so `components` always resolves to the same single composition; the split
+  below into named macros is for architectural consistency with every other template, not
+  because this doc type needs different boxes per scenario.
+#}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>CMS-1500 – {{ claim_number }}</title>
+<style>
+  @page { size: letter portrait; margin: 0.35in; }
+  * { box-sizing: border-box; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 7.3pt; color: #000; line-height: 1.25; }
+  .title-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 3px; }
+  .title { font-size: 12pt; font-weight: bold; letter-spacing: 0.5px; }
+  .subtitle { font-size: 7pt; color: #333; }
+  .form-id { font-size: 7pt; text-align: right; }
+  table.grid { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  table.grid td { border: 1px solid #000; padding: 2px 3px; vertical-align: top; overflow: hidden; }
+  .lbl { font-size: 5.6pt; color: #000; display: block; margin-bottom: 1px; }
+  .val { font-size: 8pt; font-weight: 600; }
+  .payer-box { border: 1.5px solid #000; padding: 4px 8px; margin: 4px 0 2px; min-height: 34px; }
+  .payer-box .lbl { font-size: 6pt; }
+  .payer-box .val { font-size: 9pt; }
+  .checks { font-size: 6.6pt; }
+  .section-bar { background: #1a1a1a; color: #fff; font-size: 7.5pt; font-weight: bold; padding: 2px 6px; margin: 5px 0 0; }
+  table.lines { width: 100%; border-collapse: collapse; margin-top: 0; table-layout: fixed; }
+  table.lines th { border: 1px solid #000; background: #e8e8e8; font-size: 5.6pt; padding: 2px; text-align: center; }
+  table.lines td { border: 1px solid #000; padding: 2px 3px; font-size: 7.3pt; text-align: center; }
+  .totals td { font-weight: bold; text-align: right; }
+  .footer-note { font-size: 6pt; color: #444; margin-top: 6px; text-align: center; }
+</style>
+</head>
+<body>
+
+{% macro title_payer_box(data) %}
+<div class="title-row">
+  <div>
+    <div class="title">HEALTH INSURANCE CLAIM FORM</div>
+    <div class="subtitle">APPROVED BY NATIONAL UNIFORM CLAIM COMMITTEE (NUCC) 02/12</div>
+  </div>
+  <div class="form-id">CARRIER: {{ data.insurer_name }}<br>CLAIM #: {{ data.claim_number }}</div>
+</div>
+
+<div class="payer-box">
+  <span class="lbl checks">
+    {{ data.payer_mark_medicare }} MEDICARE &nbsp; {{ data.payer_mark_medicaid }} MEDICAID &nbsp; {{ data.payer_mark_tricare }} TRICARE &nbsp; {{ data.payer_mark_champva }} CHAMPVA &nbsp; {{ data.payer_mark_group_health }} GROUP HEALTH PLAN &nbsp; {{ data.payer_mark_feca }} FECA BLK LUNG &nbsp; {{ data.payer_mark_other }} OTHER: {{ data.insurance_type_other_label }}
+  </span>
+  <span class="lbl">1a. INSURED'S I.D. NUMBER</span>
+  <span class="val">{{ data.insured_id }}</span>
+</div>
+{% endmacro %}
+
+{% macro patient_insured_grid(data) %}
+<table class="grid">
+  <tr>
+    <td style="width:38%;">
+      <span class="lbl">2. PATIENT'S NAME (Last, First, MI)</span>
+      <span class="val">{{ data.patient_name }}</span>
+    </td>
+    <td style="width:18%;">
+      <span class="lbl">3. PATIENT'S BIRTH DATE</span>
+      <span class="val">{{ data.dob }}</span>
+      <span class="lbl" style="margin-top:2px;">SEX</span>
+      <span class="val">{{ data.gender }}</span>
+    </td>
+    <td style="width:44%;">
+      <span class="lbl">4. INSURED'S NAME (Last, First, MI)</span>
+      <span class="val">{{ data.insured_name }}</span>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <span class="lbl">5. PATIENT'S ADDRESS (No., Street)</span>
+      <span class="val">{{ data.address.street }}</span><br>
+      <span class="lbl">CITY</span> <span class="val">{{ data.address.city }}</span>
+      <span class="lbl" style="display:inline;">STATE</span> <span class="val">{{ data.address.state }}</span><br>
+      <span class="lbl">ZIP</span> <span class="val">{{ data.address.zip }}</span>
+      <span class="lbl" style="display:inline;">TELEPHONE</span> <span class="val">{{ data.phone }}</span>
+    </td>
+    <td>
+      <span class="lbl">6. PATIENT RELATIONSHIP TO INSURED</span>
+      <span class="val">{{ data.relationship_to_insured }}</span>
+    </td>
+    <td>
+      <span class="lbl">7. INSURED'S ADDRESS (No., Street)</span>
+      <span class="val">{{ data.insured_address.street }}</span><br>
+      <span class="lbl">CITY</span> <span class="val">{{ data.insured_address.city }}</span>
+      <span class="lbl" style="display:inline;">STATE</span> <span class="val">{{ data.insured_address.state }}</span><br>
+      <span class="lbl">ZIP</span> <span class="val">{{ data.insured_address.zip }}</span>
+      <span class="lbl" style="display:inline;">TELEPHONE</span> <span class="val">{{ data.insured_phone }}</span>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <span class="lbl">9. OTHER INSURED'S NAME</span>
+      <span class="val">N/A</span>
+    </td>
+    <td colspan="2">
+      <span class="lbl">10. IS PATIENT'S CONDITION RELATED TO:</span>
+      <span class="val">a. Employment: {{ data.employment_related }}</span> &nbsp;
+      <span class="val">b. Auto Accident: {{ data.auto_accident_related }} (State: {{ data.auto_accident_state }})</span> &nbsp;
+      <span class="val">c. Other Accident: {{ data.other_accident_related }}</span>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <span class="lbl">11. INSURED'S POLICY GROUP OR FECA NUMBER</span>
+      <span class="val">{{ data.insured_policy_group }}</span>
+    </td>
+    <td>
+      <span class="lbl">11a. INSURED'S DATE OF BIRTH</span>
+      <span class="val">{{ data.insured_dob }}</span>
+      <span class="lbl" style="display:inline;">SEX</span> <span class="val">{{ data.insured_gender }}</span>
+    </td>
+    <td>
+      <span class="lbl">11c. INSURANCE PLAN NAME</span>
+      <span class="val">{{ data.insurer_name }}</span>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <span class="lbl">12. PATIENT'S OR AUTHORIZED PERSON'S SIGNATURE</span>
+      <span class="val">Signature on File</span> &nbsp; <span class="lbl" style="display:inline;">DATE</span> <span class="val">{{ data.dos }}</span>
+    </td>
+    <td colspan="2">
+      <span class="lbl">13. INSURED'S OR AUTHORIZED PERSON'S SIGNATURE</span>
+      <span class="val">Signature on File</span>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <span class="lbl">14. DATE OF CURRENT ILLNESS, INJURY, OR PREGNANCY</span>
+      <span class="val">{{ data.date_of_illness }}</span>
+      <span class="lbl" style="display:inline;">QUAL.</span> <span class="val">{{ data.date_of_illness_qualifier }}</span>
+    </td>
+    <td>
+      <span class="lbl">16. DATES PATIENT UNABLE TO WORK</span>
+      <span class="val">{{ data.unable_to_work_from }} – {{ data.unable_to_work_to }}</span>
+    </td>
+    <td>
+      <span class="lbl">17. NAME OF REFERRING PROVIDER</span>
+      <span class="val">{{ data.physician_name }}</span>
+      <span class="lbl" style="margin-top:2px;">17a / 17b NPI</span>
+      <span class="val">{{ data.npi }}</span>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <span class="lbl">18. HOSPITALIZATION DATES RELATED TO CURRENT SERVICES</span>
+      <span class="val">{{ data.hospitalization_from }} – {{ data.hospitalization_to }}</span>
+    </td>
+    <td>
+      <span class="lbl">20. OUTSIDE LAB?</span>
+      <span class="val">{{ data.outside_lab }}</span>
+      <span class="lbl" style="display:inline;">$ CHARGES</span>
+      <span class="val">${{ "%.2f"|format(data.outside_lab_charges) }}</span>
+    </td>
+    <td>
+      <span class="lbl">19. ADDITIONAL CLAIM INFORMATION</span>
+      <span class="val">{{ data.additional_claim_info }}</span>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2">
+      <span class="lbl">21. DIAGNOSIS OR NATURE OF ILLNESS OR INJURY — ICD Ind. 0</span>
+      {% for code, desc in data.diagnosis_codes %}
+      <div class="val">{{ loop.index0 == 0 and "A." or loop.index0 == 1 and "B." or loop.index0 == 2 and "C." or "D." }} {{ code }} — {{ desc }}</div>
+      {% endfor %}
+    </td>
+    <td>
+      <span class="lbl">22. RESUBMISSION CODE / ORIGINAL REF NO.</span>
+      <span class="val">{{ data.resubmission_code }} {{ data.original_ref_number }}</span>
+      <span class="lbl" style="margin-top:2px;">23. PRIOR AUTHORIZATION NUMBER</span>
+      <span class="val">{{ data.prior_auth_number }}</span>
+    </td>
+  </tr>
+</table>
+{% endmacro %}
+
+{% macro service_lines(data) %}
+<div class="section-bar">24. SERVICE LINE ITEMS</div>
+<table class="lines">
+  <thead><tr>
+    <th style="width:14%;">A. DATE(S) OF SERVICE</th>
+    <th style="width:6%;">B. POS</th>
+    <th style="width:6%;">C. EMG</th>
+    <th style="width:14%;">D. CPT/HCPCS + MOD</th>
+    <th style="width:8%;">E. DIAG PTR</th>
+    <th style="width:12%;">F. $ CHARGES</th>
+    <th style="width:8%;">G. DAYS/UNITS</th>
+    <th style="width:8%;">H. EPSDT</th>
+    <th style="width:24%;">J. RENDERING PROVIDER NPI</th>
+  </tr></thead>
+  {% for item in data.line_items %}
+  <tr>
+    <td>{{ data.dos_from }}</td>
+    <td>{{ item.pos }}</td>
+    <td>{{ item.emg }}</td>
+    <td>{{ item.cpt }} {{ item.modifier }}</td>
+    <td>{{ item.diag_pointer }}</td>
+    <td>${{ "%.2f"|format(item.charge) }}</td>
+    <td>{{ item.units }}</td>
+    <td></td>
+    <td>{{ data.rendering_provider_npi }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endmacro %}
+
+{% macro tax_totals_signatures(data) %}
+<table class="grid" style="margin-top:0;">
+  <tr>
+    <td style="width:20%;">
+      <span class="lbl">25. FEDERAL TAX I.D. NUMBER</span>
+      <span class="val">{{ data.federal_tax_id }} ({{ data.federal_tax_id_type }})</span>
+    </td>
+    <td style="width:16%;">
+      <span class="lbl">26. PATIENT'S ACCOUNT NO.</span>
+      <span class="val">{{ data.patient_account_number }}</span>
+    </td>
+    <td style="width:12%;">
+      <span class="lbl">27. ACCEPT ASSIGNMENT?</span>
+      <span class="val">{{ data.accept_assignment }}</span>
+    </td>
+    <td style="width:14%;" class="totals">
+      <span class="lbl">28. TOTAL CHARGE</span>
+      <span class="val">${{ "%.2f"|format(data.total_charge) }}</span>
+    </td>
+    <td style="width:14%;" class="totals">
+      <span class="lbl">29. AMOUNT PAID</span>
+      <span class="val">${{ "%.2f"|format(data.amount_paid) }}</span>
+    </td>
+    <td style="width:24%;" class="totals">
+      <span class="lbl">30. BALANCE DUE</span>
+      <span class="val">${{ "%.2f"|format(data.balance_due) }}</span>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="3">
+      <span class="lbl">31. SIGNATURE OF PHYSICIAN OR SUPPLIER</span>
+      <span class="val">{{ data.physician_name }} (Signature on File, {{ data.dos }})</span>
+    </td>
+    <td colspan="2">
+      <span class="lbl">32. SERVICE FACILITY LOCATION INFORMATION</span>
+      <span class="val">{{ data.service_facility }}</span><br>
+      <span class="val">{{ data.service_facility_address.street }}, {{ data.service_facility_address.city }}, {{ data.service_facility_address.state }} {{ data.service_facility_address.zip }}</span>
+      <span class="lbl" style="margin-top:2px;">32a. NPI</span> <span class="val">{{ data.provider_npi }}</span>
+    </td>
+    <td>
+      <span class="lbl">33. BILLING PROVIDER INFO &amp; PH #</span>
+      <span class="val">{{ data.billing_provider_name }}</span><br>
+      <span class="val">{{ data.billing_provider_address.street }}, {{ data.billing_provider_address.city }}, {{ data.billing_provider_address.state }} {{ data.billing_provider_address.zip }}</span><br>
+      <span class="val">{{ data.billing_provider_phone }}</span>
+      <span class="lbl" style="margin-top:2px;">33a. NPI</span> <span class="val">{{ data.provider_npi }}</span>
+    </td>
+  </tr>
+</table>
+{% endmacro %}
+
+{% macro footer_note(data) %}
+<div class="footer-note">SYNTHETIC / DEMONSTRATION DATA ONLY, NOT A REAL CLAIM, FOR IDP TESTING PURPOSES</div>
+{% endmacro %}
+
+{% set component_map = {
+  "title_payer_box": title_payer_box, "patient_insured_grid": patient_insured_grid,
+  "service_lines": service_lines, "tax_totals_signatures": tax_totals_signatures,
+  "footer_note": footer_note,
+} %}
+{% for c in components %}{{ component_map[c](data) }}{% endfor %}
+
+</body>
+</html>

@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Medical Record – {{ mrn }}</title>
+<style>
+  @page { size: letter portrait; margin: 1in; @top-right { content: "CONFIDENTIAL – MEDICAL RECORD"; font-size: 8pt; color: #666; } @bottom-center { content: "MRN: {{ mrn }} | Page " counter(page) " of " counter(pages); font-size: 8pt; color: #666; } }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 10pt; color: #111; line-height: 1.5; }
+  h1 { font-size: 14pt; text-align: center; margin-bottom: 4px; }
+  h2 { font-size: 11pt; background: #1a3a6b; color: #fff; padding: 3px 8px; margin: 14px 0 6px; }
+  h3 { font-size: 10pt; margin: 10px 0 4px; border-bottom: 1px solid #ccc; }
+  .header-bar { text-align: center; border-bottom: 2px solid #1a3a6b; padding-bottom: 8px; margin-bottom: 12px; }
+  .hospital { font-size: 16pt; font-weight: bold; color: #1a3a6b; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 20px; margin-bottom: 8px; }
+  .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px 16px; }
+  .field { margin-bottom: 3px; }
+  .label { font-weight: bold; font-size: 9pt; color: #444; }
+  .value { font-size: 10pt; }
+  table { width: 100%; border-collapse: collapse; font-size: 9pt; margin-top: 6px; }
+  th { background: #e8eef7; font-weight: bold; padding: 4px 6px; border: 1px solid #bbb; text-align: left; }
+  td { padding: 4px 6px; border: 1px solid #ccc; }
+  .vitals-box { background: #f5f8ff; border: 1px solid #c0d0e8; border-radius: 4px; padding: 8px; margin-bottom: 10px; }
+  .sig-block { margin-top: 24px; border-top: 1px solid #ccc; padding-top: 12px; }
+  .sig-line { width: 250px; border-bottom: 1px solid #555; margin: 20px 0 4px; display: inline-block; }
+</style>
+</head>
+<body>
+
+{% macro header_bar(data) %}
+<div class="header-bar">
+  <div class="hospital">{{ data.hospital }}</div>
+  <div style="font-size: 9pt; color:#555;">Medical Record Department | Tel: {{ data.phone }}</div>
+</div>
+<h1>PATIENT MEDICAL RECORD</h1>
+{% endmacro %}
+
+{% macro patient_info(data) %}
+<h2>Patient Information</h2>
+<div class="grid2">
+  <div class="field"><span class="label">Patient Name:</span> <span class="value">{{ data.patient_name }}</span></div>
+  <div class="field"><span class="label">MRN:</span> <span class="value">{{ data.mrn }}</span></div>
+  <div class="field"><span class="label">Date of Birth:</span> <span class="value">{{ data.dob }}</span></div>
+  <div class="field"><span class="label">Gender:</span> <span class="value">{{ data.gender }}</span></div>
+  <div class="field"><span class="label">Insurance ID:</span> <span class="value">{{ data.insurance_id }}</span></div>
+  <div class="field"><span class="label">Group Number:</span> <span class="value">{{ data.group_number }}</span></div>
+  <div class="field"><span class="label">Date of Service:</span> <span class="value">{{ data.dos }}</span></div>
+  <div class="field"><span class="label">Insurer:</span> <span class="value">{{ data.insurer_name }}</span></div>
+  <div class="field"><span class="label">Address:</span> <span class="value">{{ data.address.street }}, {{ data.address.city }}, {{ data.address.state }} {{ data.address.zip }}</span></div>
+  <div class="field"><span class="label">Phone:</span> <span class="value">{{ data.phone }}</span></div>
+</div>
+{% endmacro %}
+
+{% macro chief_complaint(data) %}
+<h2>Chief Complaint</h2>
+<p>{{ data.chief_complaint }}</p>
+{% endmacro %}
+
+{% macro hpi(data) %}
+<h2>History of Present Illness</h2>
+<p>{{ data.hpi }}</p>
+{% endmacro %}
+
+{% macro vitals(data) %}
+<h2>Vital Signs</h2>
+<div class="vitals-box">
+  <div class="grid3">
+    <div class="field"><span class="label">BP:</span> {{ data.vitals.bp }} mmHg</div>
+    <div class="field"><span class="label">HR:</span> {{ data.vitals.hr }} bpm</div>
+    <div class="field"><span class="label">Temp:</span> {{ data.vitals.temp }}</div>
+    <div class="field"><span class="label">RR:</span> {{ data.vitals.rr }} /min</div>
+    <div class="field"><span class="label">SpO2:</span> {{ data.vitals.spo2 }}</div>
+    <div class="field"><span class="label">Weight:</span> {{ data.vitals.weight }}</div>
+  </div>
+</div>
+{% endmacro %}
+
+{% macro physical_exam(data) %}
+<h2>Physical Examination</h2>
+<p>{{ data.physical_exam }}</p>
+{% endmacro %}
+
+{% macro assessment(data) %}
+<h2>Assessment &amp; Diagnoses</h2>
+<table>
+  <thead><tr><th>ICD-10 Code</th><th>Description</th></tr></thead>
+  {% for code, desc in data.diagnosis_codes %}
+  <tr><td>{{ code }}</td><td>{{ desc }}</td></tr>
+  {% endfor %}
+</table>
+<p style="margin-top:8px;">{{ data.assessment }}</p>
+{% endmacro %}
+
+{% macro plan(data) %}
+<h2>Plan</h2>
+<p>{{ data.plan }}</p>
+<table style="margin-top:8px;">
+  <thead><tr><th>CPT Code</th><th>Description</th></tr></thead>
+  {% for code in data.procedure_codes %}
+  <tr><td>{{ code }}</td><td>Procedure {{ code }}</td></tr>
+  {% endfor %}
+</table>
+{% endmacro %}
+
+{% macro scenario_details(data) %}
+{% if data.scenario_facts %}
+<h2>{{ data.scenario_facts_title }}</h2>
+<div class="grid2">
+  {% for fact in data.scenario_facts %}
+  <div class="field"><span class="label">{{ fact.label }}:</span> <span class="value">{{ fact.value }}</span></div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endmacro %}
+
+{% macro signature(data) %}
+<div class="sig-block">
+  <div class="grid2">
+    <div>
+      <div class="label">Attending Physician</div>
+      <div class="sig-line"></div>
+      <div>{{ data.physician_name }}</div>
+      <div style="font-size:9pt; color:#555;">NPI: {{ data.npi }} | Specialty: {{ data.specialty }}</div>
+    </div>
+    <div>
+      <div class="label">Date Signed</div>
+      <div class="sig-line"></div>
+      <div>{{ data.dos }}</div>
+    </div>
+  </div>
+</div>
+{% endmacro %}
+
+{% set component_map = {
+  "header_bar": header_bar, "patient_info": patient_info, "chief_complaint": chief_complaint,
+  "hpi": hpi, "vitals": vitals, "physical_exam": physical_exam, "assessment": assessment,
+  "plan": plan, "scenario_details": scenario_details, "signature": signature,
+} %}
+{% for c in components %}{{ component_map[c](data) }}{% endfor %}
+
+</body>
+</html>

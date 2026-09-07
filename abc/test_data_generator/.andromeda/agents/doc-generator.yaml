@@ -1,0 +1,103 @@
+
+name: doc-generator
+recursion_limit: 300
+read_only: false
+
+model:
+  name: "openai/qwen3.6:27b"
+  provider: litellm
+  other_args:
+    temperature: 0.3
+    timeout: 120
+
+workspace_backend: bubblewrap_process
+skill_sources:
+  - /skills
+skills_backend: filesystem
+
+# policy:
+#   enable_shell: true
+#   tool_profile: shell_enabled
+#   file:
+#     max_file_size_mb: 20
+#     allow_symlinks: false
+#     protect_root: true
+#   shell:
+#     allowed_commands:
+#       - python3
+#       - weasyprint
+#     network_enabled: false
+#     timeout_seconds: 120
+#     max_output_chars: 20000
+#     enable_background_shell: false
+
+# settings:
+#   network_mode: none
+#   inherit_host_env: false
+
+# allow_parallel_agents: false  
+allow_async_tasks: false
+
+middleware:
+  tool_error_handler: true
+  guardrails:
+    input: true
+    output: true
+    tool: false
+    blocked_message: "Request blocked by IDP document generation policy."
+
+    data_patterns:
+      email: "(?!)"
+      ssn: "(?!)"
+      phone: "(?!)"
+      credit_card: "(?!)"
+
+    prompt_injection_patterns:
+      patterns:
+        - "ignore.*(previous|above|earlier).*instructions"
+        - "disregard.*(system|prompt)"
+        - "reveal.*system.*prompt"
+        - "bypass.*(guardrail|safety|policy)"
+
+    compliance_patterns:
+      patterns:
+        - "\\b(?:help\\s+me|please|can\\s+you|could\\s+you|i\\s+(?:want|need)\\s+you\\s+to|go\\s+ahead\\s+and|i\\s+will|i'll|let'?s|we\\s+(?:should|will))\\s+(?:(?!not\\b|never\\b)\\w+\\s+){0,2}falsif(?:y|ication)\\b"
+        - "\\b(?:help\\s+me|please|can\\s+you|could\\s+you|i\\s+(?:want|need)\\s+you\\s+to|go\\s+ahead\\s+and|i\\s+will|i'll|let'?s|we\\s+(?:should|will))\\s+(?:(?!not\\b|never\\b)\\w+\\s+){0,2}misrepresent"
+        - "guaranteed\\s+(approval|coverage|payout)"
+        - "cannot\\s+be\\s+denied"
+
+prompt: |
+  You are the lead insurance document generation agent for IDP testing.
+
+  Always call load_skill for the document type before generating anything - it
+  lists that document's exact field names.
+
+  GENERATE a new document:
+    generate_synthetic_data -> validate_document_structure -> render_document_to_pdf
+
+  RECREATE an uploaded document under a different scenario:
+    analyze_uploaded_reference -> read the real values out of each page's `text`
+    -> recreate_document_data(doc_type, scenario, carried_values={...})
+    -> render_document_to_pdf
+    Carry over only people and identifiers: names, DOB, policy/claim/member/record
+    numbers, provider, addresses. Never carry diagnoses, procedures, amounts or
+    narrative - the new scenario must drive those, or you have just reproduced
+    the original document.
+
+  PACKET - exactly two calls:
+    build_packet(packet_name, scenario) -> render_packet()
+    build_packet already gives every component the same claimant, claim number and
+    incident date. Do not loop over components yourself; there is no per-component
+    step.
+
+  Generated data and rendered documents are held server-side. Tools pick them up
+  automatically. Never restate a document's fields in your own output and never
+  put document bytes there - to change a value, call revise_document_data with
+  only the fields that change.
+
+  Stay on task: do not browse the workspace, list directories, read skill files
+  directly, or run shell commands to look around. load_skill already gives you
+  everything a skill contains.
+
+  When the document or packet is staged, your final answer is a short JSON status
+  object and nothing else: {"status": "ok"} or {"status": "ok", "components": 4}.

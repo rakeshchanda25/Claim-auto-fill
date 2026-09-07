@@ -1,0 +1,42 @@
+# UB-04 Field Glossary
+
+- `provider_name`, `provider_address`, `provider_npi`, `billing_provider_phone`: FL1
+- `patient_control_number`: FL3a (`^\d{7}$`, via `_mrn()`)
+- `medical_record_number`: FL3b
+- `type_of_bill`: 3-digit Code (`111` Inpatient, `131` Outpatient) - FL4
+- `statement_period_from` / `statement_period_to`: Billing Period Start/End (`MM/DD/YYYY`) - FL6
+  (NOT `statement_from`/`statement_through` - those names do not exist in the data)
+- `patient_name`, `address`, `dob`, `gender`: FL8-11
+- `admission_date`, `admission_hour`, `admission_type`, `admission_source`: FL12-15
+- `discharge_date`, `discharge_status`: FL16-17
+- `occurrence_codes`: list of `{code, date}` - FL31
+- `value_codes`: list of `{code, amount}` - FL39
+- `revenue_codes`: list of `{code, description, hcpcs, units, charge, non_covered}` - FL42-48
+- `total_charges`: sum of every `revenue_codes[].charge` - FL47 total row
+- `non_covered_charges`: claim-level total (currently always `0.00`) - FL48 total row
+- `payer_name`: FL50
+- `prior_payments`: FL54
+- `treatment_authorization`: FL63
+- `principal_diagnosis`, `admitting_diagnosis`: ICD-10 codes - FL67, FL69
+- `principal_procedure_code`, `principal_procedure_date`: FL74
+- `drg_code`: Diagnosis Related Group (`^\d{3}$`)
+- `attending_physician_npi`, `attending_physician_name`: FL76
+- `operating_physician_name`: FL77
+- `pay_to_name`, `pay_to_address`: FL2
+- `federal_tax_id`: real 9-digit tax ID - FL5
+- `acdt_state`: 2-letter state code - FL29
+- `health_plan_id`: FL51
+- `assignment_of_benefits`: `"Y"` or `"N"` - FL53
+- `est_amount_due`: derived from `total_charges` and `assignment_of_benefits` - see Synthetic
+  Data Rules in SKILL.md - FL55
+- `insured_relationship_code`: always `"18"` (self) - FL59
+- `group_name`, `insurance_group_no`: FL61-62
+- `document_control_number`: FL64
+- `employer_name`: FL65
+- `patient_reason_dx`: FL70
+- `pps_code`: FL71 (currently always blank)
+- `attending_physician_qualifier`: always `"G2"` - FL73
+- `attending_last_name`, `attending_first_name`: split from `attending_physician_name` - FL73
+- `remarks`: FL80 (currently always blank)
+- `condition_code`: FL81 (mostly blank, occasionally `"A0"`)
+- `creation_date`: printed near the revenue-code totals row (`MM/DD/YY`)
