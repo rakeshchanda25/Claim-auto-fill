@@ -3,12 +3,18 @@
 Runs each call on its own so you can see exactly which one fails, how long it
 took and what it returned - independent of the document generator.
 
+Simplest use - run it and type the claim number when it asks:
+
+    python check_guidewire.py
+
+Or pass it on the command line:
+
+    python check_guidewire.py 000-00-000123          # run every check
     python check_guidewire.py --list                 # what can be checked
-    python check_guidewire.py 000-00-000123          # run everything
+    python check_guidewire.py --ping                 # connectivity only
     python check_guidewire.py 000-00-000123 --only details policy notes
     python check_guidewire.py 000-00-000123 --full   # print whole responses
     python check_guidewire.py 000-00-000123 --save out/   # one JSON per call
-    python check_guidewire.py --ping                 # connectivity only
 
 Exit code is 0 only if every selected check passed.
 """
@@ -153,7 +159,15 @@ def main(argv=None) -> int:
         return 0
 
     if not args.claim and not args.ping:
-        parser.error("a claim number is required (or use --ping / --list)")
+        # Just running the file with no arguments should work: ask for the
+        # claim instead of failing with a usage error.
+        try:
+            args.claim = input("Claim number (blank to only test connectivity): ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return 1
+        if not args.claim:
+            args.ping = True
 
     selected = args.only or ALL_CHECKS
     unknown = [c for c in selected if c not in ALL_CHECKS]
@@ -185,15 +199,21 @@ def main(argv=None) -> int:
     # check would hide a resolution failure behind 17 identical errors.
     claim_id = extracted
     if "resolve" in selected:
+        print("\n[resolve] Resolve claim number to public id")
         try:
             claim_id = client.resolve_claim_id_by_number(extracted)
-            print(f"\n[resolve] Resolve claim number to public id\n   ok    -> {claim_id!r}")
-            results["resolve"] = True
         except Exception as exc:
-            print(f"\n[resolve] FAIL  {type(exc).__name__}: {exc}")
+            print(f"   FAIL  {type(exc).__name__}: {exc}")
             results["resolve"] = False
             print("\nCannot continue without a claim id.")
             return 1
+
+        # resolve_claim_id_by_number warns and returns the input unchanged when
+        # the lookup fails, so an unchanged value is a failure, not a success.
+        resolved = str(claim_id).startswith("cc:") or claim_id != extracted
+        results["resolve"] = resolved
+        print(f"   {'ok  ' if resolved else 'FAIL'}  -> {claim_id!r}"
+              + ("" if resolved else "  (not resolved - client fell back to the input)"))
 
     for name in selected:
         if name in ("resolve",) or name in CONTEXT_CHECKS:
