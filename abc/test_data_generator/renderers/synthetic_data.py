@@ -16,6 +16,12 @@ _ICD10 = {
     "rear_end_collision": [("S14.0XXA", "Concussion of cervical spinal cord"), ("M54.2", "Cervicalgia"), ("S13.4XXA", "Sprain of ligaments of cervical spine")],
     "intersection_accident": [("S72.001A", "Fracture of femur"), ("S22.20XA", "Unspecified fracture of sternum"), ("S09.90XA", "Head injury")],
     "medical_malpractice": [("T80.89XA", "Other complications of surgical procedure"), ("N17.9", "Acute kidney failure")],
+    "occupational_exposure": [("J68.9", "Respiratory condition due to inhalation of chemical fumes"),
+                              ("J45.909", "Unspecified asthma, uncomplicated"),
+                              ("R05.3", "Chronic cough"),
+                              ("J30.89", "Other allergic rhinitis")],
+    "workplace_injury":   [("S60.9", "Unspecified superficial injury of wrist and hand"),
+                           ("M54.5", "Low back pain"), ("S46.90", "Injury of muscle of shoulder")],
     "general":            [("Z00.00", "Encounter for general exam"), ("J06.9", "Acute upper respiratory infection"), ("M54.5", "Low back pain")],
 }
 
@@ -24,6 +30,8 @@ _CPT = {
     "surgery":            ["47562", "27447", "44950", "93454"],
     "hospital_admission": ["99223", "99232", "93010", "80053"],
     "outpatient_procedure": ["45378", "97110", "92015", "99213"],
+    "occupational_exposure": ["99214", "94010", "71046", "95024"],
+    "workplace_injury":   ["99213", "73130", "97110", "29075"],
     "general":            ["99213", "93000", "85025", "80053"],
 }
 
@@ -351,6 +359,12 @@ def _clinical_note_fields(scenario: str = "general", icd_codes=None) -> dict:
     }
 
 
+# The only scenarios where a police report is about a motor vehicle collision.
+# Anything else - workplace exposure, illness, a fall, an unrecognised scenario
+# - must NOT be narrated as "Driver 1 / Driver 2".
+_AUTO_SCENARIOS = {"rear_end_collision", "intersection_accident", "hit_and_run"}
+
+
 def _property_scenario_facts(scenario: str) -> tuple[str, list[dict]]:
     if scenario == "fire_damage":
         return "Fire Details", [
@@ -384,6 +398,37 @@ def _property_scenario_facts(scenario: str) -> tuple[str, list[dict]]:
             {"label": "Peak Wind Gust", "value": f"{random.randint(45, 110)} mph"},
             {"label": "National Weather Service Advisory #", "value": "NWS-" + "".join(random.choices(string.digits, k=5))},
             {"label": "Tree/Debris Damage", "value": random.choice(["Yes", "No"])},
+        ]
+    if scenario == "occupational_exposure":
+        return "Exposure Details", [
+            {"label": "Exposure Agent", "value": random.choice(
+                ["Respirable grain dust", "Silica dust", "Welding fumes", "Solvent vapour",
+                 "Cleaning chemical fumes"])},
+            {"label": "Work Area", "value": random.choice(
+                ["Grain handling / silo", "Production floor", "Warehouse loading bay",
+                 "Maintenance shop"])},
+            {"label": "Duration of Exposure", "value": random.choice(
+                ["Single shift", "Repeated over several weeks", "Ongoing over several months"])},
+            {"label": "Respiratory Protection In Use", "value": random.choice(["Yes", "No", "No"])},
+            {"label": "Employer Incident Report Filed", "value": random.choice(["Yes", "Yes", "No"])},
+        ]
+    if scenario == "workplace_injury":
+        return "Workplace Incident Details", [
+            {"label": "Task Being Performed", "value": random.choice(
+                ["Manual lifting", "Operating machinery", "Working at height", "Loading stock"])},
+            {"label": "Employer Incident Report Filed", "value": random.choice(["Yes", "Yes", "No"])},
+            {"label": "Supervisor Notified", "value": random.choice(["Yes", "Yes", "No"])},
+            {"label": "Safety Equipment In Use", "value": random.choice(["Yes", "No"])},
+        ]
+    if scenario not in _AUTO_SCENARIOS:
+        # Some non-vehicle incident we have no specific table for. Return a
+        # generic block anyway, so the report is narrated as an incident rather
+        # than falling through to the two-vehicle collision wording.
+        return "Incident Details", [
+            {"label": "Incident Type", "value": scenario.replace("_", " ").title()},
+            {"label": "Reported By", "value": random.choice(
+                ["Claimant", "Employer", "Property owner", "Witness on scene"])},
+            {"label": "Agency Notified", "value": random.choice(["Yes", "No"])},
         ]
     return "", []
 

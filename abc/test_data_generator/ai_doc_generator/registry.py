@@ -90,6 +90,10 @@ SCENARIO_REGISTRY = {
     "theft": "Property theft",
     "wind_damage": "Wind/storm damage",
     "slip_and_fall": "Slip and fall injury",
+    "occupational_exposure": "Workplace exposure / occupational illness "
+                             "(dust, fumes, chemicals, noise, repetitive strain)",
+    "workplace_injury": "Injury from a workplace accident (no vehicle involved)",
+    "general_incident": "Non-auto, non-property incident",
     "medical_malpractice": "Medical malpractice claim",
     "product_liability": "Product liability claim",
     "chronic_medication": "Chronic condition medication",

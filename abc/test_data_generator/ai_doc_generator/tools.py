@@ -15,6 +15,7 @@ from renderers.docx_parser import extract_docx_layout
 from renderers.synthetic_data import _parse_anchor_date, build_synthetic_data, resolve_doc_type
 
 from .registry import DOC_TYPES, PACKET_REGISTRY
+from .trace import step, traced
 
 # doc_type id -> human label, used to name ad hoc packet components.
 DOC_TYPE_LABELS = {d["id"]: d["label"] for d in DOC_TYPES}
@@ -26,6 +27,11 @@ class RunContext:
     reference_bytes: bytes | None = None
     custom_fields: dict = field(default_factory=dict)
     anchor_date: str | None = None
+
+    # What the model concluded about this claim before choosing documents.
+    # Survives the whole run, so a later step can re-read it instead of
+    # relying on the model still remembering it.
+    analysis: dict | None = None
 
     doc_data: dict | None = None
     packet_plan: list[dict] | None = None
@@ -232,6 +238,7 @@ def _require_doc_data() -> dict:
 
 
 @tool
+@traced
 def generate_synthetic_data(doc_type: str, scenario: str = "general", seed: int = None,
                             anchor_date: str = None, custom_fields: dict = None) -> dict:
     """Generate and stage synthetic insurance claim data for one document.
@@ -253,6 +260,7 @@ def generate_synthetic_data(doc_type: str, scenario: str = "general", seed: int 
 
 
 @tool
+@traced
 def recreate_document_data(doc_type: str, scenario: str, carried_values: dict,
                            anchor_date: str = None, custom_fields: dict = None) -> dict:
     """Generate fresh data for `scenario` while preserving selected values read
@@ -283,6 +291,7 @@ def recreate_document_data(doc_type: str, scenario: str, carried_values: dict,
 
 
 @tool
+@traced
 def revise_document_data(changes: dict) -> dict:
     """Update specific fields on the staged document; nested dicts merge.
     Returns the changed and unmapped field names."""
@@ -316,6 +325,7 @@ _REQUIRED_FIELDS = {
 
 
 @tool
+@traced
 def validate_document_structure(doc_type: str) -> dict:
     """Check the staged document has every field its type requires."""
     data = _require_doc_data()
@@ -336,6 +346,7 @@ def validate_document_structure(doc_type: str) -> dict:
 
 
 @tool
+@traced
 def render_document_to_pdf(template_name: str) -> dict:
     """Render the staged document to a PDF. The result is staged automatically -
     it never passes through your output."""
@@ -378,6 +389,7 @@ def analyze_reference_document(file_bytes: bytes, file_type: str) -> dict:
 
 
 @tool
+@traced
 def analyze_uploaded_reference(file_type: str) -> dict:
     """Analyze the uploaded reference document. Its bytes are supplied
     automatically - do not attempt to pass them."""
@@ -391,6 +403,65 @@ def analyze_uploaded_reference(file_type: str) -> dict:
 
 
 @tool
+@traced
+def note_claim_analysis(claim_type: str, coverage_side: str, injuries_involved: bool,
+                        vehicle_involved: bool, documents: list, reasoning: str) -> dict:
+    """Record what you concluded about this claim BEFORE building anything.
+
+    Call this once, after reading the claim narrative and the domain reference,
+    and before build_packet.
+
+    - claim_type: the claim type from the domain reference that this claim is
+      (e.g. "Occupational illness / toxic exposure", "Auto - third-party bodily
+      injury"). Say what the claim actually is, not what documents you want.
+    - coverage_side: "first-party" or "third-party".
+    - injuries_involved: did a person suffer bodily injury or illness?
+    - vehicle_involved: was a motor vehicle involved in causing the loss? Answer
+      False for workplace exposure, illness, property loss with no vehicle, or
+      any loss where no vehicle was part of the event.
+    - documents: the document type ids you intend to generate.
+    - reasoning: one or two sentences tying the document list to the narrative.
+
+    Returns your analysis back so you can re-read it later with
+    read_claim_analysis instead of relying on memory.
+    """
+    unknown = [d for d in documents if d not in DOC_TYPE_LABELS]
+    if unknown:
+        raise ValueError(
+            f"Unknown document type(s): {unknown}. Known types: {sorted(DOC_TYPE_LABELS)}")
+
+    analysis = {
+        "claim_type": claim_type,
+        "coverage_side": coverage_side,
+        "injuries_involved": bool(injuries_involved),
+        "vehicle_involved": bool(vehicle_involved),
+        "documents": list(documents),
+        "reasoning": reasoning,
+    }
+
+    # A police report only exists if police attended an event. An occupational
+    # illness, a billing dispute or a benefit claim has no such event, so the
+    # model gets told now rather than after a collision report is rendered.
+    if "police-report" in documents and not vehicle_involved and not analysis["injuries_involved"]:
+        step("analysis.warning", note="police-report chosen with no vehicle and no injury")
+
+    current_run().analysis = analysis
+    return analysis
+
+
+@tool
+@traced
+def read_claim_analysis() -> dict:
+    """Re-read the analysis you recorded with note_claim_analysis. Use this if
+    you are unsure what you already decided about this claim."""
+    analysis = current_run().analysis
+    if not analysis:
+        raise ValueError("No analysis recorded yet - call note_claim_analysis first.")
+    return analysis
+
+
+@tool
+@traced
 def build_packet(packet_name: str = None, scenario: str = "general", seed: int = None,
                  custom_fields: dict = None, components: list = None) -> dict:
     """Plan a document packet, giving every document one shared claimant, claim
@@ -418,6 +489,11 @@ def build_packet(packet_name: str = None, scenario: str = "general", seed: int =
             raise ValueError(f"Unknown packet: {packet_name}. Available: {list(PACKET_REGISTRY)}")
         component_specs = spec["components"]
     elif components:
+        if not current_run().analysis:
+            raise ValueError(
+                "Record your reasoning first: call note_claim_analysis(...) with the "
+                "claim type, coverage side, whether injuries and a vehicle were "
+                "involved, your document list and why - then call build_packet again.")
         unknown = [c for c in components if c not in DOC_TYPE_LABELS]
         if unknown:
             raise ValueError(
@@ -453,6 +529,9 @@ def build_packet(packet_name: str = None, scenario: str = "general", seed: int =
         if claim_fields.get(key):
             shared[concept] = claim_fields[key]
 
+    step("packet.selected", source=packet_name or "model-chosen", scenario=scenario,
+         documents=[c["doc_type"] for c in component_specs],
+         analysis=current_run().analysis)
     component_specs = sorted(component_specs, key=lambda c: c["order"])
     plan = []
     for comp in component_specs:
@@ -487,6 +566,7 @@ def build_packet(packet_name: str = None, scenario: str = "general", seed: int =
 
 
 @tool
+@traced
 def render_packet() -> dict:
     """Render every component build_packet planned, in order. One call does the
     whole packet - there is no per-component step."""
@@ -516,6 +596,8 @@ AGENT_TOOLS = (
     analyze_uploaded_reference,
     build_packet,
     render_packet,
+    note_claim_analysis,
+    read_claim_analysis,
 )
 
 

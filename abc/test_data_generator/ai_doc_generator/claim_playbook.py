@@ -107,6 +107,31 @@ CLAIM_PLAYBOOK = [
                  "than optional.",
     },
     {
+        "claim_type": "Occupational illness / toxic exposure (workers' compensation)",
+        "signals": "harm from conditions AT WORK rather than from a single accident - "
+                   "inhaled dust, grain dust, silica, fumes, chemicals, asbestos, mould; "
+                   "cough, breathing difficulty, skin or hearing damage; repetitive strain; "
+                   "'at work', 'on the job', 'employer', 'shift', 'plant', 'warehouse'",
+        "core": ["medical-record", "medical-bill"],
+        "often": ["cms-1500", "eob-explanation", "demand-letter", "litigation-document",
+                  "pharmacy-invoice"],
+        "notes": "There is NO police report and NO auto-accident-report on an occupational "
+                 "illness. Nothing happened that police attend - the harm accrued from working "
+                 "conditions. The file is medical evidence of the condition plus the cost of "
+                 "treating it. A demand letter or complaint appears only if a third party "
+                 "(equipment maker, site owner, chemical supplier) is being pursued.",
+    },
+    {
+        "claim_type": "Workplace accident injury (workers' compensation)",
+        "signals": "a single identifiable accident at work - fall, lifting injury, caught in "
+                   "machinery, struck by object; no motor vehicle involved",
+        "core": ["medical-record", "medical-bill"],
+        "often": ["cms-1500", "ub-04", "discharge-summary", "eob-explanation"],
+        "notes": "The employer's own incident report - not a police report - is the accident "
+                 "record. Only include police-report if police actually attended (a serious "
+                 "or fatal accident, or a crime).",
+    },
+    {
         "claim_type": "Medical / health benefit claim",
         "signals": "treatment billed to a health plan; adjudication, allowed amount, "
                    "member responsibility",
@@ -147,6 +172,13 @@ BILLING FORM RULES - these are not interchangeable:
   for an ER-only visit, an outpatient procedure, or a claim with no admission.
 - eob-explanation is the payer's adjudication of a bill. It only makes sense
   when a bill exists - never include an EOB with no corresponding bill.
+- police-report only exists when POLICE ATTENDED AN EVENT: a crash, a crime, a
+  fire, a death, a serious public incident. An illness, an exposure that built
+  up over time, a billing dispute or a benefit claim has no such event and
+  therefore no police report. If you cannot say which incident the police were
+  called to, do not include one.
+- auto-accident-report requires a MOTOR VEHICLE. If no vehicle was involved in
+  causing the loss, it does not belong in the file at any severity.
 - acord-25 is a CERTIFICATE OF INSURANCE: proof that coverage exists. It is
   exchanged between carriers, or demanded by a third party. It is not part of a
   purely internal medical claim.
@@ -165,7 +197,14 @@ HOW TO CHOOSE:
 4. Prefer being complete over being minimal, but every document must be
    justifiable from the claim narrative. Adding the entire menu regardless of
    relevance is as wrong as returning a single document.
-5. Match the scenario to what actually happened, not to the document list.
+5. Match the scenario to what actually happened, not to the document list. The
+   scenario drives how each document is WRITTEN: choosing an auto scenario makes
+   a police report render as a two-vehicle collision, which is wrong for a
+   workplace, illness or premises claim. If no listed scenario fits the claim,
+   pick the closest NON-auto one rather than defaulting to a collision.
+6. Sanity check before you commit: does every document name an event or a cost
+   the narrative actually describes? If the narrative is about an illness, ask
+   yourself what a police officer or a vehicle would be doing in that file.
 """
 
 

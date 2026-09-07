@@ -122,9 +122,14 @@ def _packet_prompt(req: GenerationRequest, tail: str) -> str:
         )
 
     scenario_step = (
-        f"4. Choose the scenario that matches what actually happened, from:\n{_scenario_menu()}\n"
+        f"STEP 5 - CHOOSE THE SCENARIO that matches what actually happened, from:\n"
+        f"{_scenario_menu()}\n"
+        "The scenario controls how the documents are WRITTEN, not just what they are "
+        "called. An auto scenario renders a police report as a two-vehicle collision "
+        "with Driver 1 and Driver 2. Only choose one of those if a vehicle was actually "
+        "involved.\n"
         if auto_scenario else
-        f"4. Use scenario='{req.scenario}'.\n"
+        f"STEP 5 - Use scenario='{req.scenario}'.\n"
     )
     scenario_arg = "<the scenario you chose>" if auto_scenario else f"'{req.scenario}'"
 
@@ -150,17 +155,28 @@ def _packet_prompt(req: GenerationRequest, tail: str) -> str:
         "clearly generated. You may ONLY use ids from this list:\n"
         f"{_doc_type_menu()}\n"
 
+        "STEP 4 - WRITE DOWN YOUR ANALYSIS before you build anything. Call:\n"
+        "  note_claim_analysis(claim_type=..., coverage_side=..., injuries_involved=..., "
+        "vehicle_involved=..., documents=[...], reasoning=...)\n"
+        "This is your scratchpad. Committing the decision in writing is what stops the "
+        "document list drifting away from the claim later in this run, and you can call "
+        "read_claim_analysis() at any point to see what you decided instead of trying to "
+        "remember it. Answer vehicle_involved honestly - False for a workplace exposure, "
+        "an illness, a fall, or any loss where no motor vehicle caused the harm.\n"
+
         + scenario_step +
 
-        f"5. Call build_packet(components=[<your final document type ids>], "
+        f"STEP 6 - Call build_packet(components=[<your final document type ids>], "
         f"scenario={scenario_arg}"
         f"{_seed_arg(req)}{_optional_args(req, with_anchor=False)})\n"
-        "6. Call render_packet().\n\n"
+        "STEP 7 - Call render_packet().\n\n"
 
-        "Before you call build_packet, check your list against the claim: is every "
-        "document justified by something in the narrative, and is anything the claim "
-        "obviously produced missing? A realistic file for a disputed injury claim is "
-        "several documents; a simple first-party property claim may be two.\n"
+        "Check your list once more before STEP 6: is every document justified by "
+        "something in the narrative, and is anything the claim obviously produced "
+        "missing? A realistic file for a disputed injury claim is several documents; a "
+        "simple first-party property claim may be two. If your analysis says no vehicle "
+        "was involved there must be no auto-accident-report in the list, and a "
+        "police-report only if police actually attended an event.\n"
         "build_packet gives every document the same claimant, claim number and incident "
         "date automatically - do not adjust them, and do not loop over components "
         "yourself. When render_packet returns, reply with "
