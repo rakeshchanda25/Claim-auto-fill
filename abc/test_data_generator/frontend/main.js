@@ -203,6 +203,7 @@ document.addEventListener('DOMContentLoaded', () => {
             let suffix = '';
             if (e.target.name === 'skew_angle') suffix = '°';
             else if (e.target.name === 'blur_strength') suffix = ' px';
+            else if (e.target.name === 'crop_percent') suffix = '%';
             e.target.nextElementSibling.textContent = e.target.value + suffix;
         });
     });
@@ -219,6 +220,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const container = document.getElementById('rotation-settings-container');
         if (e.target.checked) container.classList.remove('hidden');
         else container.classList.add('hidden');
+    });
+
+    // Toggle the settings panel for each scan-defect option
+    [['dark_background', 'dark-settings-container'],
+     ['crop', 'crop-settings-container'],
+     ['handwritten', 'handwritten-settings-container']].forEach(([name, id]) => {
+        document.querySelector(`[name="${name}"]`).addEventListener('change', (e) => {
+            const container = document.getElementById(id);
+            if (e.target.checked) container.classList.remove('hidden');
+            else container.classList.add('hidden');
+        });
     });
 
     // Add Rotation Rule - Using Event Delegation
@@ -282,6 +294,20 @@ document.addEventListener('DOMContentLoaded', () => {
         const blur_strength = scannerForm.querySelector('[name="blur_strength"]').value;
         const noise_intensity = scannerForm.querySelector('[name="noise_intensity"]').value;
         const rotation = scannerForm.querySelector('[name="rotation"]').checked;
+
+        const dark_background = scannerForm.querySelector('[name="dark_background"]').checked;
+        const dark_intensity = scannerForm.querySelector('[name="dark_intensity"]').value;
+        const dark_mode = scannerForm.querySelector('[name="dark_mode"]').value;
+        const crop = scannerForm.querySelector('[name="crop"]').checked;
+        const crop_percent = scannerForm.querySelector('[name="crop_percent"]').value;
+        const crop_edges = Array.from(
+            scannerForm.querySelectorAll('[name="crop_edge"]:checked')
+        ).map(cb => cb.value).join(',');
+        const handwritten = scannerForm.querySelector('[name="handwritten"]').checked;
+        const annotation_count = scannerForm.querySelector('[name="annotation_count"]').value;
+        const annotation_ink = scannerForm.querySelector('[name="annotation_ink"]').value;
+        const annotation_text = scannerForm.querySelector('[name="annotation_text"]').value;
+        const seed = scannerForm.querySelector('[name="seed"]').value;
         
         // Collect all rotation rules
         const rotationRules = [];
@@ -315,6 +341,17 @@ document.addEventListener('DOMContentLoaded', () => {
             formData.append('noise_intensity', noise_intensity);
             formData.append('rotation', rotation);
             formData.append('rotation_rules', rotationRulesJson);
+            formData.append('dark_background', dark_background);
+            formData.append('dark_intensity', dark_intensity);
+            formData.append('dark_mode', dark_mode);
+            formData.append('crop', crop);
+            formData.append('crop_percent', crop_percent);
+            formData.append('crop_edges', crop_edges);
+            formData.append('handwritten', handwritten);
+            formData.append('annotation_count', annotation_count);
+            formData.append('annotation_ink', annotation_ink);
+            formData.append('annotation_text', annotation_text);
+            if (seed !== '') { formData.append('seed', seed); }
             if (overlayFile) {
                 formData.append('overlay_image', overlayFile);
             }

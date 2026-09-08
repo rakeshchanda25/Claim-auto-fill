@@ -86,7 +86,18 @@ async def api_simulate_scan(
     noise_intensity: float = Form(15.0),
     overlay_image: UploadFile = File(None),
     rotation: bool = Form(False),
-    rotation_rules: str = Form("[]")
+    rotation_rules: str = Form("[]"),
+    dark_background: bool = Form(False),
+    dark_intensity: float = Form(0.55),
+    dark_mode: str = Form("band"),
+    crop: bool = Form(False),
+    crop_percent: float = Form(8.0),
+    crop_edges: str = Form("right,bottom"),
+    handwritten: bool = Form(False),
+    annotation_count: int = Form(3),
+    annotation_ink: str = Form("blue"),
+    annotation_text: str = Form(""),
+    seed: Optional[int] = Form(None),
 ):
     try:
         pdf_bytes = await file.read()
@@ -103,7 +114,18 @@ async def api_simulate_scan(
             noise_intensity=noise_intensity,
             overlay_image_bytes=overlay_bytes,
             rotation=rotation,
-            rotation_rules=rotation_rules
+            rotation_rules=rotation_rules,
+            dark_background=dark_background,
+            dark_intensity=dark_intensity,
+            dark_mode=dark_mode,
+            crop=crop,
+            crop_percent=crop_percent,
+            crop_edges=crop_edges,
+            handwritten=handwritten,
+            annotation_count=annotation_count,
+            annotation_ink=annotation_ink,
+            annotation_text=annotation_text,
+            seed=seed,
         )
         
         return Response(

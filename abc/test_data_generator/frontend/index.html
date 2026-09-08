@@ -198,6 +198,100 @@
                                             Rule</button>
                                     </div>
                                 </div>
+
+                                <div class="toggle-control" style="grid-column: span 2;">
+                                    <label class="control-header">
+                                        <input type="checkbox" name="dark_background">
+                                        <div class="header-text">
+                                            <span class="control-label">Dark Background</span>
+                                            <span class="control-desc">Darkens the paper while leaving the ink dark, so
+                                                text sits on a grey or near-black ground.</span>
+                                        </div>
+                                    </label>
+                                    <div id="dark-settings-container" class="hidden" style="margin-top: 1rem; display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+                                        <div>
+                                            <label style="display: block; margin-bottom: 0.4rem; font-size: 0.8rem; color: var(--text-muted);">Area</label>
+                                            <select name="dark_mode" style="width: 100%; padding: 0.5rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; color: var(--text-main); font-size: 0.85rem;">
+                                                <option value="band">Shaded band</option>
+                                                <option value="full">Whole page</option>
+                                                <option value="shadow">Edge shadow (book scan)</option>
+                                                <option value="blocks">Random blocks</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label style="display: block; margin-bottom: 0.4rem; font-size: 0.8rem; color: var(--text-muted);">Darkness</label>
+                                            <div class="slider-container">
+                                                <input type="range" name="dark_intensity" min="0.15" max="0.9" step="0.05" value="0.55">
+                                                <span class="slider-val">0.55</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="toggle-control" style="grid-column: span 2;">
+                                    <label class="control-header">
+                                        <input type="checkbox" name="crop">
+                                        <div class="header-text">
+                                            <span class="control-label">Crop Document</span>
+                                            <span class="control-desc">Cuts the chosen edges off the page, removing any
+                                                fields that were there.</span>
+                                        </div>
+                                    </label>
+                                    <div id="crop-settings-container" class="hidden" style="margin-top: 1rem; display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; align-items: start;">
+                                        <div>
+                                            <label style="display: block; margin-bottom: 0.4rem; font-size: 0.8rem; color: var(--text-muted);">Edges to cut</label>
+                                            <div style="display: flex; gap: 0.9rem; flex-wrap: wrap; font-size: 0.85rem;">
+                                                <label><input type="checkbox" name="crop_edge" value="top"> Top</label>
+                                                <label><input type="checkbox" name="crop_edge" value="bottom" checked> Bottom</label>
+                                                <label><input type="checkbox" name="crop_edge" value="left"> Left</label>
+                                                <label><input type="checkbox" name="crop_edge" value="right" checked> Right</label>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label style="display: block; margin-bottom: 0.4rem; font-size: 0.8rem; color: var(--text-muted);">How much of each edge</label>
+                                            <div class="slider-container">
+                                                <input type="range" name="crop_percent" min="2" max="40" step="1" value="8">
+                                                <span class="slider-val">8%</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="toggle-control" style="grid-column: span 2;">
+                                    <label class="control-header">
+                                        <input type="checkbox" name="handwritten">
+                                        <div class="header-text">
+                                            <span class="control-label">Handwritten Annotation</span>
+                                            <span class="control-desc">Adds handwritten notes and markings (circles,
+                                                ticks, underlines) over and around the printed content.</span>
+                                        </div>
+                                    </label>
+                                    <div id="handwritten-settings-container" class="hidden" style="margin-top: 1rem; display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; align-items: start;">
+                                        <div>
+                                            <label style="display: block; margin-bottom: 0.4rem; font-size: 0.8rem; color: var(--text-muted);">Ink</label>
+                                            <select name="annotation_ink" style="width: 100%; padding: 0.5rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; color: var(--text-main); font-size: 0.85rem;">
+                                                <option value="blue">Blue pen</option>
+                                                <option value="black">Black pen</option>
+                                                <option value="red">Red pen</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label style="display: block; margin-bottom: 0.4rem; font-size: 0.8rem; color: var(--text-muted);">Annotations per page</label>
+                                            <div class="slider-container">
+                                                <input type="range" name="annotation_count" min="1" max="10" step="1" value="3">
+                                                <span class="slider-val">3</span>
+                                            </div>
+                                        </div>
+                                        <div style="grid-column: span 2;">
+                                            <label style="display: block; margin-bottom: 0.4rem; font-size: 0.8rem; color: var(--text-muted);">Your own notes (comma separated - leave blank for realistic defaults)</label>
+                                            <input type="text" name="annotation_text" placeholder="e.g. Verified w/ insured, Check DOL, Approved" style="width: 100%; padding: 0.5rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; color: var(--text-main); font-size: 0.85rem;">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="toggle-control" style="grid-column: span 2;">
+                                    <div>
+                                        <label style="display: block; margin-bottom: 0.4rem; font-size: 0.8rem; color: var(--text-muted);">Random seed (optional - same seed gives the identical scan every run)</label>
+                                        <input type="number" name="seed" placeholder="blank = different every time" style="width: 100%; padding: 0.5rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; color: var(--text-main); font-size: 0.85rem;">
+                                    </div>
+                                </div>
                             </div>
 
                             <div class="actions">
