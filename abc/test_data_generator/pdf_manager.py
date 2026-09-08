@@ -2,6 +2,7 @@ import fitz
 import random
 
 from handwriting import find_handwriting_font, ink_unit
+from value_classifier import classify_page, classify_page_by_rules
 
 def _normalize_font_name(raw_font: str) -> str:
     
@@ -246,91 +247,98 @@ def combine_pdfs(
 # ---------------------------------------------------------------------------
 # Handwritten form values
 #
-# A real filled-in form is a PRINTED template with HANDWRITTEN values: the
-# label "Name of Hospital" is printed, "Rishab Hospital" is written by hand.
-# This finds the values, removes the typed version and writes them back in a
-# handwriting font, leaving every label, box and rule untouched.
+# A filled-in document is a PRINTED schema with HANDWRITTEN values: the label
+# "Name of Hospital" is printed, "Rishab Hospital" is written in. This reads
+# the whole PDF, works out which text is which, then redraws every value in a
+# handwriting font and leaves the schema untouched.
 # ---------------------------------------------------------------------------
 
-# Anything longer than this is prose, not something a person hand-writes into
-# a form box - narrative paragraphs stay printed.
-_MAX_HANDWRITTEN_VALUE = 90
-
-# Labels commonly end with one of these, and the value is whatever follows.
-_LABEL_SEPARATORS = (":", "-", "\u2013")
+# Longer than this is prose, not something written into a form box. Narrative
+# paragraphs stay printed.
+_MAX_HANDWRITTEN_VALUE = 120
 
 
-def _iter_spans(page):
+def _page_lines(page) -> tuple:
+    """Every text span on the page as (lines, spans).
+
+    `lines` is what the classifier reads: a list of lines, each a list of
+    (span_id, text). `spans` maps span_id back to the span itself so the value
+    can be positioned where the printed text was.
+    """
+    lines, spans = [], {}
     for block in page.get_text("dict").get("blocks", []):
         if block.get("type") != 0:
             continue
         for line in block.get("lines", []):
-            yield line
+            entry = []
+            for span in line.get("spans", []):
+                if not span["text"].strip():
+                    continue
+                span_id = len(spans)
+                spans[span_id] = span
+                entry.append((span_id, span["text"]))
+            if entry:
+                lines.append(entry)
+    return lines, spans
 
 
-def _value_targets_from_labels(page) -> list:
-    """Values found by the label/value split: text after a colon on a line.
+def _value_rect(span, value_text):
+    """Where in the span the value sits.
 
-    Deliberately conservative - a span is only treated as a value when the
-    line actually reads like "Label: value", so headings and body text are
-    left as printed text.
+    When the model returns only part of a span ("Ram" out of "Name: Ram") the
+    offset is estimated from the character position. Proportional spacing makes
+    that approximate, so it is nudged right by a third of a character - leaving
+    a sliver of the label is far better than redacting the end of it.
     """
-    targets = []
-    for line in _iter_spans(page):
-        spans = line.get("spans", [])
-        if not spans:
-            continue
+    x0, y0, x1, y1 = span["bbox"]
+    text = span["text"]
 
-        joined = "".join(s["text"] for s in spans)
-        if not any(sep in joined for sep in _LABEL_SEPARATORS[:1]):
-            continue
+    if value_text == text.strip():
+        return fitz.Rect(x0, y0, x1, y1), x0
 
-        seen_separator = False
-        for span in spans:
-            text = span["text"]
-            if seen_separator:
-                if text.strip():
-                    targets.append((span, text, 0.0))
-                continue
+    index = text.find(value_text)
+    if index <= 0:
+        return fitz.Rect(x0, y0, x1, y1), x0
 
-            if ":" in text:
-                seen_separator = True
-                head, _, tail = text.partition(":")
-                if tail.strip():
-                    # The value starts partway into this span; estimate where
-                    # from the character count, which is close enough for
-                    # placement and avoids re-measuring every glyph.
-                    frac = (len(head) + 1) / max(1, len(text))
-                    targets.append((span, tail, frac))
-    return targets
+    avg_char = (x1 - x0) / max(1, len(text))
+    start_x = min(x1 - 1, x0 + avg_char * index + avg_char * 0.35)
+    return fitz.Rect(start_x, y0, x1, y1), start_x
 
 
-def _value_targets_from_widgets(page) -> list:
-    """Filled AcroForm fields - the only case where the values are known
-    exactly rather than guessed."""
-    targets = []
+def _widget_values(page) -> list:
+    """Filled AcroForm fields - the one case where the values are known
+    exactly rather than inferred."""
+    jobs = []
     for widget in page.widgets() or []:
         value = (widget.field_value or "").strip()
-        if value:
-            targets.append((widget, value))
-    return targets
+        if not value:
+            continue
+        rect = widget.rect
+        jobs.append((rect, fitz.Point(rect.x0 + 2, rect.y1 - rect.height * 0.25),
+                     value, max(6.0, rect.height * 0.62)))
+        try:
+            page.delete_widget(widget)   # the typed value goes with it
+        except Exception:
+            pass
+    return jobs
 
 
 def handwrite_values_in_pdf(pdf_bytes: bytes, values: list = None, ink: str = "blue",
-                            font_path: str = "", seed: int = None,
-                            scale: float = 1.15) -> bytes:
-    """Rewrite a document's filled-in values in handwriting, keeping the
-    printed template exactly as it is.
+                            font_path: str = "", seed: int = None, scale: float = 1.15,
+                            detect: str = "llm", model: str = "") -> bytes:
+    """Rewrite everything filled into a document in handwriting, keeping the
+    printed schema exactly as it is.
 
-    Values are located, in order of reliability:
+    detect:
+      "llm"       - read the whole page and let the model decide what is schema
+                    and what is a value. Falls back to rules if it cannot be
+                    reached, and reports which was used in the returned report.
+      "rules"     - the "Label: value" heuristic only, no model call.
+    values:
+      exact strings to handwrite. Given these, nothing is inferred at all.
 
-    1. `values` - exact strings you supply, when you know what was filled in.
-    2. Filled AcroForm fields, when the PDF is a real fillable form.
-    3. Text after a colon on a "Label: value" line.
-
-    Returns the PDF with those values redacted and redrawn in an embedded
-    handwriting font, slightly rotated and offset per value so no two look
-    stamped from the same die.
+    Returns (pdf_bytes, report) where report says how values were found and how
+    many were written.
     """
     rng = random.Random(seed)
     font_file = find_handwriting_font(font_path)
@@ -338,60 +346,60 @@ def handwrite_values_in_pdf(pdf_bytes: bytes, values: list = None, ink: str = "b
     metrics = fitz.Font(fontfile=font_file)
 
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-    written = 0
+    report = {"method": detect, "written": 0, "pages": len(doc), "fallback_reason": None}
+    wanted = {v.strip() for v in (values or []) if v and v.strip()}
 
     for page in doc:
-        jobs = []
+        jobs = _widget_values(page)
+        lines, spans = _page_lines(page)
 
-        for widget, value in _value_targets_from_widgets(page):
-            rect = widget.rect
-            size = max(6.0, rect.height * 0.62)
-            jobs.append((rect, fitz.Point(rect.x0 + 2, rect.y1 - rect.height * 0.25),
-                         value, size, True))
-            try:
-                page.delete_widget(widget)   # the typed value goes with it
-            except Exception:
-                pass
-
-        if values:
-            wanted = [v.strip() for v in values if v and v.strip()]
+        if wanted:
+            report["method"] = "explicit"
             for value in wanted:
                 if len(value) > _MAX_HANDWRITTEN_VALUE:
                     continue
                 for rect in page.search_for(value):
                     size = max(6.0, (rect.y1 - rect.y0) * 0.85)
                     jobs.append((rect, fitz.Point(rect.x0, rect.y1 - size * 0.18),
-                                 value, size, False))
-        elif not jobs:
-            for span, text, frac in _value_targets_from_labels(page):
-                value = text.strip()
-                if not value or len(value) > _MAX_HANDWRITTEN_VALUE:
-                    continue
-                x0, y0, x1, y1 = span["bbox"]
-                # frac is a character-count estimate, and ':' plus a space are
-                # narrower than average, so it lands slightly left of the real
-                # value. Nudge right by a third of a character so the label
-                # keeps its colon instead of having it redacted away.
-                avg_char = (x1 - x0) / max(1, len(span["text"]))
-                start_x = min(x1 - 1, x0 + (x1 - x0) * frac + avg_char * 0.35)
-                rect = fitz.Rect(start_x, y0, x1, y1)
-                jobs.append((rect, fitz.Point(start_x, span["origin"][1]),
-                             value, span["size"], False))
+                                 value, size))
+        elif lines:
+            found = []
+            if detect == "llm":
+                try:
+                    found = classify_page(lines, model=model)
+                    report["method"] = "llm"
+                except Exception as exc:
+                    # An unreachable model must not lose the feature entirely,
+                    # but the caller has to know it was not used.
+                    report["method"] = "rules"
+                    report["fallback_reason"] = f"{type(exc).__name__}: {exc}"[:200]
+                    found = classify_page_by_rules(lines)
+            else:
+                report["method"] = "rules"
+                found = classify_page_by_rules(lines)
 
-        # Clear the typed text first: redactions are applied per page, and
-        # anything drawn before them would be wiped out too.
-        for rect, _, _, _, _ in jobs:
-            # Padded on the right and vertically only - growing it leftwards
-            # would clip the printed label next to the value.
+            for span_id, value_text in found:
+                span = spans.get(span_id)
+                if span is None or len(value_text) > _MAX_HANDWRITTEN_VALUE:
+                    continue
+                rect, start_x = _value_rect(span, value_text)
+                jobs.append((rect, fitz.Point(start_x, span["origin"][1]),
+                             value_text, span["size"]))
+
+        # Clear the typed text first: redactions apply per page, and anything
+        # drawn before them would be wiped out too.
+        for rect, _, _, _ in jobs:
+            # Padded right and vertically only - growing it leftwards would
+            # clip the printed label sitting next to the value.
             page.add_redact_annot(fitz.Rect(rect.x0, rect.y0 - 0.5,
                                             rect.x1 + 0.5, rect.y1 + 0.5), fill=(1, 1, 1))
         if jobs:
             page.apply_redactions(images=fitz.PDF_REDACT_IMAGE_NONE)
 
-        for rect, point, value, size, from_widget in jobs:
+        for rect, point, value, size in jobs:
             size = max(6.0, size * scale)
 
-            # Handwriting is wider than print. Shrink only enough to stay on
+            # Handwriting runs wider than print. Shrink only enough to stay on
             # the page - overrunning the printed line a little is what real
             # handwriting does, so it is not corrected.
             available = page.rect.x1 - point.x - 6
@@ -403,21 +411,23 @@ def handwrite_values_in_pdf(pdf_bytes: bytes, values: list = None, ink: str = "b
                                   point.y + rng.uniform(-1.2, 0.8))
             page.insert_text(
                 baseline, value,
-                # fontfile is repeated per call on purpose: apply_redactions
-                # drops the page's font registration, and PyMuPDF de-duplicates
-                # by fontname anyway.
+                # fontfile repeated per call on purpose: apply_redactions drops
+                # the page's font registration, and PyMuPDF de-duplicates by
+                # fontname anyway.
                 fontname="handwriting", fontfile=font_file, fontsize=size, color=color,
                 morph=(baseline, fitz.Matrix(rng.uniform(-2.2, 2.2))),
             )
-            written += 1
+            report["written"] += 1
 
-    if not written:
+    if not report["written"]:
         doc.close()
         raise ValueError(
-            "No filled-in values were found to handwrite. This document has no "
-            "form fields and no 'Label: value' lines - pass the values "
-            "explicitly instead.")
+            "No filled-in values were found to handwrite. "
+            + (f"The model was not reachable ({report['fallback_reason']}) and the "
+               "fallback rules found no 'Label: value' lines. "
+               if report["fallback_reason"] else "")
+            + "Pass the values explicitly instead.")
 
     out = doc.write(garbage=4, deflate=True)
     doc.close()
-    return out
+    return out, report

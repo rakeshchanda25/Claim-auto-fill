@@ -7,6 +7,8 @@ Each check fails loudly if the feature stops doing what it claims, which is the
 only way to notice - the output is a picture, and a picture always looks like
 something.
 """
+import json
+import re
 import sys
 
 import cv2
@@ -141,8 +143,13 @@ def _fonts_by_text(pdf_bytes):
 
 
 def check_handwritten_values():
-    """The image-2 behaviour: template printed, values handwritten."""
-    out = handwrite_values_in_pdf(_form_pdf(), seed=3)
+    """The image-2 behaviour: schema printed, values handwritten.
+
+    Uses detect="rules" so the check runs without a model - the LLM path is
+    exercised separately by check_llm_classifier when one is reachable.
+    """
+    out, report = handwrite_values_in_pdf(_form_pdf(), seed=3, detect="rules")
+    assert report["method"] == "rules" and report["written"] >= 5, report
     fonts = _fonts_by_text(out)
 
     printed = [t for t, f in fonts.items() if "Ink" not in f and "Comic" not in f
@@ -157,7 +164,8 @@ def check_handwritten_values():
     assert not any("Telephone Nos" in t for t in handwritten), "a label got handwritten"
 
     # Explicit values take precedence over the label heuristic.
-    only = handwrite_values_in_pdf(_form_pdf(), values=["Rishab Hospital"], seed=3)
+    only, rep2 = handwrite_values_in_pdf(_form_pdf(), values=["Rishab Hospital"], seed=3)
+    assert rep2["method"] == "explicit", rep2
     f2 = _fonts_by_text(only)
     hand2 = [t for t, f in f2.items() if "Ink" in f or "Comic" in f or "Z003" in f
              or "Segoe" in f]
@@ -169,13 +177,131 @@ def check_handwritten_values():
     data = blank.tobytes()
     blank.close()
     try:
-        handwrite_values_in_pdf(data)
+        handwrite_values_in_pdf(data, detect="rules")
         raise AssertionError("should have refused a document with no values")
     except ValueError as exc:
-        assert "no form fields" in str(exc)
+        assert "No filled-in values were found" in str(exc)
 
     print(f"  handwritten vals  ok   {len(handwritten)} values handwritten, "
           f"{len(printed)} labels left printed")
+
+
+def check_classifier_contract():
+    """The classifier's parsing and rule fallback, without calling a model."""
+    from value_classifier import _parse_reply, _render_lines, classify_page_by_rules
+
+    lines = [[(0, "Name of Hospital:"), (1, "Rishab Hospital")],
+             [(2, "Complete Address: G-12 Kardhani, Jaipur")]]
+    rendered = _render_lines(lines)
+    assert '[1]"Rishab Hospital"' in rendered and rendered.startswith("L1:")
+
+    # The model's reply survives a code fence and stray prose.
+    reply = '```json\n{"values": [{"span": 1, "text": "Rishab Hospital"}]}\n```'
+    assert _parse_reply(reply, {0, 1, 2}) == [(1, "Rishab Hospital")]
+    # Spans it invented are dropped rather than crashing the run.
+    assert _parse_reply('{"values":[{"span":99,"text":"x"}]}', {0, 1}) == []
+    try:
+        _parse_reply("I could not do that", {0, 1})
+        raise AssertionError("unparseable reply should raise")
+    except ValueError:
+        pass
+
+    by_rules = classify_page_by_rules(lines)
+    assert (1, "Rishab Hospital") in by_rules
+    assert (2, "G-12 Kardhani, Jaipur") in by_rules
+    print(f"  classifier        ok   parses replies, drops bad spans, "
+          f"rules found {len(by_rules)}")
+
+
+def check_llm_pipeline_with_stub():
+    """The whole LLM path with a canned model reply.
+
+    Proves the plumbing - prompt built, reply parsed, value located inside its
+    span, handwriting drawn - without needing a reachable model. Only the
+    model's judgement is left untested, and check_llm_classifier covers that
+    when one is up.
+    """
+    import types
+    import value_classifier
+
+    seen = {}
+
+    def fake_completion(model=None, messages=None, **kwargs):
+        seen["model"] = model
+        seen["prompt"] = messages[1]["content"]
+        # Values only: the labels and the heading must be left alone.
+        wanted = ("Rishab Hospital", "G-12 Kardhani, Kalwar Road, Jaipur",
+                  "0141-2405692", "AAVPS8821F", "50")
+        picks = []
+        for line in messages[1]["content"].splitlines():
+            for match in re.finditer(r'\[(\d+)\]"([^"]*)"', line):
+                span_id, text = int(match.group(1)), match.group(2)
+                for value in wanted:
+                    if text.strip().endswith(value):
+                        picks.append({"span": span_id, "text": value})
+                        break
+        body = json.dumps({"values": picks})
+        message = types.SimpleNamespace(content="```json\n" + body + "\n```")
+        return types.SimpleNamespace(choices=[types.SimpleNamespace(message=message)])
+
+    real = sys.modules.get("litellm")
+    sys.modules["litellm"] = types.SimpleNamespace(completion=fake_completion)
+    try:
+        out, report = handwrite_values_in_pdf(_form_pdf(), seed=3, detect="llm")
+    finally:
+        if real is not None:
+            sys.modules["litellm"] = real
+        else:
+            del sys.modules["litellm"]
+
+    assert report["method"] == "llm", report
+    assert report["fallback_reason"] is None, report
+    assert report["written"] == 5, report
+
+    fonts = _fonts_by_text(out)
+    hand = [t for t, f in fonts.items()
+            if any(k in f for k in ("Ink", "Comic", "Z003", "Segoe"))]
+    assert "Rishab Hospital" in hand and "AAVPS8821F" in hand, hand
+    assert not any("HOSPITAL EMPANELMENT" in t for t in hand), "heading was handwritten"
+    assert not any(t.startswith("PAN No") for t in hand), "label was handwritten"
+    assert seen["model"] == value_classifier._configured_model()
+    assert 'L1:' in seen["prompt"] and '[0]"' in seen["prompt"]
+
+    # A model that dies mid-run falls back to rules and says so.
+    def boom(**kwargs):
+        raise RuntimeError("model gone")
+    sys.modules["litellm"] = types.SimpleNamespace(completion=boom)
+    try:
+        _, fallback = handwrite_values_in_pdf(_form_pdf(), seed=3, detect="llm")
+    finally:
+        if real is not None:
+            sys.modules["litellm"] = real
+        else:
+            del sys.modules["litellm"]
+    assert fallback["method"] == "rules" and "model gone" in fallback["fallback_reason"]
+
+    print(f"  llm pipeline      ok   stubbed model -> {report['written']} values "
+          f"handwritten; failure falls back to rules")
+
+
+def check_llm_classifier():
+    """Runs the real model if one is reachable; skips cleanly if not."""
+    from value_classifier import _configured_model, classify_page
+    model = _configured_model()
+    lines = [[(0, "Name of Hospital:"), (1, "Rishab Hospital")],
+             [(2, "No. of Beds:"), (3, "50")],
+             [(4, "HOSPITAL EMPANELMENT REQUEST FORM")]]
+    try:
+        found = classify_page(lines, timeout=45)
+    except Exception as exc:
+        print(f"  llm classifier    skipped  ({model} unreachable: "
+              f"{type(exc).__name__})")
+        return
+    ids = {span for span, _ in found}
+    assert 1 in ids and 3 in ids, f"model missed the values: {found}"
+    assert 4 not in ids, f"model called the heading a value: {found}"
+    assert 0 not in ids and 2 not in ids, f"model called a label a value: {found}"
+    print(f"  llm classifier    ok   {model} classified {len(found)} values correctly")
 
 
 def check_photo_darkness():
@@ -268,6 +394,9 @@ if __name__ == "__main__":
     check_crop()
     check_handwritten()
     check_handwritten_values()
+    check_classifier_contract()
+    check_llm_pipeline_with_stub()
+    check_llm_classifier()
     check_photo_darkness()
     check_colour_fidelity()
     check_full_pipeline()

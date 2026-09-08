@@ -89,7 +89,7 @@ async def api_simulate_scan(
     rotation_rules: str = Form("[]"),
     dark_background: bool = Form(False),
     dark_intensity: float = Form(0.55),
-    dark_mode: str = Form("band"),
+    dark_mode: str = Form("photo"),
     crop: bool = Form(False),
     crop_percent: float = Form(8.0),
     crop_edges: str = Form("right,bottom"),
@@ -100,11 +100,13 @@ async def api_simulate_scan(
     handwrite_values: bool = Form(False),
     handwrite_ink: str = Form("blue"),
     handwrite_list: str = Form(""),
+    handwrite_detect: str = Form("llm"),
     seed: Optional[int] = Form(None),
 ):
     try:
         pdf_bytes = await file.read()
-        
+        handwrite_report = None
+
         overlay_bytes = None
         if overlay_image and overlay_image.filename:
             overlay_bytes = await overlay_image.read()
@@ -115,8 +117,9 @@ async def api_simulate_scan(
             # the values look hand-filled.
             supplied = [v.strip() for v in handwrite_list.replace("\n", ",").split(",")
                         if v.strip()]
-            pdf_bytes = handwrite_values_in_pdf(
-                pdf_bytes, values=supplied or None, ink=handwrite_ink, seed=seed)
+            pdf_bytes, handwrite_report = handwrite_values_in_pdf(
+                pdf_bytes, values=supplied or None, ink=handwrite_ink,
+                seed=seed, detect=handwrite_detect)
 
         new_pdf_bytes = simulate_scan(
             pdf_bytes, 
@@ -140,12 +143,19 @@ async def api_simulate_scan(
             seed=seed,
         )
         
+        headers = {"Content-Disposition": f"attachment; filename=scanned_{file.filename}"}
+        if handwrite_report:
+            # So the caller can tell whether the model actually classified the
+            # page or the rule fallback quietly took over.
+            headers["X-Handwrite-Method"] = handwrite_report["method"]
+            headers["X-Handwrite-Count"] = str(handwrite_report["written"])
+            if handwrite_report.get("fallback_reason"):
+                headers["X-Handwrite-Fallback"] = handwrite_report["fallback_reason"][:180]
+
         return Response(
             content=new_pdf_bytes,
             media_type="application/pdf",
-            headers={
-                "Content-Disposition": f"attachment; filename=scanned_{file.filename}"
-            }
+            headers=headers,
         )
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
