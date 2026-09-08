@@ -9,7 +9,7 @@ import zipfile
 import uvicorn
 from pathlib import Path
 from typing import List, Optional
-from pdf_manager import replace_text_in_pdf, combine_pdfs
+from pdf_manager import replace_text_in_pdf, combine_pdfs, handwrite_values_in_pdf
 from scanner_simulator import simulate_scan
 from ai_doc_generator.config import GenerationRequest
 from ai_doc_generator.prompt_builder import build_generation_prompt
@@ -97,6 +97,9 @@ async def api_simulate_scan(
     annotation_count: int = Form(3),
     annotation_ink: str = Form("blue"),
     annotation_text: str = Form(""),
+    handwrite_values: bool = Form(False),
+    handwrite_ink: str = Form("blue"),
+    handwrite_list: str = Form(""),
     seed: Optional[int] = Form(None),
 ):
     try:
@@ -106,6 +109,15 @@ async def api_simulate_scan(
         if overlay_image and overlay_image.filename:
             overlay_bytes = await overlay_image.read()
         
+        if handwrite_values:
+            # Rewrites the filled-in values in handwriting before the page is
+            # ever rasterised, so the printed template stays crisp and only
+            # the values look hand-filled.
+            supplied = [v.strip() for v in handwrite_list.replace("\n", ",").split(",")
+                        if v.strip()]
+            pdf_bytes = handwrite_values_in_pdf(
+                pdf_bytes, values=supplied or None, ink=handwrite_ink, seed=seed)
+
         new_pdf_bytes = simulate_scan(
             pdf_bytes, 
             skew, blur, noise, low_dpi,

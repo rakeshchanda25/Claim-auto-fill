@@ -1,5 +1,7 @@
 import fitz
-import io
+import random
+
+from handwriting import find_handwriting_font, ink_unit
 
 def _normalize_font_name(raw_font: str) -> str:
     
@@ -240,3 +242,182 @@ def combine_pdfs(
 
     return out_bytes
 
+
+# ---------------------------------------------------------------------------
+# Handwritten form values
+#
+# A real filled-in form is a PRINTED template with HANDWRITTEN values: the
+# label "Name of Hospital" is printed, "Rishab Hospital" is written by hand.
+# This finds the values, removes the typed version and writes them back in a
+# handwriting font, leaving every label, box and rule untouched.
+# ---------------------------------------------------------------------------
+
+# Anything longer than this is prose, not something a person hand-writes into
+# a form box - narrative paragraphs stay printed.
+_MAX_HANDWRITTEN_VALUE = 90
+
+# Labels commonly end with one of these, and the value is whatever follows.
+_LABEL_SEPARATORS = (":", "-", "\u2013")
+
+
+def _iter_spans(page):
+    for block in page.get_text("dict").get("blocks", []):
+        if block.get("type") != 0:
+            continue
+        for line in block.get("lines", []):
+            yield line
+
+
+def _value_targets_from_labels(page) -> list:
+    """Values found by the label/value split: text after a colon on a line.
+
+    Deliberately conservative - a span is only treated as a value when the
+    line actually reads like "Label: value", so headings and body text are
+    left as printed text.
+    """
+    targets = []
+    for line in _iter_spans(page):
+        spans = line.get("spans", [])
+        if not spans:
+            continue
+
+        joined = "".join(s["text"] for s in spans)
+        if not any(sep in joined for sep in _LABEL_SEPARATORS[:1]):
+            continue
+
+        seen_separator = False
+        for span in spans:
+            text = span["text"]
+            if seen_separator:
+                if text.strip():
+                    targets.append((span, text, 0.0))
+                continue
+
+            if ":" in text:
+                seen_separator = True
+                head, _, tail = text.partition(":")
+                if tail.strip():
+                    # The value starts partway into this span; estimate where
+                    # from the character count, which is close enough for
+                    # placement and avoids re-measuring every glyph.
+                    frac = (len(head) + 1) / max(1, len(text))
+                    targets.append((span, tail, frac))
+    return targets
+
+
+def _value_targets_from_widgets(page) -> list:
+    """Filled AcroForm fields - the only case where the values are known
+    exactly rather than guessed."""
+    targets = []
+    for widget in page.widgets() or []:
+        value = (widget.field_value or "").strip()
+        if value:
+            targets.append((widget, value))
+    return targets
+
+
+def handwrite_values_in_pdf(pdf_bytes: bytes, values: list = None, ink: str = "blue",
+                            font_path: str = "", seed: int = None,
+                            scale: float = 1.15) -> bytes:
+    """Rewrite a document's filled-in values in handwriting, keeping the
+    printed template exactly as it is.
+
+    Values are located, in order of reliability:
+
+    1. `values` - exact strings you supply, when you know what was filled in.
+    2. Filled AcroForm fields, when the PDF is a real fillable form.
+    3. Text after a colon on a "Label: value" line.
+
+    Returns the PDF with those values redacted and redrawn in an embedded
+    handwriting font, slightly rotated and offset per value so no two look
+    stamped from the same die.
+    """
+    rng = random.Random(seed)
+    font_file = find_handwriting_font(font_path)
+    color = ink_unit(ink)
+    metrics = fitz.Font(fontfile=font_file)
+
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    written = 0
+
+    for page in doc:
+        jobs = []
+
+        for widget, value in _value_targets_from_widgets(page):
+            rect = widget.rect
+            size = max(6.0, rect.height * 0.62)
+            jobs.append((rect, fitz.Point(rect.x0 + 2, rect.y1 - rect.height * 0.25),
+                         value, size, True))
+            try:
+                page.delete_widget(widget)   # the typed value goes with it
+            except Exception:
+                pass
+
+        if values:
+            wanted = [v.strip() for v in values if v and v.strip()]
+            for value in wanted:
+                if len(value) > _MAX_HANDWRITTEN_VALUE:
+                    continue
+                for rect in page.search_for(value):
+                    size = max(6.0, (rect.y1 - rect.y0) * 0.85)
+                    jobs.append((rect, fitz.Point(rect.x0, rect.y1 - size * 0.18),
+                                 value, size, False))
+        elif not jobs:
+            for span, text, frac in _value_targets_from_labels(page):
+                value = text.strip()
+                if not value or len(value) > _MAX_HANDWRITTEN_VALUE:
+                    continue
+                x0, y0, x1, y1 = span["bbox"]
+                # frac is a character-count estimate, and ':' plus a space are
+                # narrower than average, so it lands slightly left of the real
+                # value. Nudge right by a third of a character so the label
+                # keeps its colon instead of having it redacted away.
+                avg_char = (x1 - x0) / max(1, len(span["text"]))
+                start_x = min(x1 - 1, x0 + (x1 - x0) * frac + avg_char * 0.35)
+                rect = fitz.Rect(start_x, y0, x1, y1)
+                jobs.append((rect, fitz.Point(start_x, span["origin"][1]),
+                             value, span["size"], False))
+
+        # Clear the typed text first: redactions are applied per page, and
+        # anything drawn before them would be wiped out too.
+        for rect, _, _, _, _ in jobs:
+            # Padded on the right and vertically only - growing it leftwards
+            # would clip the printed label next to the value.
+            page.add_redact_annot(fitz.Rect(rect.x0, rect.y0 - 0.5,
+                                            rect.x1 + 0.5, rect.y1 + 0.5), fill=(1, 1, 1))
+        if jobs:
+            page.apply_redactions(images=fitz.PDF_REDACT_IMAGE_NONE)
+
+        for rect, point, value, size, from_widget in jobs:
+            size = max(6.0, size * scale)
+
+            # Handwriting is wider than print. Shrink only enough to stay on
+            # the page - overrunning the printed line a little is what real
+            # handwriting does, so it is not corrected.
+            available = page.rect.x1 - point.x - 6
+            width = metrics.text_length(value, fontsize=size)
+            if width > available > 0:
+                size = max(5.0, size * available / width)
+
+            baseline = fitz.Point(point.x + rng.uniform(-1.0, 1.5),
+                                  point.y + rng.uniform(-1.2, 0.8))
+            page.insert_text(
+                baseline, value,
+                # fontfile is repeated per call on purpose: apply_redactions
+                # drops the page's font registration, and PyMuPDF de-duplicates
+                # by fontname anyway.
+                fontname="handwriting", fontfile=font_file, fontsize=size, color=color,
+                morph=(baseline, fitz.Matrix(rng.uniform(-2.2, 2.2))),
+            )
+            written += 1
+
+    if not written:
+        doc.close()
+        raise ValueError(
+            "No filled-in values were found to handwrite. This document has no "
+            "form fields and no 'Label: value' lines - pass the values "
+            "explicitly instead.")
+
+    out = doc.write(garbage=4, deflate=True)
+    doc.close()
+    return out

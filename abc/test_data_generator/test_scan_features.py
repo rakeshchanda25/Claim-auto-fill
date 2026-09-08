@@ -13,6 +13,7 @@ import cv2
 import fitz
 import numpy as np
 
+from pdf_manager import handwrite_values_in_pdf
 from scanner_simulator import (
     apply_crop,
     apply_dark_background,
@@ -110,6 +111,93 @@ def check_handwritten():
     print(f"  handwritten annot ok   {changed} px of ink, blue B={b:.0f}/R={r:.0f}")
 
 
+def _form_pdf() -> bytes:
+    """A printed form: typed labels, typed values - the thing that should come
+    back with the labels printed and the values handwritten."""
+    doc = fitz.open()
+    page = doc.new_page(width=595, height=500)
+    page.insert_text((40, 50), "HOSPITAL EMPANELMENT REQUEST FORM", fontsize=13)
+    for i, (label, value) in enumerate([
+            ("Name of Hospital", "Rishab Hospital"),
+            ("Complete Address", "G-12 Kardhani, Kalwar Road, Jaipur"),
+            ("Telephone Nos", "0141-2405692"),
+            ("PAN No", "AAVPS8821F"),
+            ("No. of Beds", "50")]):
+        page.insert_text((40, 100 + i * 34), f"{label}: {value}", fontsize=11)
+    out = doc.tobytes()
+    doc.close()
+    return out
+
+
+def _fonts_by_text(pdf_bytes):
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    found = {}
+    for block in doc[0].get_text("dict")["blocks"]:
+        for line in block.get("lines", []):
+            for span in line["spans"]:
+                found[span["text"].strip()] = span["font"]
+    doc.close()
+    return found
+
+
+def check_handwritten_values():
+    """The image-2 behaviour: template printed, values handwritten."""
+    out = handwrite_values_in_pdf(_form_pdf(), seed=3)
+    fonts = _fonts_by_text(out)
+
+    printed = [t for t, f in fonts.items() if "Ink" not in f and "Comic" not in f
+               and "Z003" not in f and "Segoe" not in f]
+    handwritten = [t for t, f in fonts.items() if t not in printed]
+
+    assert any("Name of Hospital" in t for t in printed), f"labels lost: {printed}"
+    assert "Rishab Hospital" in handwritten, f"values not handwritten: {handwritten}"
+    assert "0141-2405692" in handwritten
+    assert "50" in handwritten
+    # A label must never be converted - that would be rewriting the template.
+    assert not any("Telephone Nos" in t for t in handwritten), "a label got handwritten"
+
+    # Explicit values take precedence over the label heuristic.
+    only = handwrite_values_in_pdf(_form_pdf(), values=["Rishab Hospital"], seed=3)
+    f2 = _fonts_by_text(only)
+    hand2 = [t for t, f in f2.items() if "Ink" in f or "Comic" in f or "Z003" in f
+             or "Segoe" in f]
+    assert hand2 == ["Rishab Hospital"], f"explicit list not respected: {hand2}"
+
+    # A document with nothing fillable must say so, not silently do nothing.
+    blank = fitz.open()
+    blank.new_page(width=200, height=100).insert_text((20, 50), "no fields here", fontsize=11)
+    data = blank.tobytes()
+    blank.close()
+    try:
+        handwrite_values_in_pdf(data)
+        raise AssertionError("should have refused a document with no values")
+    except ValueError as exc:
+        assert "no form fields" in str(exc)
+
+    print(f"  handwritten vals  ok   {len(handwritten)} values handwritten, "
+          f"{len(printed)} labels left printed")
+
+
+def check_photo_darkness():
+    """Photo mode must be uneven - a flat fill is what it is replacing."""
+    img = _white_page()
+    out = apply_dark_background(img, intensity=0.55, mode="photo")
+    assert out.mean() < img.mean() - 20, "page did not darken"
+
+    grey = out.mean(axis=2)
+    h, w = grey.shape
+    corners = np.mean([grey[:h // 5, :w // 5].mean(), grey[:h // 5, -w // 5:].mean(),
+                       grey[-h // 5:, :w // 5].mean(), grey[-h // 5:, -w // 5:].mean()])
+    centre = grey[2 * h // 5:3 * h // 5, 2 * w // 5:3 * w // 5].mean()
+    assert centre > corners + 8, f"no vignette (centre {centre:.0f} vs corners {corners:.0f})"
+
+    flat = apply_dark_background(img, intensity=0.55, mode="full")
+    paper = img.mean(axis=2) > 200
+    assert out[paper].std() > flat[paper].std() + 5, "photo mode is as flat as a plain fill"
+    print(f"  photo darkness    ok   centre {centre:.0f} vs corners {corners:.0f}, "
+          f"variation {out[paper].std():.1f} (flat fill {flat[paper].std():.1f})")
+
+
 def check_colour_fidelity():
     """The red box must still be red after a scan - the RGB/BGR fix."""
     out = simulate_scan(_sample_pdf(), False, False, False, False, seed=1)
@@ -154,7 +242,8 @@ def write_samples():
     pdf = _sample_pdf()
     cases = {
         "01_original": {},
-        "02_dark_band": dict(dark_background=True, dark_mode="band", dark_intensity=0.55),
+        "02_dark_photo": dict(dark_background=True, dark_mode="photo", dark_intensity=0.55),
+        "02b_dark_band": dict(dark_background=True, dark_mode="band", dark_intensity=0.55),
         "03_dark_full": dict(dark_background=True, dark_mode="full", dark_intensity=0.6),
         "04_dark_shadow": dict(dark_background=True, dark_mode="shadow", dark_intensity=0.7),
         "05_cropped": dict(crop=True, crop_percent=12, crop_edges="right,bottom"),
@@ -178,6 +267,8 @@ if __name__ == "__main__":
     check_dark_background()
     check_crop()
     check_handwritten()
+    check_handwritten_values()
+    check_photo_darkness()
     check_colour_fidelity()
     check_full_pipeline()
     print("all checks passed")

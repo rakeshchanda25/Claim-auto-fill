@@ -4,33 +4,13 @@ import json
 import random
 import numpy as np
 import io
-from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
-# Drop any .ttf/.otf here to control what handwriting looks like.
-FONT_DIR = Path(__file__).parent / "assets" / "fonts"
+from handwriting import INK_COLORS, find_handwriting_font
 
-# Handwriting faces that ship with common systems, tried in order when the
-# project directory is empty.
-_SYSTEM_HANDWRITING_FONTS = (
-    "C:/Windows/Fonts/Inkfree.ttf",
-    "C:/Windows/Fonts/segoesc.ttf",
-    "C:/Windows/Fonts/segoepr.ttf",
-    "C:/Windows/Fonts/comic.ttf",
-    "/usr/share/fonts/truetype/comic-neue/ComicNeue-Regular.ttf",
-    "/usr/share/fonts/truetype/msttcorefonts/Comic_Sans_MS.ttf",
-    "/usr/share/fonts/opentype/urw-base35/Z003-MediumItalic.otf",
-    "/usr/share/fonts/urw-base35/Z003-MediumItalic.otf",
-)
+_INK_COLORS = INK_COLORS
 
-_INK_COLORS = {
-    "blue": (20, 30, 140),
-    "black": (25, 25, 25),
-    "red": (150, 25, 25),
-}
-
-# What an adjuster actually scribbles on a claim document.
 _DEFAULT_NOTES = (
     "Verified w/ insured", "Called claimant - no answer", "See attached estimate",
     "Approved", "Needs adjuster review", "Copy sent to legal", "Check DOL",
@@ -41,33 +21,8 @@ _DEFAULT_NOTES = (
 _MARKINGS = ("circle", "underline", "strikethrough", "check", "arrow")
 
 
-def find_handwriting_font(explicit_path: str = "") -> str:
-    """Path to a handwriting font: an explicit one, then assets/fonts/, then a
-    known system face. Raises rather than silently drawing in Arial, because a
-    typeface that is not handwriting makes the whole feature a lie."""
-    if explicit_path:
-        if not Path(explicit_path).is_file():
-            raise ValueError(f"Handwriting font not found: {explicit_path}")
-        return explicit_path
-
-    if FONT_DIR.is_dir():
-        for pattern in ("*.ttf", "*.otf", "*.TTF", "*.OTF"):
-            for candidate in sorted(FONT_DIR.glob(pattern)):
-                return str(candidate)
-
-    for candidate in _SYSTEM_HANDWRITING_FONTS:
-        if Path(candidate).is_file():
-            return candidate
-
-    raise ValueError(
-        "No handwriting font available. Put a handwriting .ttf/.otf in "
-        f"{FONT_DIR} (e.g. Caveat, Patrick Hand, Homemade Apple from Google "
-        "Fonts), or install one system-wide (Linux: apt install fonts-comic-neue)."
-    )
-
-
 def apply_dark_background(img_array: np.ndarray, intensity: float = 0.55,
-                          mode: str = "band", rng: random.Random = None) -> np.ndarray:
+                          mode: str = "photo", rng: random.Random = None) -> np.ndarray:
     """Darken the paper while leaving the ink dark, so text sits on a grey or
     near-black ground.
 
@@ -107,6 +62,28 @@ def apply_dark_background(img_array: np.ndarray, intensity: float = 0.55,
             x0, y0 = rng.randint(0, max(1, w - bw)), rng.randint(0, max(1, h - bh))
             gain[y0:y0 + bh, x0:x0 + bw] = floor
 
+    elif mode == "photo":
+        # A page photographed in poor light, which is how most "dark
+        # background" documents actually arrive: darker overall, darker still
+        # towards the edges, and unevenly lit across the sheet.
+        gain[:, :] = floor + (1.0 - floor) * 0.35
+
+        # Vignette - corners fall away faster than the centre.
+        yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+        cy, cx = h / 2.0, w / 2.0
+        radius = np.sqrt(((xx - cx) / cx) ** 2 + ((yy - cy) / cy) ** 2)
+        gain *= np.clip(1.0 - 0.55 * intensity * (radius / 1.414) ** 1.6, 0.05, 1.0)
+
+        # Uneven illumination: a handful of random low-frequency values blown
+        # up to page size, so the light falls across the sheet in broad soft
+        # patches rather than in visible blocks.
+        coarse = np.array([[rng.uniform(0.72, 1.12) for _ in range(4)] for _ in range(5)],
+                          dtype=np.float32)
+        blotches = cv2.resize(coarse, (w, h), interpolation=cv2.INTER_CUBIC)
+        gain *= cv2.GaussianBlur(blotches, (0, 0), sigmaX=max(8, w / 40))
+
+        gain = np.clip(gain, 0.03, 1.0)
+
     else:  # "band" - a shaded section running the width of the page
         for _ in range(rng.randint(1, 2)):
             bh = rng.randint(h // 8, h // 4)
@@ -114,6 +91,12 @@ def apply_dark_background(img_array: np.ndarray, intensity: float = 0.55,
             gain[y0:y0 + bh, :] = floor
 
     result *= gain[:, :, None]
+
+    if mode == "photo":
+        # Grain is what separates a photograph from a flat fill.
+        grain = np.random.normal(0, 4.0 + 8.0 * intensity, result.shape).astype(np.float32)
+        result += grain
+
     return np.clip(result, 0, 255).astype(np.uint8)
 
 
@@ -315,7 +298,7 @@ def simulate_scan(
     rotation_rules: str = "[]",
     dark_background: bool = False,
     dark_intensity: float = 0.55,
-    dark_mode: str = "band",
+    dark_mode: str = "photo",
     crop: bool = False,
     crop_percent: float = 8.0,
     crop_edges: str = "right,bottom",

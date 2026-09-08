@@ -212,6 +212,7 @@
                                         <div>
                                             <label style="display: block; margin-bottom: 0.4rem; font-size: 0.8rem; color: var(--text-muted);">Area</label>
                                             <select name="dark_mode" style="width: 100%; padding: 0.5rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; color: var(--text-main); font-size: 0.85rem;">
+                                                <option value="photo">Photographed in poor light</option>
                                                 <option value="band">Shaded band</option>
                                                 <option value="full">Whole page</option>
                                                 <option value="shadow">Edge shadow (book scan)</option>
@@ -257,9 +258,35 @@
                                 </div>
                                 <div class="toggle-control" style="grid-column: span 2;">
                                     <label class="control-header">
+                                        <input type="checkbox" name="handwrite_values">
+                                        <div class="header-text">
+                                            <span class="control-label">Handwritten Values (fill-in text)</span>
+                                            <span class="control-desc">Rewrites the document's filled-in values in
+                                                handwriting and leaves the printed template alone - the label
+                                                "Name of Hospital" stays typed, "Rishab Hospital" becomes
+                                                handwriting.</span>
+                                        </div>
+                                    </label>
+                                    <div id="handwrite-values-container" class="hidden" style="margin-top: 1rem; display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; align-items: start;">
+                                        <div>
+                                            <label style="display: block; margin-bottom: 0.4rem; font-size: 0.8rem; color: var(--text-muted);">Ink</label>
+                                            <select name="handwrite_ink" style="width: 100%; padding: 0.5rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; color: var(--text-main); font-size: 0.85rem;">
+                                                <option value="blue">Blue pen</option>
+                                                <option value="black">Black pen</option>
+                                                <option value="red">Red pen</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label style="display: block; margin-bottom: 0.4rem; font-size: 0.8rem; color: var(--text-muted);">Which values (comma separated)</label>
+                                            <input type="text" name="handwrite_list" placeholder="blank = detect form fields and Label: value lines" style="width: 100%; padding: 0.5rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; color: var(--text-main); font-size: 0.85rem;">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="toggle-control" style="grid-column: span 2;">
+                                    <label class="control-header">
                                         <input type="checkbox" name="handwritten">
                                         <div class="header-text">
-                                            <span class="control-label">Handwritten Annotation</span>
+                                            <span class="control-label">Handwritten Annotation (notes &amp; markings)</span>
                                             <span class="control-desc">Adds handwritten notes and markings (circles,
                                                 ticks, underlines) over and around the printed content.</span>
                                         </div>
