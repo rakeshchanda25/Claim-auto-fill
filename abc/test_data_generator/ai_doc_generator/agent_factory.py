@@ -2,7 +2,7 @@ import threading
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import tools, trace
+from . import tools
 from .tools import agent_tools
 
 _PROJECT_ROOT = Path(__file__).parent.parent
@@ -100,12 +100,7 @@ class RunResult:
 def run_generation(agent, prompt: str, reference_bytes: bytes | None = None,
                    custom_fields: dict | None = None, anchor_date: str | None = None) -> RunResult:
     with tools.run_lock:
-        run_id = trace.start_run(label=(custom_fields or {}).get("claim_number", ""))
         tools.begin_run(reference_bytes, custom_fields, anchor_date)
-
-        trace.step("run.input", claim_fields=custom_fields or {},
-                   has_reference=bool(reference_bytes), anchor_date=anchor_date)
-        trace.write_blob("prompt", prompt)
 
         # The agent is one shared process-wide instance and its memory/plan are
         # instance-level, not keyed by thread - without clearing, the previous
@@ -120,15 +115,6 @@ def run_generation(agent, prompt: str, reference_bytes: bytes | None = None,
             # dict - treating it as one silently loses the agent's final answer.
             text = agent.run(prompt)
             ctx = tools.current_run()
-
-            trace.write_blob("final-answer", text if isinstance(text, str) else repr(text))
-            trace.step("run.result", run=run_id, analysis=ctx.analysis,
-                       produced_single_pdf=bool(ctx.artifact),
-                       packet_components=[c["label"] for c in (ctx.packet or [])])
-
             return RunResult(text, ctx.artifact, ctx.packet)
-        except Exception as exc:
-            trace.step("run.error", error=f"{type(exc).__name__}: {exc}")
-            raise
         finally:
             tools.end_run()
