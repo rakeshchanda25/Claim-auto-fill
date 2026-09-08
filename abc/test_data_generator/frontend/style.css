@@ -362,3 +362,16 @@ input[type="text"] {
 }
 #ai-result-label { flex: 1; font-size: 1rem; font-weight: 500; }
 
+.control-select {
+    width: 100%; padding: 0.5rem; font-size: 0.85rem;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-color);
+    border-radius: 4px; color: var(--text-main);
+}
+/* The dropdown list is drawn by the OS, not the page, and it opens on a light
+   background - options inheriting the dark theme's near-white text render
+   white on white. They need their own colours. */
+.control-select option {
+    background: #1e293b;
+    color: var(--text-main);
+}
