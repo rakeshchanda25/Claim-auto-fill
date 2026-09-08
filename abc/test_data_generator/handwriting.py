@@ -11,15 +11,18 @@ FONT_DIR = Path(__file__).parent / "assets" / "fonts"
 
 # Handwriting faces that ship with common systems, tried in order when the
 # project directory is empty.
+# Ordered by how much they read as a person filling in a form rather than as
+# a typeface. Print-hands come first because that is how people write into
+# boxes; the cursive and cartoon faces are last-resort.
 SYSTEM_HANDWRITING_FONTS = (
     "C:/Windows/Fonts/Inkfree.ttf",
-    "C:/Windows/Fonts/segoesc.ttf",
     "C:/Windows/Fonts/segoepr.ttf",
-    "C:/Windows/Fonts/comic.ttf",
     "/usr/share/fonts/truetype/comic-neue/ComicNeue-Regular.ttf",
-    "/usr/share/fonts/truetype/msttcorefonts/Comic_Sans_MS.ttf",
+    "C:/Windows/Fonts/segoesc.ttf",
     "/usr/share/fonts/opentype/urw-base35/Z003-MediumItalic.otf",
     "/usr/share/fonts/urw-base35/Z003-MediumItalic.otf",
+    "/usr/share/fonts/truetype/msttcorefonts/Comic_Sans_MS.ttf",
+    "C:/Windows/Fonts/comic.ttf",
 )
 
 # RGB. Ballpoint blue is what most forms are actually filled in with.

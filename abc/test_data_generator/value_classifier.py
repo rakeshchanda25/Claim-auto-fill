@@ -7,8 +7,7 @@ handwritten.
 
 Rules cannot tell these apart reliably - plenty of forms have no colons, put
 the label above the box, or run values across table cells - so the page is
-handed to the model that already serves this app, and the rules are kept only
-as a fallback for when it is unreachable.
+handed to the model that already serves this app.
 """
 
 import json
@@ -100,8 +99,8 @@ def classify_page(lines: list, model: str = "", timeout: int = 120) -> list:
 
     `lines` is a list of lines, each a list of (span_id, text).
     Returns [(span_id, value_text), ...]. Raises if the model is unreachable
-    or answers with something unusable - the caller decides whether to fall
-    back.
+    or answers with something unusable: guessing at a document's schema with
+    rules produced worse results than not running at all.
     """
     valid_ids = {idx for line in lines for idx, _ in line}
     if not valid_ids:
@@ -129,26 +128,4 @@ def classify_page(lines: list, model: str = "", timeout: int = 120) -> list:
         )
         found.extend(_parse_reply(response.choices[0].message.content, chunk_ids))
 
-    return found
-
-
-def classify_page_by_rules(lines: list) -> list:
-    """Fallback: the text after a colon on a "Label: value" line.
-
-    Only catches the simplest layout - a form with the label above the box, or
-    values in table cells, gets nothing from this. It exists so an unreachable
-    model degrades instead of failing.
-    """
-    found = []
-    for line in lines:
-        seen_separator = False
-        for span_id, text in line:
-            if seen_separator:
-                if text.strip():
-                    found.append((span_id, text.strip()))
-            elif ":" in text:
-                seen_separator = True
-                _, _, tail = text.partition(":")
-                if tail.strip():
-                    found.append((span_id, tail.strip()))
     return found

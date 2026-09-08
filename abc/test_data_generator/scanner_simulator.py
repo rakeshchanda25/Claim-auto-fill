@@ -5,21 +5,6 @@ import random
 import numpy as np
 import io
 
-from PIL import Image, ImageDraw, ImageFont
-
-from handwriting import INK_COLORS, find_handwriting_font
-
-_INK_COLORS = INK_COLORS
-
-_DEFAULT_NOTES = (
-    "Verified w/ insured", "Called claimant - no answer", "See attached estimate",
-    "Approved", "Needs adjuster review", "Copy sent to legal", "Check DOL",
-    "Rec'd", "Incomplete - follow up", "Confirm policy #", "Paid in full",
-    "Duplicate?", "OK to close", "Photos on file",
-)
-
-_MARKINGS = ("circle", "underline", "strikethrough", "check", "arrow")
-
 
 def apply_dark_background(img_array: np.ndarray, intensity: float = 0.55,
                           mode: str = "photo", rng: random.Random = None) -> np.ndarray:
@@ -91,12 +76,6 @@ def apply_dark_background(img_array: np.ndarray, intensity: float = 0.55,
             gain[y0:y0 + bh, :] = floor
 
     result *= gain[:, :, None]
-
-    if mode == "photo":
-        # Grain is what separates a photograph from a flat fill.
-        grain = np.random.normal(0, 4.0 + 8.0 * intensity, result.shape).astype(np.float32)
-        result += grain
-
     return np.clip(result, 0, 255).astype(np.uint8)
 
 
@@ -126,111 +105,6 @@ def apply_crop(img_array: np.ndarray, percent: float = 8.0,
     if cropped.size == 0:
         return img_array
     return cv2.resize(cropped, (w, h), interpolation=cv2.INTER_LINEAR)
-
-
-def _ink_map(img_array: np.ndarray, cell: int = 40) -> np.ndarray:
-    """Coarse grid of how much ink each cell holds, used to place annotations
-    either over printed content or in a clear margin."""
-    grey = cv2.cvtColor(img_array, cv2.COLOR_BGR2GRAY)
-    dark = (grey < 160).astype(np.float32)
-    h, w = dark.shape
-    gh, gw = max(1, h // cell), max(1, w // cell)
-    return cv2.resize(dark, (gw, gh), interpolation=cv2.INTER_AREA)
-
-
-def _pick_spot(ink: np.ndarray, img_shape, over_text: bool, rng: random.Random):
-    """A pixel position in a cell that either has ink (over_text) or does not."""
-    gh, gw = ink.shape
-    h, w = img_shape[:2]
-    cells = [(y, x) for y in range(gh) for x in range(gw)
-             if (ink[y, x] > 0.08) == over_text]
-    if not cells:
-        cells = [(y, x) for y in range(gh) for x in range(gw)]
-    cy, cx = rng.choice(cells)
-    return (int((cx + rng.random()) * w / gw), int((cy + rng.random()) * h / gh))
-
-
-def _jittered_line(draw: ImageDraw.ImageDraw, points, color, width, rng):
-    """Draw a polyline with small random offsets so the stroke reads as
-    hand-drawn rather than as a vector shape."""
-    wobbled = [(x + rng.uniform(-2.5, 2.5), y + rng.uniform(-2.5, 2.5)) for x, y in points]
-    draw.line(wobbled, fill=color, width=width, joint="curve")
-
-
-def _draw_marking(draw, kind, x, y, color, rng, scale=1.0):
-    width = max(2, int(3 * scale))
-    if kind == "circle":
-        rx, ry = 90 * scale, 26 * scale
-        pts = []
-        for i in range(37):
-            a = i * (2 * np.pi / 36)
-            pts.append((x + rx * np.cos(a), y + ry * np.sin(a)))
-        _jittered_line(draw, pts, color, width, rng)
-    elif kind == "underline":
-        _jittered_line(draw, [(x - 80 * scale, y), (x + 80 * scale, y)], color, width, rng)
-    elif kind == "strikethrough":
-        _jittered_line(draw, [(x - 85 * scale, y + 4), (x + 85 * scale, y - 4)],
-                       color, width, rng)
-    elif kind == "check":
-        _jittered_line(draw, [(x - 18 * scale, y), (x - 4 * scale, y + 16 * scale),
-                              (x + 22 * scale, y - 20 * scale)], color, width + 1, rng)
-    else:  # arrow
-        _jittered_line(draw, [(x - 70 * scale, y), (x + 20 * scale, y)], color, width, rng)
-        _jittered_line(draw, [(x + 20 * scale, y), (x + 4 * scale, y - 12 * scale)],
-                       color, width, rng)
-        _jittered_line(draw, [(x + 20 * scale, y), (x + 4 * scale, y + 12 * scale)],
-                       color, width, rng)
-
-
-def apply_handwritten_annotations(img_array: np.ndarray, count: int = 3,
-                                  ink: str = "blue", notes: str = "",
-                                  font_path: str = "",
-                                  rng: random.Random = None) -> np.ndarray:
-    """Add handwritten notes and markings over and around the printed content.
-
-    The printed document is untouched - these are added on top, the way a
-    reviewer annotates a page after it was printed.
-    """
-    if count <= 0:
-        return img_array
-
-    rng = rng or random.Random()
-    font_file = find_handwriting_font(font_path)
-    color = _INK_COLORS.get(ink, _INK_COLORS["blue"])
-
-    supplied = [n.strip() for n in notes.replace("\n", ",").split(",") if n.strip()]
-    phrases = supplied or list(_DEFAULT_NOTES)
-
-    h, w = img_array.shape[:2]
-    scale = w / 1200.0  # annotations sized relative to the page, not the DPI
-    ink_grid = _ink_map(img_array)
-
-    # cv2 arrays are BGR; PIL works in RGB.
-    canvas = Image.fromarray(cv2.cvtColor(img_array, cv2.COLOR_BGR2RGB)).convert("RGBA")
-
-    for i in range(count):
-        layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
-        draw = ImageDraw.Draw(layer)
-
-        # Notes go in clear space so they stay readable; markings go over the
-        # text they are marking.
-        as_marking = rng.random() < 0.4
-        x, y = _pick_spot(ink_grid, img_array.shape, over_text=as_marking, rng=rng)
-
-        if as_marking:
-            _draw_marking(draw, rng.choice(_MARKINGS), x, y,
-                          color + (235,), rng, scale=scale)
-        else:
-            size = max(14, int(rng.uniform(26, 40) * scale))
-            font = ImageFont.truetype(font_file, size)
-            text = rng.choice(phrases)
-            draw.text((x, y), text, font=font, fill=color + (240,))
-
-        # A few degrees of tilt - nobody writes on a perfect baseline.
-        layer = layer.rotate(rng.uniform(-7, 7), resample=Image.BICUBIC, center=(x, y))
-        canvas = Image.alpha_composite(canvas, layer)
-
-    return cv2.cvtColor(np.array(canvas.convert("RGB")), cv2.COLOR_RGB2BGR)
 
 
 def apply_degradations(img_array: np.ndarray, skew: bool, blur: bool, noise: bool, low_dpi: bool, skew_angle: float, blur_strength: int, noise_intensity: float, rotate: bool = False, rotation_angle: float = 0.0) -> np.ndarray:
@@ -302,11 +176,6 @@ def simulate_scan(
     crop: bool = False,
     crop_percent: float = 8.0,
     crop_edges: str = "right,bottom",
-    handwritten: bool = False,
-    annotation_count: int = 3,
-    annotation_ink: str = "blue",
-    annotation_text: str = "",
-    annotation_font: str = "",
     seed: int = None,
 ) -> bytes:
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
@@ -353,13 +222,6 @@ def simulate_scan(
         # PyMuPDF gives RGB but cv2 works in - and writes - BGR. Without this
         # swap every colour is mirrored on the way out (a red stamp scans blue).
         img_array = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
-
-        # Annotations belong to the paper, so they go on before any scan
-        # artefact is applied to it.
-        if handwritten:
-            img_array = apply_handwritten_annotations(
-                img_array, count=annotation_count, ink=annotation_ink,
-                notes=annotation_text, font_path=annotation_font, rng=rng)
 
         if dark_background:
             img_array = apply_dark_background(

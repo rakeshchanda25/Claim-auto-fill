@@ -2,7 +2,7 @@ import fitz
 import random
 
 from handwriting import find_handwriting_font, ink_unit
-from value_classifier import classify_page, classify_page_by_rules
+from value_classifier import classify_page
 
 def _normalize_font_name(raw_font: str) -> str:
     
@@ -258,6 +258,12 @@ def combine_pdfs(
 _MAX_HANDWRITTEN_VALUE = 120
 
 
+def _vary_ink(color: tuple, rng: random.Random) -> tuple:
+    """Nudge the pen colour per value. A page where every entry is the exact
+    same RGB reads as printed; real ink varies with pressure and pen."""
+    return tuple(min(1.0, max(0.0, c + rng.uniform(-0.045, 0.045))) for c in color)
+
+
 def _page_lines(page) -> tuple:
     """Every text span on the page as (lines, spans).
 
@@ -305,6 +311,45 @@ def _value_rect(span, value_text):
     return fitz.Rect(start_x, y0, x1, y1), start_x
 
 
+def _write_by_word(page, point, text, size, color, font_file, metrics, rng) -> None:
+    """Write one value a word at a time.
+
+    Setting a whole string at one size and angle is what makes generated
+    handwriting look generated: every letter sits on a perfect baseline at an
+    identical size. Real writing drifts. Each word therefore gets its own
+    baseline offset, tilt and slight size change, and the spacing between them
+    varies, so the line wanders the way a hand does.
+    """
+    x = point.x
+    baseline_drift = 0.0
+
+    for word in text.split(" "):
+        if not word:
+            x += metrics.text_length(" ", fontsize=size)
+            continue
+
+        # Drift accumulates along the line, then is pulled back towards the
+        # baseline so a long value wanders without sliding off the row.
+        baseline_drift = baseline_drift * 0.65 + rng.uniform(-0.9, 0.9)
+        word_size = size * rng.uniform(0.96, 1.05)
+        at = fitz.Point(x, point.y + baseline_drift)
+
+        page.insert_text(
+            at, word,
+            # fontfile is repeated per call on purpose: apply_redactions drops
+            # the page's font registration, and PyMuPDF de-duplicates by
+            # fontname anyway.
+            fontname="handwriting", fontfile=font_file,
+            fontsize=word_size, color=color,
+            morph=(at, fitz.Matrix(rng.uniform(-2.6, 2.6))),
+        )
+
+        # Advance by the word's real width plus a space that varies a little,
+        # because nobody spaces words identically.
+        x += metrics.text_length(word, fontsize=word_size)
+        x += metrics.text_length(" ", fontsize=size) * rng.uniform(0.85, 1.4)
+
+
 def _widget_values(page) -> list:
     """Filled AcroForm fields - the one case where the values are known
     exactly rather than inferred."""
@@ -325,20 +370,16 @@ def _widget_values(page) -> list:
 
 def handwrite_values_in_pdf(pdf_bytes: bytes, values: list = None, ink: str = "blue",
                             font_path: str = "", seed: int = None, scale: float = 1.15,
-                            detect: str = "llm", model: str = "") -> bytes:
+                            model: str = "") -> tuple:
     """Rewrite everything filled into a document in handwriting, keeping the
     printed schema exactly as it is.
 
-    detect:
-      "llm"       - read the whole page and let the model decide what is schema
-                    and what is a value. Falls back to rules if it cannot be
-                    reached, and reports which was used in the returned report.
-      "rules"     - the "Label: value" heuristic only, no model call.
-    values:
-      exact strings to handwrite. Given these, nothing is inferred at all.
+    The whole page is read and the model decides which text is the pre-printed
+    form and which was filled in; pass `values` to skip that and handwrite an
+    exact list of strings instead.
 
-    Returns (pdf_bytes, report) where report says how values were found and how
-    many were written.
+    Returns (pdf_bytes, report). Raises if the model cannot be reached or the
+    document has nothing fillable in it.
     """
     rng = random.Random(seed)
     font_file = find_handwriting_font(font_path)
@@ -346,7 +387,7 @@ def handwrite_values_in_pdf(pdf_bytes: bytes, values: list = None, ink: str = "b
     metrics = fitz.Font(fontfile=font_file)
 
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-    report = {"method": detect, "written": 0, "pages": len(doc), "fallback_reason": None}
+    report = {"method": "llm", "written": 0, "pages": len(doc)}
     wanted = {v.strip() for v in (values or []) if v and v.strip()}
 
     for page in doc:
@@ -363,20 +404,8 @@ def handwrite_values_in_pdf(pdf_bytes: bytes, values: list = None, ink: str = "b
                     jobs.append((rect, fitz.Point(rect.x0, rect.y1 - size * 0.18),
                                  value, size))
         elif lines:
-            found = []
-            if detect == "llm":
-                try:
-                    found = classify_page(lines, model=model)
-                    report["method"] = "llm"
-                except Exception as exc:
-                    # An unreachable model must not lose the feature entirely,
-                    # but the caller has to know it was not used.
-                    report["method"] = "rules"
-                    report["fallback_reason"] = f"{type(exc).__name__}: {exc}"[:200]
-                    found = classify_page_by_rules(lines)
-            else:
-                report["method"] = "rules"
-                found = classify_page_by_rules(lines)
+            report["method"] = "llm"
+            found = classify_page(lines, model=model)
 
             for span_id, value_text in found:
                 span = spans.get(span_id)
@@ -407,26 +436,18 @@ def handwrite_values_in_pdf(pdf_bytes: bytes, values: list = None, ink: str = "b
             if width > available > 0:
                 size = max(5.0, size * available / width)
 
-            baseline = fitz.Point(point.x + rng.uniform(-1.0, 1.5),
-                                  point.y + rng.uniform(-1.2, 0.8))
-            page.insert_text(
-                baseline, value,
-                # fontfile repeated per call on purpose: apply_redactions drops
-                # the page's font registration, and PyMuPDF de-duplicates by
-                # fontname anyway.
-                fontname="handwriting", fontfile=font_file, fontsize=size, color=color,
-                morph=(baseline, fitz.Matrix(rng.uniform(-2.2, 2.2))),
-            )
+            start = fitz.Point(point.x + rng.uniform(-0.8, 1.6),
+                               point.y + rng.uniform(-1.0, 0.8))
+            _write_by_word(page, start, value, size,
+                           _vary_ink(color, rng), font_file, metrics, rng)
             report["written"] += 1
 
     if not report["written"]:
         doc.close()
         raise ValueError(
-            "No filled-in values were found to handwrite. "
-            + (f"The model was not reachable ({report['fallback_reason']}) and the "
-               "fallback rules found no 'Label: value' lines. "
-               if report["fallback_reason"] else "")
-            + "Pass the values explicitly instead.")
+            "No filled-in values were found to handwrite - the model found "
+            "nothing in this document that looked like entered data. Pass the "
+            "values explicitly instead.")
 
     out = doc.write(garbage=4, deflate=True)
     doc.close()

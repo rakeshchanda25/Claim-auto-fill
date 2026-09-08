@@ -16,13 +16,7 @@ import fitz
 import numpy as np
 
 from pdf_manager import handwrite_values_in_pdf
-from scanner_simulator import (
-    apply_crop,
-    apply_dark_background,
-    apply_handwritten_annotations,
-    find_handwriting_font,
-    simulate_scan,
-)
+from scanner_simulator import apply_crop, apply_dark_background, simulate_scan
 
 
 def _sample_pdf() -> bytes:
@@ -89,30 +83,6 @@ def check_crop():
     print(f"  cropped document  ok   bottom ink {ink_bottom_before} -> {ink_bottom_after}")
 
 
-def check_handwritten():
-    print(f"  font in use            {find_handwriting_font()}")
-    img = _white_page()
-    out = apply_handwritten_annotations(img, count=6, ink="blue")
-    assert out.shape == img.shape
-
-    changed = (np.abs(out.astype(int) - img.astype(int)).sum(axis=2) > 30).sum()
-    assert changed > 500, f"barely any ink was added ({changed} px)"
-
-    # Blue ink must actually be blue in BGR, not red.
-    diff = np.abs(out.astype(int) - img.astype(int)).sum(axis=2) > 30
-    b, g, r = [out[:, :, c][diff].mean() for c in range(3)]
-    assert b > r + 15, f"ink is not blue (B={b:.0f} R={r:.0f})"
-
-    red = apply_handwritten_annotations(img, count=6, ink="red")
-    d2 = np.abs(red.astype(int) - img.astype(int)).sum(axis=2) > 30
-    rb, _, rr = [red[:, :, c][d2].mean() for c in range(3)]
-    assert rr > rb + 15, f"red ink is not red (R={rr:.0f} B={rb:.0f})"
-
-    assert apply_handwritten_annotations(img, count=0).tobytes() == img.tobytes(), \
-        "count=0 should be a no-op"
-    print(f"  handwritten annot ok   {changed} px of ink, blue B={b:.0f}/R={r:.0f}")
-
-
 def _form_pdf() -> bytes:
     """A printed form: typed labels, typed values - the thing that should come
     back with the labels printed and the values handwritten."""
@@ -131,25 +101,43 @@ def _form_pdf() -> bytes:
     return out
 
 
+_HAND_FONTS = ("Ink", "Comic", "Z003", "Segoe")
+
+
 def _fonts_by_text(pdf_bytes):
+    """Text -> font. Handwritten values are written word by word, so the words
+    of one value are joined back together before comparing."""
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-    found = {}
+    found, hand_words = {}, []
     for block in doc[0].get_text("dict")["blocks"]:
         for line in block.get("lines", []):
+            run, run_font = [], None
             for span in line["spans"]:
-                found[span["text"].strip()] = span["font"]
+                text = span["text"].strip()
+                if not text:
+                    continue
+                if any(k in span["font"] for k in _HAND_FONTS):
+                    run.append(text)
+                    run_font = span["font"]
+                else:
+                    if run:
+                        hand_words.append((" ".join(run), run_font))
+                        run = []
+                    found[text] = span["font"]
+            if run:
+                hand_words.append((" ".join(run), run_font))
     doc.close()
+    found.update(dict(hand_words))
     return found
 
 
 def check_handwritten_values():
-    """The image-2 behaviour: schema printed, values handwritten.
-
-    Uses detect="rules" so the check runs without a model - the LLM path is
-    exercised separately by check_llm_classifier when one is reachable.
-    """
-    out, report = handwrite_values_in_pdf(_form_pdf(), seed=3, detect="rules")
-    assert report["method"] == "rules" and report["written"] >= 5, report
+    """Explicit values: schema printed, values handwritten, no model needed."""
+    out, report = handwrite_values_in_pdf(
+        _form_pdf(), seed=3,
+        values=["Rishab Hospital", "G-12 Kardhani, Kalwar Road, Jaipur",
+                "0141-2405692", "AAVPS8821F", "50"])
+    assert report["method"] == "explicit" and report["written"] >= 5, report
     fonts = _fonts_by_text(out)
 
     printed = [t for t, f in fonts.items() if "Ink" not in f and "Comic" not in f
@@ -163,7 +151,7 @@ def check_handwritten_values():
     # A label must never be converted - that would be rewriting the template.
     assert not any("Telephone Nos" in t for t in handwritten), "a label got handwritten"
 
-    # Explicit values take precedence over the label heuristic.
+    # One explicit value converts that value and nothing else.
     only, rep2 = handwrite_values_in_pdf(_form_pdf(), values=["Rishab Hospital"], seed=3)
     assert rep2["method"] == "explicit", rep2
     f2 = _fonts_by_text(only)
@@ -177,7 +165,7 @@ def check_handwritten_values():
     data = blank.tobytes()
     blank.close()
     try:
-        handwrite_values_in_pdf(data, detect="rules")
+        handwrite_values_in_pdf(data, values=["not on this page"])
         raise AssertionError("should have refused a document with no values")
     except ValueError as exc:
         assert "No filled-in values were found" in str(exc)
@@ -186,31 +174,9 @@ def check_handwritten_values():
           f"{len(printed)} labels left printed")
 
 
-def check_classifier_contract():
-    """The classifier's parsing and rule fallback, without calling a model."""
-    from value_classifier import _parse_reply, _render_lines, classify_page_by_rules
-
-    lines = [[(0, "Name of Hospital:"), (1, "Rishab Hospital")],
-             [(2, "Complete Address: G-12 Kardhani, Jaipur")]]
-    rendered = _render_lines(lines)
-    assert '[1]"Rishab Hospital"' in rendered and rendered.startswith("L1:")
-
-    # The model's reply survives a code fence and stray prose.
-    reply = '```json\n{"values": [{"span": 1, "text": "Rishab Hospital"}]}\n```'
-    assert _parse_reply(reply, {0, 1, 2}) == [(1, "Rishab Hospital")]
-    # Spans it invented are dropped rather than crashing the run.
-    assert _parse_reply('{"values":[{"span":99,"text":"x"}]}', {0, 1}) == []
-    try:
-        _parse_reply("I could not do that", {0, 1})
-        raise AssertionError("unparseable reply should raise")
-    except ValueError:
-        pass
-
-    by_rules = classify_page_by_rules(lines)
-    assert (1, "Rishab Hospital") in by_rules
-    assert (2, "G-12 Kardhani, Jaipur") in by_rules
-    print(f"  classifier        ok   parses replies, drops bad spans, "
-          f"rules found {len(by_rules)}")
+def check_font():
+    from handwriting import find_handwriting_font
+    print(f"  font in use            {find_handwriting_font()}")
 
 
 def check_llm_pipeline_with_stub():
@@ -247,7 +213,7 @@ def check_llm_pipeline_with_stub():
     real = sys.modules.get("litellm")
     sys.modules["litellm"] = types.SimpleNamespace(completion=fake_completion)
     try:
-        out, report = handwrite_values_in_pdf(_form_pdf(), seed=3, detect="llm")
+        out, report = handwrite_values_in_pdf(_form_pdf(), seed=3)
     finally:
         if real is not None:
             sys.modules["litellm"] = real
@@ -255,7 +221,6 @@ def check_llm_pipeline_with_stub():
             del sys.modules["litellm"]
 
     assert report["method"] == "llm", report
-    assert report["fallback_reason"] is None, report
     assert report["written"] == 5, report
 
     fonts = _fonts_by_text(out)
@@ -267,21 +232,23 @@ def check_llm_pipeline_with_stub():
     assert seen["model"] == value_classifier._configured_model()
     assert 'L1:' in seen["prompt"] and '[0]"' in seen["prompt"]
 
-    # A model that dies mid-run falls back to rules and says so.
+    # An unreachable model must surface, not quietly produce nothing.
     def boom(**kwargs):
         raise RuntimeError("model gone")
     sys.modules["litellm"] = types.SimpleNamespace(completion=boom)
     try:
-        _, fallback = handwrite_values_in_pdf(_form_pdf(), seed=3, detect="llm")
+        handwrite_values_in_pdf(_form_pdf(), seed=3)
+        raise AssertionError("an unreachable model should raise")
+    except RuntimeError as exc:
+        assert "model gone" in str(exc)
     finally:
         if real is not None:
             sys.modules["litellm"] = real
         else:
             del sys.modules["litellm"]
-    assert fallback["method"] == "rules" and "model gone" in fallback["fallback_reason"]
 
     print(f"  llm pipeline      ok   stubbed model -> {report['written']} values "
-          f"handwritten; failure falls back to rules")
+          f"handwritten; unreachable model raises")
 
 
 def check_llm_classifier():
@@ -339,7 +306,6 @@ def check_full_pipeline():
         pdf, skew=True, blur=True, noise=True, low_dpi=False,
         dark_background=True, dark_intensity=0.45, dark_mode="band",
         crop=True, crop_percent=10, crop_edges="right,bottom",
-        handwritten=True, annotation_count=4, annotation_ink="blue",
         seed=7,
     )
     assert out[:4] == b"%PDF", "output is not a PDF"
@@ -353,7 +319,6 @@ def check_full_pipeline():
         pdf, skew=True, blur=True, noise=True, low_dpi=False,
         dark_background=True, dark_intensity=0.45, dark_mode="band",
         crop=True, crop_percent=10, crop_edges="right,bottom",
-        handwritten=True, annotation_count=4, annotation_ink="blue",
         seed=7,
     )
     assert _page_image(out).tobytes() == _page_image(again).tobytes(), \
@@ -373,9 +338,8 @@ def write_samples():
         "03_dark_full": dict(dark_background=True, dark_mode="full", dark_intensity=0.6),
         "04_dark_shadow": dict(dark_background=True, dark_mode="shadow", dark_intensity=0.7),
         "05_cropped": dict(crop=True, crop_percent=12, crop_edges="right,bottom"),
-        "06_handwritten": dict(handwritten=True, annotation_count=5, annotation_ink="blue"),
-        "07_all": dict(dark_background=True, dark_mode="band", crop=True,
-                       handwritten=True, annotation_count=4, skew=True, noise=True),
+        "06_all": dict(dark_background=True, dark_mode="photo", crop=True,
+                       skew=True, noise=True),
     }
     for name, kwargs in cases.items():
         kwargs.setdefault("skew", False)
@@ -390,11 +354,10 @@ def write_samples():
 
 if __name__ == "__main__":
     print("scan feature checks")
+    check_font()
     check_dark_background()
     check_crop()
-    check_handwritten()
     check_handwritten_values()
-    check_classifier_contract()
     check_llm_pipeline_with_stub()
     check_llm_classifier()
     check_photo_darkness()

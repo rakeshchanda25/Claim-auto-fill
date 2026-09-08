@@ -276,47 +276,10 @@
                                                 <option value="red">Red pen</option>
                                             </select>
                                         </div>
-                                        <div>
-                                            <label style="display: block; margin-bottom: 0.4rem; font-size: 0.8rem; color: var(--text-muted);">How to find the values</label>
-                                            <select name="handwrite_detect" style="width: 100%; padding: 0.5rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; color: var(--text-main); font-size: 0.85rem;">
-                                                <option value="llm">Read the document with the model (recommended)</option>
-                                                <option value="rules">Label: value lines only (no model call)</option>
-                                            </select>
-                                        </div>
+                                        
                                         <div style="grid-column: span 2;">
-                                            <label style="display: block; margin-bottom: 0.4rem; font-size: 0.8rem; color: var(--text-muted);">Or list the exact values (comma separated - overrides the above)</label>
+                                            <label style="display: block; margin-bottom: 0.4rem; font-size: 0.8rem; color: var(--text-muted);">Or list the exact values (comma separated - skips reading the document)</label>
                                             <input type="text" name="handwrite_list" placeholder="blank = work them out from the document" style="width: 100%; padding: 0.5rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; color: var(--text-main); font-size: 0.85rem;">
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="toggle-control" style="grid-column: span 2;">
-                                    <label class="control-header">
-                                        <input type="checkbox" name="handwritten">
-                                        <div class="header-text">
-                                            <span class="control-label">Handwritten Annotation (notes &amp; markings)</span>
-                                            <span class="control-desc">Adds handwritten notes and markings (circles,
-                                                ticks, underlines) over and around the printed content.</span>
-                                        </div>
-                                    </label>
-                                    <div id="handwritten-settings-container" class="hidden" style="margin-top: 1rem; display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; align-items: start;">
-                                        <div>
-                                            <label style="display: block; margin-bottom: 0.4rem; font-size: 0.8rem; color: var(--text-muted);">Ink</label>
-                                            <select name="annotation_ink" style="width: 100%; padding: 0.5rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; color: var(--text-main); font-size: 0.85rem;">
-                                                <option value="blue">Blue pen</option>
-                                                <option value="black">Black pen</option>
-                                                <option value="red">Red pen</option>
-                                            </select>
-                                        </div>
-                                        <div>
-                                            <label style="display: block; margin-bottom: 0.4rem; font-size: 0.8rem; color: var(--text-muted);">Annotations per page</label>
-                                            <div class="slider-container">
-                                                <input type="range" name="annotation_count" min="1" max="10" step="1" value="3">
-                                                <span class="slider-val">3</span>
-                                            </div>
-                                        </div>
-                                        <div style="grid-column: span 2;">
-                                            <label style="display: block; margin-bottom: 0.4rem; font-size: 0.8rem; color: var(--text-muted);">Your own notes (comma separated - leave blank for realistic defaults)</label>
-                                            <input type="text" name="annotation_text" placeholder="e.g. Verified w/ insured, Check DOL, Approved" style="width: 100%; padding: 0.5rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; color: var(--text-main); font-size: 0.85rem;">
                                         </div>
                                     </div>
                                 </div>

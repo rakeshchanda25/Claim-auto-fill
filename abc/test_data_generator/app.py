@@ -93,14 +93,9 @@ async def api_simulate_scan(
     crop: bool = Form(False),
     crop_percent: float = Form(8.0),
     crop_edges: str = Form("right,bottom"),
-    handwritten: bool = Form(False),
-    annotation_count: int = Form(3),
-    annotation_ink: str = Form("blue"),
-    annotation_text: str = Form(""),
     handwrite_values: bool = Form(False),
     handwrite_ink: str = Form("blue"),
     handwrite_list: str = Form(""),
-    handwrite_detect: str = Form("llm"),
     seed: Optional[int] = Form(None),
 ):
     try:
@@ -118,8 +113,7 @@ async def api_simulate_scan(
             supplied = [v.strip() for v in handwrite_list.replace("\n", ",").split(",")
                         if v.strip()]
             pdf_bytes, handwrite_report = handwrite_values_in_pdf(
-                pdf_bytes, values=supplied or None, ink=handwrite_ink,
-                seed=seed, detect=handwrite_detect)
+                pdf_bytes, values=supplied or None, ink=handwrite_ink, seed=seed)
 
         new_pdf_bytes = simulate_scan(
             pdf_bytes, 
@@ -136,21 +130,15 @@ async def api_simulate_scan(
             crop=crop,
             crop_percent=crop_percent,
             crop_edges=crop_edges,
-            handwritten=handwritten,
-            annotation_count=annotation_count,
-            annotation_ink=annotation_ink,
-            annotation_text=annotation_text,
             seed=seed,
         )
         
         headers = {"Content-Disposition": f"attachment; filename=scanned_{file.filename}"}
         if handwrite_report:
-            # So the caller can tell whether the model actually classified the
-            # page or the rule fallback quietly took over.
+            # So the caller can see how the values were found and how many
+            # were rewritten, without opening the PDF.
             headers["X-Handwrite-Method"] = handwrite_report["method"]
             headers["X-Handwrite-Count"] = str(handwrite_report["written"])
-            if handwrite_report.get("fallback_reason"):
-                headers["X-Handwrite-Fallback"] = handwrite_report["fallback_reason"][:180]
 
         return Response(
             content=new_pdf_bytes,

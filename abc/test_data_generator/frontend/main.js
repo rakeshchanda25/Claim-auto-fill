@@ -225,7 +225,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // Toggle the settings panel for each scan-defect option
     [['dark_background', 'dark-settings-container'],
      ['crop', 'crop-settings-container'],
-     ['handwritten', 'handwritten-settings-container'],
      ['handwrite_values', 'handwrite-values-container']].forEach(([name, id]) => {
         document.querySelector(`[name="${name}"]`).addEventListener('change', (e) => {
             const container = document.getElementById(id);
@@ -304,14 +303,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const crop_edges = Array.from(
             scannerForm.querySelectorAll('[name="crop_edge"]:checked')
         ).map(cb => cb.value).join(',');
-        const handwritten = scannerForm.querySelector('[name="handwritten"]').checked;
-        const annotation_count = scannerForm.querySelector('[name="annotation_count"]').value;
-        const annotation_ink = scannerForm.querySelector('[name="annotation_ink"]').value;
-        const annotation_text = scannerForm.querySelector('[name="annotation_text"]').value;
         const handwrite_values = scannerForm.querySelector('[name="handwrite_values"]').checked;
         const handwrite_ink = scannerForm.querySelector('[name="handwrite_ink"]').value;
         const handwrite_list = scannerForm.querySelector('[name="handwrite_list"]').value;
-        const handwrite_detect = scannerForm.querySelector('[name="handwrite_detect"]').value;
         const seed = scannerForm.querySelector('[name="seed"]').value;
         
         // Collect all rotation rules
@@ -352,14 +346,9 @@ document.addEventListener('DOMContentLoaded', () => {
             formData.append('crop', crop);
             formData.append('crop_percent', crop_percent);
             formData.append('crop_edges', crop_edges);
-            formData.append('handwritten', handwritten);
-            formData.append('annotation_count', annotation_count);
-            formData.append('annotation_ink', annotation_ink);
-            formData.append('annotation_text', annotation_text);
             formData.append('handwrite_values', handwrite_values);
             formData.append('handwrite_ink', handwrite_ink);
             formData.append('handwrite_list', handwrite_list);
-            formData.append('handwrite_detect', handwrite_detect);
             if (seed !== '') { formData.append('seed', seed); }
             if (overlayFile) {
                 formData.append('overlay_image', overlayFile);
